@@ -203,7 +203,7 @@ export async function getKeywordPlannerClient(
     });
     const cached = await getCached(key);
     if (cached !== null) return cached;
-    const payload = await post(config, await accessToken(userId), path, body);
+    const payload = await post(config, userId, path, body);
     await setCached(key, payload, CACHE_TTL_SECONDS);
     return payload;
   };
@@ -405,11 +405,14 @@ async function waitForRequestSlot() {
 
 async function post(
   config: KeywordPlannerConfig,
-  token: string,
+  userId: string,
   path: string,
   body: object,
 ): Promise<unknown> {
   await waitForRequestSlot();
+  // After the wait: a queued request can sit long enough for a token fetched
+  // earlier to expire.
+  const token = await accessToken(userId);
   let response: Response;
   try {
     response = await fetch(`${API_BASE}/${path}`, {

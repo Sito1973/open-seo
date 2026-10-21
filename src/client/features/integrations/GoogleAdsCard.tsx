@@ -44,6 +44,21 @@ export function GoogleAdsCard() {
   });
   const status = statusQuery.data;
   const ready = status?.plannerActive && status.oauthConfigured;
+  // DataForSEO serves keyword data on this install; the card stays only so a
+  // user who connected earlier can remove the grant.
+  if (status && !status.available && !status.connected) return null;
+
+  const disconnectButton = (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => disconnectMutation.mutate()}
+      pending={disconnectMutation.isPending}
+      disabled={linking}
+    >
+      Disconnect
+    </Button>
+  );
 
   return (
     <CardShell
@@ -110,17 +125,7 @@ export function GoogleAdsCard() {
               : "Connect the Google account that can open your Google Ads account. Keyword research then reads search volumes and ideas from its Keyword Planner."}
           </p>
           <div className="mt-auto flex flex-wrap items-center justify-end gap-2">
-            {status.connected ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => disconnectMutation.mutate()}
-                pending={disconnectMutation.isPending}
-                disabled={linking}
-              >
-                Disconnect
-              </Button>
-            ) : null}
+            {status.connected ? disconnectButton : null}
             <Button
               variant="outline"
               size="sm"
@@ -138,6 +143,10 @@ export function GoogleAdsCard() {
           </div>
         </div>
       )}
+      {/* The setup branches above still let a stored grant be removed. */}
+      {status?.connected && !ready && !statusQuery.isError ? (
+        <div className="mt-4 flex justify-end">{disconnectButton}</div>
+      ) : null}
       {disconnectMutation.isError ? (
         <p role="alert" className="mt-3 text-sm text-destructive">
           {getStandardErrorMessage(disconnectMutation.error)}

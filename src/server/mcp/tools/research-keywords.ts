@@ -149,6 +149,7 @@ export const researchKeywordsTool = {
     },
   },
   handler: withMcpProjectAuth(async (args: Args, context) => {
+    const plannerConfig = await getKeywordPlannerConfig();
     const results = await Promise.all(
       args.seeds.map(async (item) => {
         try {
@@ -184,7 +185,12 @@ export const researchKeywordsTool = {
           return {
             seed: item.seed,
             ok: false as const,
-            error: toolErrorMessage(error),
+            // search_serp_locations needs DataForSEO, which a Keyword
+            // Planner install lacks.
+            error:
+              plannerConfig && error instanceof Error
+                ? error.message
+                : toolErrorMessage(error),
           };
         }
       }),
@@ -193,9 +199,7 @@ export const researchKeywordsTool = {
     const okCount = results.filter((r) => r.ok).length;
     const failCount = results.length - okCount;
     const sourceNote =
-      (await getKeywordPlannerConfig()) && okCount > 0
-        ? `\n${KEYWORD_PLANNER_SOURCE_NOTE}`
-        : "";
+      plannerConfig && okCount > 0 ? `\n${KEYWORD_PLANNER_SOURCE_NOTE}` : "";
     const text =
       results
         .map((r) => {

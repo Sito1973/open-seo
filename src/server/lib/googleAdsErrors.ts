@@ -15,6 +15,13 @@ const ACCESS_PENDING_CODES = new Set([
   "authorizationError.DEVELOPER_TOKEN_NOT_APPROVED",
 ]);
 
+// Authentication errors that mean GOOGLE_ADS_CUSTOMER_ID is wrong, which
+// reconnecting cannot fix.
+const CUSTOMER_ID_CODES = new Set([
+  "authenticationError.CUSTOMER_NOT_FOUND",
+  "authenticationError.CLIENT_CUSTOMER_ID_INVALID",
+]);
+
 const errorBodySchema = z.object({
   error: z.object({
     message: z.string().optional(),
@@ -63,9 +70,11 @@ export function googleAdsApiError(
   if (codes.some((code) => ACCESS_PENDING_CODES.has(code))) {
     return new AppError("GOOGLE_ADS_ACCESS_PENDING", ACCESS_PENDING_MESSAGE);
   }
+  const customerIdRejected = codes.some((code) => CUSTOMER_ID_CODES.has(code));
   if (
-    status === 401 ||
-    codes.some((code) => code.startsWith("authenticationError."))
+    !customerIdRejected &&
+    (status === 401 ||
+      codes.some((code) => code.startsWith("authenticationError.")))
   ) {
     return new AppError(
       "GOOGLE_ADS_NOT_CONNECTED",
@@ -78,7 +87,7 @@ export function googleAdsApiError(
       `Google Ads API quota reached (${message}). Keyword Planner allows one request per second and Basic access 15,000 operations a day; try again later.`,
     );
   }
-  if (status === 403) {
+  if (status === 403 || customerIdRejected) {
     return new AppError(
       "FORBIDDEN",
       `The Google Ads API refused the request: ${message} Check that the Google Ads API is enabled in the Cloud project that owns GOOGLE_ADS_CLIENT_ID, that the connected Google account can open customer ${config.customerId}, and that GOOGLE_ADS_LOGIN_CUSTOMER_ID names the manager account it goes through.`,

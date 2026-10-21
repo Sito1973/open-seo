@@ -52,7 +52,7 @@ function ProjectIntegrationsRoute() {
       {/* Self-hosted only: Keyword Planner errors send users here to
           connect Google Ads. */}
       {isHostedClientAuthMode() ? null : (
-        <section id="google-ads" className="scroll-mt-6">
+        <section id="google-ads" className="scroll-mt-6 empty:hidden">
           <GoogleAdsCard />
         </section>
       )}

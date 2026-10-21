@@ -88,6 +88,15 @@ const metrics = (avgMonthlySearches: string, competitionIndex: string) => ({
   ],
 });
 
+/** A Google Ads API error response carrying one GoogleAdsFailure error. */
+function googleAdsFailure(status: number, errorCode: Record<string, string>) {
+  return () =>
+    Response.json(
+      { error: { details: [{ errors: [{ errorCode }] }] } },
+      { status },
+    );
+}
+
 beforeEach(() => {
   mocks.cache.clear();
   vi.stubEnv("DATAFORSEO_API_KEY", "");
@@ -242,30 +251,9 @@ it("gives city volumes for national ideas through the city's geo target", async 
 
 it("reports Explorer access as pending instead of a generic error", async () => {
   answerGoogleAds({
-    generateKeywordHistoricalMetrics: () =>
-      Response.json(
-        {
-          error: {
-            code: 403,
-            message: "The caller does not have permission",
-            status: "PERMISSION_DENIED",
-            details: [
-              {
-                "@type":
-                  "type.googleapis.com/google.ads.googleads.v26.errors.GoogleAdsFailure",
-                errors: [
-                  {
-                    errorCode: { authorizationError: "SERVICE_ACCESS_DENIED" },
-                    message:
-                      "The developer specified does not have access to the service.",
-                  },
-                ],
-              },
-            ],
-          },
-        },
-        { status: 403 },
-      ),
+    generateKeywordHistoricalMetrics: googleAdsFailure(403, {
+      authorizationError: "SERVICE_ACCESS_DENIED",
+    }),
   });
 
   const failure = getKeywordMetricsTool.handler(
@@ -279,4 +267,43 @@ it("reports Explorer access as pending instead of a generic error", async () => 
   await expect(failure).rejects.toThrow(
     "Google Ads API access pending (Explorer level blocks Keyword Planner)",
   );
+});
+
+it("reports an unknown customer ID as configuration, not a lost connection", async () => {
+  answerGoogleAds({
+    generateKeywordHistoricalMetrics: googleAdsFailure(401, {
+      authenticationError: "CUSTOMER_NOT_FOUND",
+    }),
+  });
+
+  const failure = getKeywordMetricsTool.handler(
+    { projectId: "project_1", keywords: ["pizza"] },
+    toolContext,
+  );
+
+  await expect(failure).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(failure).rejects.toThrow("customer 9270250391");
+});
+
+it("leaves out the search_serp_locations hint, which needs DataForSEO, for an unknown city", async () => {
+  answerGoogleAds({
+    generateKeywordIdeas: () =>
+      Response.json({
+        results: [{ text: "pizza", keywordIdeaMetrics: metrics("900", "20") }],
+      }),
+    search: () => Response.json({}),
+  });
+
+  const result = await researchKeywordsTool.handler(
+    {
+      projectId: "project_1",
+      seeds: [{ seed: "pizza", locationName: "Atlantis,Risaralda,Colombia" }],
+    },
+    toolContext,
+  );
+
+  const [seed] = result.structuredContent.results;
+  expect(seed).toMatchObject({ ok: false });
+  expect(seed.ok ? "" : seed.error).toContain("is not a Google Ads location");
+  expect(textContent(result)).not.toContain("search_serp_locations");
 });

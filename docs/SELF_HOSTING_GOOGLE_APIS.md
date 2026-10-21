@@ -508,7 +508,9 @@ changes anything in the account.
 The grant belongs to the OpenSEO user who connected it, and keyword research
 uses the grant of the user who runs it. **Disconnect** deletes the stored
 grant; you can also remove OpenSEO's access in your Google account's security
-settings. Hosted OpenSEO never offers this connection.
+settings. Hosted OpenSEO never offers this connection. With
+`DATAFORSEO_API_KEY` set, the card appears only while you still have a grant
+to disconnect.
 
 ### Limits and caching
 

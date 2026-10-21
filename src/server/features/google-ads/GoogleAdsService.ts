@@ -9,7 +9,10 @@ import {
 } from "@/server/features/google/oauth-config";
 import { AppError } from "@/server/lib/errors";
 import { getKeywordPlannerConfig } from "@/server/lib/keywordPlannerConfig";
-import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import {
+  getOptionalEnvValue,
+  isHostedServerAuthMode,
+} from "@/server/lib/runtime-env";
 
 // The Google Ads grant behind the self-hosted Keyword Planner. Self-hosted
 // only: the adwords scope is write-capable, so every entry point refuses
@@ -26,12 +29,16 @@ async function requireSelfHosted() {
 
 async function getStatus(userId: string) {
   await requireSelfHosted();
-  const [plannerConfig, oauthConfigured, grant] = await Promise.all([
-    getKeywordPlannerConfig(),
-    getGoogleOAuthClientConfig("ads").then(hasGoogleOAuthConfig),
-    GoogleAdsGrantRepository.getLatestGrant(userId),
-  ]);
+  const [dataforseoKey, plannerConfig, oauthConfigured, grant] =
+    await Promise.all([
+      getOptionalEnvValue("DATAFORSEO_API_KEY"),
+      getKeywordPlannerConfig(),
+      getGoogleOAuthClientConfig("ads").then(hasGoogleOAuthConfig),
+      GoogleAdsGrantRepository.getLatestGrant(userId),
+    ]);
   return {
+    // DataForSEO always serves keyword data when its key is set.
+    available: !dataforseoKey,
     plannerActive: plannerConfig !== null,
     oauthConfigured,
     connected: grant !== null,
