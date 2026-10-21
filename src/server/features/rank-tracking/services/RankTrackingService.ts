@@ -362,7 +362,7 @@ async function refreshKeywordMetrics(
   const keywords = await RankTrackingRepository.getKeywordsForConfig(configId);
   if (keywords.length === 0) return { updated: 0 };
 
-  const client = await getKeywordDataClient(billingCustomer);
+  const client = await getKeywordDataClient(billingCustomer, projectId);
   const metrics = await fetchKeywordMetricsForList(client, {
     // The keyword-data APIs are case-insensitive and echo keywords back
     // lowercased, so ask in lowercase. A match-case keyword can sit next to

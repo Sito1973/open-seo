@@ -4,10 +4,16 @@ export type KeywordSource = "related" | "suggestions" | "ideas";
 export type KeywordMode = "auto" | KeywordSource;
 /**
  * Where research rows actually came from. "google_ads" is not requestable as
- * a mode (it's the automatic source for countries Labs doesn't support), and
- * "blended" is auto mode's suggestions + ideas mix.
+ * a mode (it's the automatic source for countries Labs doesn't support),
+ * "blended" is auto mode's suggestions + ideas mix, and "search_console" is
+ * the project's own queries while the self-hosted Keyword Planner waits for
+ * Basic access.
  */
-export type ResearchSource = KeywordSource | "google_ads" | "blended";
+export type ResearchSource =
+  | KeywordSource
+  | "google_ads"
+  | "blended"
+  | "search_console";
 
 export const MIN_NON_SEED_FOR_AUTO = 5;
 

@@ -88,6 +88,9 @@ function MobileTabs({ controller }: Props) {
 
 function KeywordPanel({ controller }: Props) {
   const { mobileTab, searchedKeyword, showApproximateMatchNotice } = controller;
+  const fromSearchConsole = controller.rows.some(
+    (row) => row.gscImpressions !== undefined,
+  );
 
   return (
     <div
@@ -99,6 +102,17 @@ function KeywordPanel({ controller }: Props) {
             No exact match for{" "}
             <span className="font-medium">"{searchedKeyword}"</span>. Showing
             closest related keywords instead.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {fromSearchConsole ? (
+        <Alert variant="warning" role="status">
+          <AlertDescription className="text-foreground">
+            Google has not approved Basic access to the Google Ads API for this
+            server&apos;s Keyword Planner yet. Until it does, these are your
+            site&apos;s Search Console queries from the last 28 days that
+            contain the keyword. GSC impressions count how often your site
+            appeared for each one; they are not search volume.
           </AlertDescription>
         </Alert>
       ) : null}

@@ -17,6 +17,7 @@ import {
   type SortField,
 } from "@/client/features/keywords/components";
 import { SortableHeader } from "@/client/components/table/SortableHeader";
+import { HelpLabel } from "@/client/components/HelpLabel";
 import { ScoreBadge } from "@/client/components/table/ScoreBadge";
 import { formatNumber } from "@/client/features/keywords/utils";
 import type { KeywordResearchDisplayRow } from "@/client/features/keywords/groupSharedVolumeRows";
@@ -60,6 +61,11 @@ export function KeywordResearchTable({
         [...selectedRows].map((keyword) => [keyword, true]),
       ) as RowSelectionState,
     [selectedRows],
+  );
+  // Rows from the project's Search Console while the self-hosted Keyword
+  // Planner waits for Basic access carry the site's impressions, not volume.
+  const showGscImpressions = filteredRows.some(
+    (row) => row.gscImpressions !== undefined,
   );
   const columns = useMemo<ColumnDef<KeywordResearchDisplayRow>[]>(() => {
     // The controller sorts the rows, so each header reads and sets its sort.
@@ -116,6 +122,26 @@ export function KeywordResearchTable({
             "whitespace-nowrap text-right tabular-nums text-muted-foreground",
         },
       }),
+      ...(showGscImpressions
+        ? [
+            keywordColumnHelper.accessor("gscImpressions", {
+              header: () => (
+                <span className="flex w-full justify-end font-medium">
+                  <HelpLabel
+                    label="GSC impr."
+                    helpText="Impressions of your site in Search Console over the last 28 days. Not search volume."
+                  />
+                </span>
+              ),
+              cell: ({ getValue }) => formatNumber(getValue()),
+              meta: {
+                headerClassName: "text-right",
+                cellClassName:
+                  "whitespace-nowrap text-right tabular-nums text-muted-foreground",
+              },
+            }),
+          ]
+        : []),
       keywordColumnHelper.accessor("cpc", {
         header: () => (
           <SortableHeader
@@ -177,7 +203,7 @@ export function KeywordResearchTable({
         },
       }),
     ];
-  }, [selectAnchorRef, sortDir, sortField, toggleSort]);
+  }, [selectAnchorRef, showGscImpressions, sortDir, sortField, toggleSort]);
   const table = useDataTable({
     data: filteredRows,
     columns,

@@ -83,6 +83,7 @@ type ResearchRow = {
   cpc: number | null;
   competition: number | null;
   intent: string;
+  gscImpressions?: number;
 };
 
 // The 12-month trend array is ~80% of the bytes per row and no MCP consumer
@@ -96,6 +97,9 @@ function toResearchRow(row: EnrichedKeyword): ResearchRow {
     cpc: row.cpc,
     competition: row.competition,
     intent: row.intent,
+    ...(row.gscImpressions === undefined
+      ? {}
+      : { gscImpressions: row.gscImpressions }),
   };
 }
 
@@ -110,6 +114,20 @@ const RESEARCH_COLUMNS: McpTableColumn<ResearchRow>[] = [
   { header: "competition", value: (row) => row.competition },
   { header: "intent", value: (row) => row.intent },
 ];
+
+// Rows from the project's Search Console while the Keyword Planner waits for
+// Basic access carry impressions instead of volume, CPC and competition.
+const SEARCH_CONSOLE_COLUMNS: McpTableColumn<ResearchRow>[] = [
+  { header: "keyword", value: (row) => row.keyword },
+  {
+    header: "GSC impressions (your site)",
+    value: (row) => row.gscImpressions ?? null,
+  },
+  { header: "intent", value: (row) => row.intent },
+];
+
+const SEARCH_CONSOLE_NOTE =
+  "Seeds with source search_console: Google has not approved Basic Google Ads API access for this server's Keyword Planner yet, so they list this project's own Search Console queries from the last 28 days that contain the seed. GSC impressions count how often the project's site appeared for the query; they are not search volume, and volume, CPC and competition stay empty until Basic access.";
 
 export const researchKeywordsTool = {
   name: "research_keywords",
@@ -199,7 +217,10 @@ export const researchKeywordsTool = {
     const okCount = results.filter((r) => r.ok).length;
     const failCount = results.length - okCount;
     const sourceNote =
-      plannerConfig && okCount > 0 ? `\n${KEYWORD_PLANNER_SOURCE_NOTE}` : "";
+      (plannerConfig && okCount > 0 ? `\n${KEYWORD_PLANNER_SOURCE_NOTE}` : "") +
+      (results.some((r) => r.ok && r.source === "search_console")
+        ? `\n${SEARCH_CONSOLE_NOTE}`
+        : "");
     const text =
       results
         .map((r) => {
@@ -213,7 +234,12 @@ export const researchKeywordsTool = {
           if (r.rowCount === 0) {
             return `${header}\n(no keywords returned)`;
           }
-          return `${header}\n${formatMcpTable(r.rows, RESEARCH_COLUMNS)}`;
+          return `${header}\n${formatMcpTable(
+            r.rows,
+            r.source === "search_console"
+              ? SEARCH_CONSOLE_COLUMNS
+              : RESEARCH_COLUMNS,
+          )}`;
         })
         .join("\n\n") +
       `\n\nResearched ${okCount} of ${results.length} seeds${failCount > 0 ? ` (${failCount} failed)` : ""}. Columns: volume = monthly searches, KD = keyword difficulty (0-100), CPC in USD, competition = paid competition (0-1); "—" = unavailable. Google Ads close variants may share search volumes; do not add their volumes together.${sourceNote}`;

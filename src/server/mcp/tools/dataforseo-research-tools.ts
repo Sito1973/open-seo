@@ -1406,7 +1406,10 @@ export const getKeywordMetricsTool = {
     // Assert against the RESOLVED pair: an explicit language with an omitted
     // location must validate against the project's default location.
     assertLanguageForLocation(locationCode, languageCode);
-    const planner = await getKeywordPlannerClient(context.billing.userId);
+    const planner = await getKeywordPlannerClient(
+      context.billing.userId,
+      args.projectId,
+    );
     const metrics = await fetchKeywordMetricsForList(
       planner ?? createDataforseoClient(context.billing),
       {
