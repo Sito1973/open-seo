@@ -314,7 +314,12 @@ Each request fetches one Google results page with about 10 organic results:
   describe. If checks for another country fail with that error, Bright Data
   could not follow Google's redirect for it.
 - **Language and city:** `hl` is the tracker's or query's language. A tracker
-  or query with a city adds Google's `uule` location parameter.
+  or query with a city adds Google's `uule` location parameter. Without
+  DataForSEO, OpenSEO cannot look up or check city names, and
+  `search_serp_locations` does not work. Pass Google's canonical name for the
+  city, `City,Region,Country` with no spaces after the commas, for example
+  `Pereira,Risaralda,Colombia`, as a tracker's or query's `locationName`. Google
+  may ignore a name it does not recognize and return country-wide results.
 - **Device:** mobile checks ask Bright Data for a mobile browser
   (`brd_mobile=1`); `get_serp_results` and `find_serp_competitors` use desktop.
 - **Depth:** each further 10 results is one more request (`start=10`,
@@ -356,6 +361,13 @@ the 500-request margin absorbs some of that. On the free tier, Bright Data
 stops answering at its own cap. If you add a payment method, also set a
 monthly spend limit in Bright Data.
 
+Bright Data's 5,000 free credits are one pool per account, shared with its Web
+Unlocker API, Web Scraper API, Scraper Studio, Browser API and Bright Data's own
+MCP server. OpenSEO's 4,500 is its own count, not a reservation: other usage on
+the same account can use up the pool first, and OpenSEO's requests then fail
+while its counter still shows budget left. Use a Bright Data account that runs nothing
+else, or keep your other usage within the remaining 500 credits.
+
 ### 1) Create a SERP API zone
 
 1. In the Bright Data control panel, add a **SERP API** zone.
@@ -384,6 +396,8 @@ locations.
 ### What OpenSEO stores
 
 A rank check stores what a DataForSEO check stores: each keyword's position,
-ranking URL and the names of the SERP features on the page. OpenSEO keeps no
-copy of the results page. `get_serp_results` and `find_serp_competitors` are
-not cached on Bright Data, so repeating a call sends new requests.
+ranking URL and the names of the SERP features on the page. It keeps no copy
+of the results page. `get_serp_results` keeps its rows for 12 hours, as
+it does with DataForSEO, so repeating a call within that time sends no new
+request. `find_serp_competitors` is not cached, so repeating it sends new
+requests.

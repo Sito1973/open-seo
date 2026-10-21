@@ -81,11 +81,16 @@ export const estimateRankTrackerCostTool = {
       args.additionalKeywords ??
         Array<string>(args.additionalKeywordCount ?? 0).fill(""),
     );
-    const brightDataNote = (await getBrightDataSerp())
-      ? ` ${BRIGHTDATA_RANK_CHECK_NOTE}`
-      : "";
+    const checks = `${estimate.keywordCount} keyword${estimate.keywordCount === 1 ? "" : "s"} × ${estimate.devicesCount} device${estimate.devicesCount === 1 ? "" : "s"} = ${estimate.totalChecks} SERP checks.${estimate.additionalKeywordCount > 0 ? ` This projects ${estimate.additionalKeywordCount} additional keyword${estimate.additionalKeywordCount === 1 ? "" : "s"}.` : ""}`;
+    const { scheduledEstimate: scheduled } = estimate;
+    // Bright Data checks run live and unbilled against a request budget, so
+    // DataForSEO prices and the queued-fallback caveat do not apply. The
+    // approval gates still compare credits, so those numbers stay.
+    const cost = (await getBrightDataSerp())
+      ? `One check for tracker ${args.trackerId} is not billed: ${checks} It sends at least ${estimate.totalChecks} Bright Data requests, more when the domain ranks below page 1, up to ${estimate.totalChecks * Math.ceil(estimate.serpDepth / 10)} at depth ${estimate.serpDepth}.${scheduled ? ` Its ${scheduled.scheduleInterval} schedule sends at least ${scheduled.checksPerMonth * estimate.totalChecks} requests per month.` : ""} The approval fields still take DataForSEO credit units, which nothing bills here: pass ${estimate.costCredits} as run_rank_tracker's maxCostCredits${scheduled ? ` and ${scheduled.costCredits} as add_rank_tracking_keywords' maxEstimatedScheduledCheckCredits` : ""}. ${BRIGHTDATA_RANK_CHECK_NOTE}`
+      : `One live check for tracker ${args.trackerId} is estimated at $${estimate.costUsd.toFixed(4)} (${estimate.costCredits} credits): ${checks}${scheduled ? ` Its ${scheduled.scheduleInterval} queued checks have a nominal estimate of $${scheduled.costUsd.toFixed(4)} (${scheduled.costCredits} credits) each, or about $${scheduled.monthlyCostUsd.toFixed(4)} (${scheduled.monthlyCostCredits} credits) per month. Show the user that rejected, failed, or timed-out queued tasks may use additional separately billed live fallback, then use the per-check estimate as maxEstimatedScheduledCheckCredits when adding keywords.` : ""}`;
     return mcpResponse({
-      text: `One live check for tracker ${args.trackerId} is estimated at $${estimate.costUsd.toFixed(4)} (${estimate.costCredits} credits): ${estimate.keywordCount} keyword${estimate.keywordCount === 1 ? "" : "s"} × ${estimate.devicesCount} device${estimate.devicesCount === 1 ? "" : "s"} = ${estimate.totalChecks} SERP checks.${estimate.additionalKeywordCount > 0 ? ` This projects ${estimate.additionalKeywordCount} additional keyword${estimate.additionalKeywordCount === 1 ? "" : "s"}.` : ""}${estimate.scheduledEstimate ? ` Its ${estimate.scheduledEstimate.scheduleInterval} queued checks have a nominal estimate of $${estimate.scheduledEstimate.costUsd.toFixed(4)} (${estimate.scheduledEstimate.costCredits} credits) each, or about $${estimate.scheduledEstimate.monthlyCostUsd.toFixed(4)} (${estimate.scheduledEstimate.monthlyCostCredits} credits) per month. Show the user that rejected, failed, or timed-out queued tasks may use additional separately billed live fallback, then use the per-check estimate as maxEstimatedScheduledCheckCredits when adding keywords.` : ""}${brightDataNote} No check was started.`,
+      text: `${cost} No check was started.`,
       meta: buildProjectMeta(
         context,
         args.projectId,

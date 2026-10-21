@@ -1219,7 +1219,14 @@ async function findBrightDataSerpCompetitors(
       "On this server competitors come from live organic results only: include organic in resultTypes, or omit resultTypes.",
     );
   }
-  const market = resolveMarketSelector(args, context.project);
+  // A live Google SERP serves any market, so the project's market stands
+  // without Labs' rules; only the legacy explicit-US selector still applies.
+  const market =
+    args.market?.country != null &&
+    args.locationCode == null &&
+    args.languageCode == null
+      ? { locationCode: DEFAULT_LOCATION_CODE, languageCode: "en" }
+      : resolveMarket(args, context.project);
   const settled = await Promise.allSettled(
     args.keywords.map((keyword) =>
       fetchBrightDataSerp(config, {

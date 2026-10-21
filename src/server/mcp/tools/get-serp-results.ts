@@ -50,13 +50,20 @@ const SERP_ITEM_COLUMNS: McpTableColumn<SerpItem>[] = [
   { header: "url", value: (item) => item.url },
 ];
 
-type LocalPackItem = {
-  rank: number;
-  title: string | null;
-  url: string | null;
-  rating: number | null;
-  reviews_count: number | null;
-};
+const localPackItemSchema = z.object({
+  rank: z.number(),
+  title: z.string().nullable(),
+  url: z.string().nullable(),
+  rating: z.number().nullable(),
+  reviews_count: z.number().nullable(),
+});
+
+type LocalPackItem = z.infer<typeof localPackItemSchema>;
+
+const brightDataCacheSchema = z.object({
+  organic: z.array(serpItemSchema),
+  localPack: z.array(localPackItemSchema),
+});
 
 const LOCAL_PACK_COLUMNS: McpTableColumn<LocalPackItem>[] = [
   { header: "rank", value: (item) => item.rank },
@@ -75,7 +82,7 @@ const querySchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Optional city, county, or region inside the query's country, for a local SERP. Call search_serp_locations first and pass its locationName verbatim. Same price as a national SERP.",
+      "Optional city, county, or region inside the query's country, for a local SERP. Call search_serp_locations first and pass its locationName verbatim; if it is unavailable, pass Google's canonical City,Region,Country name (e.g. Pereira,Risaralda,Colombia). Same price as a national SERP.",
     ),
 });
 
@@ -240,13 +247,16 @@ export const getSerpResultsTool = {
 /**
  * A self-hosted install without DataForSEO reads the live SERP from Bright
  * Data, one request from the monthly budget per 10 rows of depth (default
- * one page). Nothing is cached: OpenSEO keeps no copy of a live SERP.
+ * one page). Rows are cached like DataForSEO's, so a repeat within 12 hours
+ * sends no request. A city name goes straight into uule: checking it needs
+ * DataForSEO's location list.
  */
 async function getBrightDataSerpResults(
   config: BrightDataSerp,
   args: Args,
   context: {
     baseUrl: string;
+    billing: { organizationId: string };
     project: { locationCode: number; languageCode: string };
   },
 ) {
@@ -258,12 +268,28 @@ async function getBrightDataSerpResults(
           ...resolveMarket(q, context.project),
           locationName: q.locationName,
         };
-        if (q.locationName) {
-          await assertLocalResearchLocation(
-            market.locationCode,
-            q.locationName,
-          );
+        const source = brightDataSourceNote(market);
+        const cacheKey = await buildCacheKey("mcp:serp-results", {
+          organizationId: context.billing.organizationId,
+          projectId: args.projectId,
+          keyword: q.keyword,
+          ...market,
+          depth,
+          provider: "brightdata",
+        });
+        const cached = brightDataCacheSchema.safeParse(
+          await getCached(cacheKey),
+        );
+        if (cached.success) {
+          return {
+            keyword: q.keyword,
+            ok: true as const,
+            ...cached.data,
+            source,
+            usedThisMonth: null,
+          };
         }
+
         const serp = await fetchBrightDataSerp(config, {
           keyword: q.keyword,
           market,
@@ -282,12 +308,23 @@ async function getBrightDataSerpResults(
           rating: item.rating,
           reviews_count: item.reviewsCount,
         }));
+        if (organic.length > 0 || localPack.length > 0) {
+          waitUntil(
+            setCached(
+              cacheKey,
+              { organic, localPack },
+              SERP_RESULTS_CACHE_TTL_SECONDS,
+            ).catch((error) => {
+              console.error("mcp.serp-results.cache-write failed:", error);
+            }),
+          );
+        }
         return {
           keyword: q.keyword,
           ok: true as const,
           organic,
           localPack,
-          source: brightDataSourceNote(market),
+          source,
           usedThisMonth: serp.usedThisMonth,
         };
       } catch (error) {
@@ -301,6 +338,7 @@ async function getBrightDataSerpResults(
   );
 
   const succeeded = results.filter((r) => r.ok);
+  const fresh = succeeded.flatMap((r) => r.usedThisMonth ?? []);
   const blocks = results.map((r) => {
     if (!r.ok) return `"${r.keyword}": FAILED — ${r.error}`;
     const lines = [
@@ -319,11 +357,10 @@ async function getBrightDataSerpResults(
     ...blocks,
     `${succeeded.length} of ${results.length} queries succeeded. rank is the position among organic results; local pack rows rank within the pack.`,
     ...new Set(succeeded.map((r) => r.source)),
-    ...(succeeded.length > 0
+    ...(fresh.length > 0 ? [brightDataBudgetLine(Math.max(...fresh))] : []),
+    ...(fresh.length < succeeded.length
       ? [
-          brightDataBudgetLine(
-            Math.max(...succeeded.map((r) => r.usedThisMonth)),
-          ),
+          `${succeeded.length - fresh.length} of ${results.length} queries came from the 12-hour cache and sent no Bright Data request.`,
         ]
       : []),
   ].join("\n\n");

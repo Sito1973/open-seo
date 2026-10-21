@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   createDataforseoClient: vi.fn(),
   getProjectForOrganization: vi.fn(),
   reserveCalls: vi.fn(),
+  getCached: vi.fn(),
   setCached: vi.fn(),
   fetch: vi.fn<typeof fetch>(),
 }));
@@ -21,7 +22,7 @@ vi.mock("cloudflare:workers", () => ({
 }));
 vi.mock("@/server/lib/r2-cache", () => ({
   buildCacheKey: async () => "key",
-  getCached: async () => null,
+  getCached: mocks.getCached,
   setCached: mocks.setCached,
 }));
 vi.mock("@/server/lib/dataforseo", () => ({
@@ -71,6 +72,8 @@ beforeEach(() => {
     languageCode: "es",
   });
   mocks.reserveCalls.mockResolvedValue(7);
+  mocks.getCached.mockResolvedValue(null);
+  mocks.setCached.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -78,7 +81,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("reads one live page per query with its local pack, uncached and with its source", async () => {
+it("reads one live page per query with its local pack and source", async () => {
   answerPages({
     "hamburguesas pereira": {
       organic: [
@@ -106,7 +109,6 @@ it("reads one live page per query with its local pack, uncached and with its sou
 
   expect(mocks.fetch).toHaveBeenCalledTimes(1);
   expect(mocks.createDataforseoClient).not.toHaveBeenCalled();
-  expect(mocks.setCached).not.toHaveBeenCalled();
   expect(result.structuredContent).toMatchObject({
     provider: "brightdata",
     results: [
@@ -133,6 +135,37 @@ it("reads one live page per query with its local pack, uncached and with its sou
   const text = textContent(result);
   expect(text).toContain("Bright Data live Google SERP from www.google.com.co");
   expect(text).toContain("7 of 4500 SERP requests used this month");
+});
+
+it("answers a repeat within 12 hours from the cache without a request", async () => {
+  answerPages({ cafe: { organic: organic("https://a.com/") } });
+  const args = { projectId: "project_1", queries: [{ keyword: "cafe" }] };
+
+  await getSerpResultsTool.handler(args, toolContext);
+  mocks.getCached.mockResolvedValue(mocks.setCached.mock.calls[0]?.[1]);
+  const repeat = await getSerpResultsTool.handler(args, toolContext);
+
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  expect(repeat.structuredContent).toMatchObject({
+    results: [{ ok: true, items: [{ rank: 1, domain: "a.com" }] }],
+  });
+});
+
+it("sends a query's city as Google's uule without a DataForSEO lookup", async () => {
+  answerPages({ cafe: { organic: organic("https://a.com/") } });
+
+  const result = await getSerpResultsTool.handler(
+    {
+      projectId: "project_1",
+      queries: [
+        { keyword: "cafe", locationName: "Pereira,Risaralda,Colombia" },
+      ],
+    },
+    toolContext,
+  );
+
+  expect(result.structuredContent).toMatchObject({ results: [{ ok: true }] });
+  expect(mocks.fetch.mock.calls[0]?.[1]?.body).toContain("&uule=w+");
 });
 
 it.each([

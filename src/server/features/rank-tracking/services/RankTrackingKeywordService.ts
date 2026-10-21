@@ -172,6 +172,7 @@ async function estimateCost(
     keywordCount,
     devicesCount: devicesCount(config.devices),
     totalChecks: keywordCount * devicesCount(config.devices),
+    serpDepth: config.serpDepth,
     method: "live" as const,
     existingKeywordCount,
     additionalKeywordCount: keywordCount - existingKeywordCount,
