@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { sortBy } from "remeda";
 import { parseTerms } from "@/client/features/keywords/utils";
 import type { KeywordResearchRow } from "@/types/keywords";
+import { shownDifficulty } from "@/shared/keyword-difficulty";
 import {
   parseIntentFilter,
   type KeywordFilterValues,
@@ -37,7 +38,7 @@ export function applyKeywordFiltersAndSort(params: {
 
     const vol = row.searchVolume ?? 0;
     const cpc = row.cpc ?? 0;
-    const kd = row.keywordDifficulty ?? 0;
+    const kd = shownDifficulty(row) ?? 0;
 
     if (params.filters.minVol && vol < Number(params.filters.minVol))
       return false;
@@ -66,7 +67,7 @@ export function applyKeywordFiltersAndSort(params: {
   }
 
   return sortBy(filtered, [
-    (row) => row.keywordDifficulty ?? -1,
+    (row) => shownDifficulty(row) ?? -1,
     params.sortDir,
   ]);
 }

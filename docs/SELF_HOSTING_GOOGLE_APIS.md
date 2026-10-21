@@ -402,6 +402,9 @@ It runs:
 - **Google AI Overviews in AI visibility tracking**: one request per prompt
   in each check, reading the AI Overview on that results page. See
   [Google AI Overviews for AI visibility](#google-ai-overviews-for-ai-visibility).
+- **Keyword difficulty estimates**: from the first pages rank checks save, at
+  no cost, and on demand at most 300 requests a month. See
+  [Keyword difficulty estimates](#keyword-difficulty-estimates-bright-data-and-open-pagerank).
 
 Each response says where its results came from, for example "Bright Data live
 Google SERP from www.google.com.co (exit country CO, language es)". The rank
@@ -617,6 +620,92 @@ first pages it saved, so it sends no new request for those keywords. The SERP
 Analysis card and the searches of project setup and prompt suggestions also
 keep their results for 12 hours.
 
+## Keyword difficulty estimates: Bright Data and Open PageRank
+
+DataForSEO's keyword difficulty has no Google equivalent, and Keyword Planner
+has none. With [Bright Data](#bright-data-live-google-serp-for-rank-tracking)
+set and no DataForSEO for other features, OpenSEO estimates it (0-100) from a
+keyword's first Google results page. Estimates are labeled
+**OpenSEO estimate**: a dashed badge with that label on hover in the app, and
+`~N` with `keywordDifficultyEstimate` in the MCP tools. They are not
+DataForSEO data, and where DataForSEO has a difficulty for a keyword, its
+number is shown instead.
+
+### How it is worked out
+
+- **Local:** the local pack's median review count on a log scale: about 50
+  reviews give 25, 500 give 58 and 3,000 give 84. For a restaurant search,
+  how established the businesses in the pack are is most of the difficulty.
+- **Organic:** the [Open PageRank](https://keywordseverywhere.com/openpagerank/docs)
+  of the top 10 domains (0-10, times 10), averaged with OpenSEO's
+  click-through-rate curve as weights so the top results count most, minus 10
+  for each top-5 result on a social network, forum, directory or delivery
+  platform (Facebook, Instagram, TikTok, Tripadvisor, Restaurant Guru, Rappi,
+  Páginas Amarillas and similar), which a business's own page can pass. A
+  domain Open PageRank does not know counts as 0.
+- **Difficulty:** 0.6 × local + 0.4 × organic when the page has a local pack,
+  and organic alone when it has none. Without `OPENPAGERANK_API_KEY` the
+  organic part is not measured: a page with a local pack gets the local score,
+  and a page without one gets no estimate.
+
+### Where estimates come from
+
+- **Tracked keywords**, after each rank check, from the first pages the check
+  saved: no extra request. They show in the rank tracker's KD column and in
+  `get_rank_tracker`.
+- **Any other keyword**, on demand: select keywords in keyword research or
+  Saved Keywords and choose **Estimate difficulty**, or call the
+  `estimate_keyword_difficulty` MCP tool. A keyword with a
+  [saved first page](#saved-first-pages) from the last 14 days costs nothing;
+  at most 10 others per click or call are searched live, one Bright Data
+  request each, near the city of the project's rank tracker on its device. Up
+  to 50 keywords per click; repeat for the rest.
+
+Each estimate belongs to the project, for one keyword, country and language,
+and the latest one replaces the one before. It records the city and date of
+the page it came from. Estimates live apart from the provider's metrics, so a
+metrics refresh never erases them and saving keywords from research never
+stores an estimate as provider data. Keyword research, Saved Keywords
+(including its difficulty filter and sort), the rank tracker,
+`research_keywords`, `list_saved_keywords` and `get_rank_tracker` show them.
+CSV and Sheets exports keep the provider's difficulty only.
+
+### Budgets
+
+| What OpenSEO sends                                   | Free tier                | OpenSEO budget              |
+| ---------------------------------------------------- | ------------------------ | --------------------------- |
+| Live Google searches for on-demand estimates         | (Bright Data's 5,000)    | 300 a month, from the 4,500 |
+| Open PageRank lookups (each domain counted per call) | 30,000 domains per month | 25,000 domains a month      |
+
+Both reset on the 1st, UTC, and neither has a setting to raise it. Each
+domain's Open PageRank is kept 30 days, so the same sites cost nothing in
+later estimates. Past a budget, estimates from saved pages still work, and
+the organic part is left out until next month.
+
+### 1) Create an Open PageRank key (optional)
+
+1. Create a free key on
+   [Open PageRank](https://keywordseverywhere.com/openpagerank/docs).
+2. Set the server's public IPv4 address on the account page. From 1 November
+   2026 a free key answers only that address, so the server needs a fixed
+   IPv4 address. Without one, leave the key unset and estimates use the local
+   pack alone.
+3. Set the environment variable and recreate the container:
+
+```bash
+OPENPAGERANK_API_KEY=your-key
+```
+
+OpenSEO sends the key only in the `Authorization` header, and only the
+domains of the top 10 results. The `/api/health` preflight lists the estimates
+among the stand-in providers in use.
+
+### Accuracy
+
+An estimate reads one page of one city on one day, so it moves with Google's
+results. Compare estimates with each other, not with DataForSEO's difficulty,
+which weighs the backlinks of the ranking pages; no free source offers those.
+
 ## Google Ads Keyword Planner: search volume and keyword ideas
 
 The search volumes DataForSEO sells for keyword research come from Google Ads'
@@ -636,7 +725,9 @@ instead, for free. It runs:
 
 Keyword Planner has no keyword difficulty or search intent, so those columns
 stay empty, as they do for the countries DataForSEO serves from Google Ads
-data. CPC also stays empty: Google reports bids in the Ads account's currency,
+data, except for OpenSEO's own
+[difficulty estimates](#keyword-difficulty-estimates-bright-data-and-open-pagerank)
+when Bright Data is set. CPC also stays empty: Google reports bids in the Ads account's currency,
 and OpenSEO shows CPC in US dollars. Google merges close variants such as
 "hamburguesa" and "hamburguesas", and each keyword you asked for gets the
 shared numbers; do not add them together.

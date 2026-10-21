@@ -16,6 +16,8 @@ export type KeywordResearchRow = {
   searchVolume: number | null;
   trend: MonthlySearch[];
   keywordDifficulty: number | null;
+  /** OpenSEO's own estimate, set only by reads (see shared/keyword-difficulty). */
+  keywordDifficultyEstimate?: number | null;
   cpc: number | null;
   competition: number | null;
   intent: KeywordIntent;
@@ -32,6 +34,8 @@ export type SavedKeywordRow = {
   cpc: number | null;
   competition: number | null;
   keywordDifficulty: number | null;
+  /** OpenSEO's own estimate (see shared/keyword-difficulty). */
+  keywordDifficultyEstimate?: number | null;
   intent: string | null;
   monthlySearches: MonthlySearch[];
   fetchedAt: string | null;

@@ -1,4 +1,4 @@
-import { FileDown, Save, Sheet } from "lucide-react";
+import { FileDown, Gauge, Save, Sheet } from "lucide-react";
 import {
   lastTwelveMonths,
   MONTH_SHORT_LABELS,
@@ -144,6 +144,15 @@ function TableCard({ controller }: Props) {
             >
               Save<span className="hidden md:inline"> Keywords</span>
             </TableBulkActionButton>
+            {controller.canEstimateDifficulty ? (
+              <TableBulkActionButton
+                icon={<Gauge className="size-3.5" />}
+                onClick={controller.estimateSelectedDifficulty}
+                disabled={controller.estimatingDifficulty}
+              >
+                Estimate<span className="hidden md:inline"> difficulty</span>
+              </TableBulkActionButton>
+            ) : null}
             <TableBulkExportMenu
               actions={[
                 {

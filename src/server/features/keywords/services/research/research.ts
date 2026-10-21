@@ -30,6 +30,7 @@ import {
   fetchGoogleAdsResearchRows,
   fetchResearchRowsBySource,
 } from "./research-data";
+import { storedDifficultyEstimates } from "@/server/features/serp/services/difficultyEstimate";
 import {
   MIN_NON_SEED_FOR_AUTO,
   countNonSeedKeywords,
@@ -264,7 +265,38 @@ function persistRows(
   );
 }
 
+/**
+ * Keyword research rows, with OpenSEO's stored difficulty estimate next to
+ * each keyword the provider has no difficulty for. Estimates join on read
+ * only: they are never cached or persisted with the provider's rows.
+ */
 export async function research(
+  input: ResolvedResearchKeywordsInput,
+  billingCustomer: BillingCustomerContext,
+  creditFeature?: CreditFeature,
+): Promise<ResearchResult> {
+  const result = await researchRows(input, billingCustomer, creditFeature);
+  const estimates = await storedDifficultyEstimates({
+    projectId: input.projectId,
+    locationCode: input.locationCode,
+    languageCode: input.languageCode,
+    keywords: result.rows
+      .filter((row) => row.keywordDifficulty == null)
+      .map((row) => row.keyword),
+  });
+  if (estimates.size === 0) return result;
+  return {
+    ...result,
+    rows: result.rows.map((row) => {
+      const estimate = estimates.get(normalizeKeyword(row.keyword));
+      return estimate == null
+        ? row
+        : { ...row, keywordDifficultyEstimate: estimate };
+    }),
+  };
+}
+
+async function researchRows(
   input: ResolvedResearchKeywordsInput,
   billingCustomer: BillingCustomerContext,
   creditFeature?: CreditFeature,
@@ -370,7 +402,7 @@ async function researchLocal(
     await assertLocalResearchLocation(input.locationCode, locationName);
   }
   const nationalInput = { ...input, locationName: undefined };
-  const national = await research(
+  const national = await researchRows(
     nationalInput,
     billingCustomer,
     creditFeature,

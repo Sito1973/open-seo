@@ -1,7 +1,7 @@
 import type { KeywordResearchRow } from "@/types/keywords";
 import { Card } from "@/client/components/ui/card";
 import { Separator } from "@/client/components/ui/separator";
-import { ScoreBadge } from "@/client/components/table/ScoreBadge";
+import { DifficultyBadge } from "@/client/components/table/ScoreBadge";
 import { formatNumber } from "../utils";
 import { IntentBadge } from "./IntentBadge";
 export { SerpAnalysisCard } from "./SerpAnalysisCard";
@@ -16,7 +16,7 @@ export function OverviewStats({ keyword }: { keyword: KeywordResearchRow }) {
         <span className="font-bold text-base truncate max-w-[240px] capitalize">
           {keyword.keyword}
         </span>
-        <ScoreBadge value={keyword.keywordDifficulty} />
+        <DifficultyBadge row={keyword} />
       </div>
 
       <Separator orientation="vertical" className="h-6" />

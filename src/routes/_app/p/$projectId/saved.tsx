@@ -378,6 +378,8 @@ function SavedKeywordsPage() {
         )}
 
         <SavedKeywordsBulkActionBar
+          projectId={projectId}
+          selectedRows={selectedRows}
           selectedCount={selectedCount}
           exportingSelection={exporter.exportingSelection}
           onCopy={() => {

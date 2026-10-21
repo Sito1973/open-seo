@@ -14,6 +14,7 @@ import { usePreferredKeywordGrouping } from "@/client/features/keywords/hooks/us
 import { useLocalKeywordFilters } from "@/client/features/keywords/hooks/useLocalKeywordFilters";
 import { useKeywordResearchData } from "@/client/features/keywords/hooks/useKeywordResearchData";
 import { useKeywordSerpAnalysis } from "@/client/features/keywords/hooks/useKeywordSerpAnalysis";
+import { useEstimateDifficulty } from "@/client/features/keywords/hooks/useEstimateDifficulty";
 import { captureClientEvent } from "@/client/lib/posthog";
 import { useSearchHistory } from "@/client/hooks/useSearchHistory";
 import {
@@ -250,6 +251,12 @@ export function useKeywordResearchController(
     setShowSaveDialog: uiState.setShowSaveDialog,
   });
 
+  // The refetch is answered from the server's research cache.
+  const difficulty = useEstimateDifficulty(input.projectId, [
+    "keywordResearch",
+    input.projectId,
+  ]);
+
   const handleRowClick = (row: KeywordResearchRow) => {
     captureClientEvent("keyword_research:serp_open");
     uiState.setSelectedKeyword(row);
@@ -314,5 +321,14 @@ export function useKeywordResearchController(
     sortField: input.sortField,
     toggleSort,
     SERP_PAGE_SIZE,
+    canEstimateDifficulty: difficulty.available,
+    estimatingDifficulty: difficulty.pending,
+    estimateSelectedDifficulty: () =>
+      difficulty.estimate(
+        selectedKeywordRows.map((row) => ({
+          keyword: row.keyword,
+          locationCode,
+        })),
+      ),
   };
 }

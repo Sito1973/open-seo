@@ -42,6 +42,8 @@ export interface RankTrackingRow {
   pinned: boolean;
   searchVolume: number | null;
   keywordDifficulty: number | null;
+  /** OpenSEO's own estimate (see shared/keyword-difficulty). */
+  keywordDifficultyEstimate?: number | null;
   cpc: number | null;
   desktop: RankTrackingDeviceResult;
   mobile: RankTrackingDeviceResult;

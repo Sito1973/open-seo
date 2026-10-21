@@ -71,7 +71,8 @@ export async function getDataforseoKey(
 /**
  * A key for a provider of Google data that stands in for DataForSEO: a free
  * Google API, the Google Ads Keyword Planner, Bright Data's live Google SERP,
- * or SerpApi's Google AI Mode. It applies only on self-hosted installs that do
+ * SerpApi's Google AI Mode, or Open PageRank's domain authority for keyword
+ * difficulty estimates. It applies only on self-hosted installs that do
  * not use DataForSEO for that feature (no key, or a key kept to backlinks by
  * DATAFORSEO_SCOPE), so hosted billing and every install that uses DataForSEO
  * for it keep their exact behavior.
@@ -82,7 +83,8 @@ export async function getGoogleFallbackKey(
     | "GOOGLE_PLACES_API_KEY"
     | "GOOGLE_ADS_CUSTOMER_ID"
     | "BRIGHTDATA_API_KEY"
-    | "SERPAPI_API_KEY",
+    | "SERPAPI_API_KEY"
+    | "OPENPAGERANK_API_KEY",
 ): Promise<string | null> {
   if (await getDataforseoKey("other")) return null;
   if (await isHostedServerAuthMode()) return null;

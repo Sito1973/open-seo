@@ -6,6 +6,7 @@ import {
   real,
   text,
 } from "drizzle-orm/pg-core";
+import { projects } from "./app.schema";
 import { organization } from "./better-auth-schema";
 
 // Keep these definitions structurally identical to ../serp.schema.ts.
@@ -67,4 +68,29 @@ export const serpObservationFeatures = pgTable(
     feature: text("feature").notNull(),
   },
   (t) => [primaryKey({ columns: [t.observationId, t.feature] })],
+);
+
+export const keywordDifficultyEstimates = pgTable(
+  "keyword_difficulty_estimates",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    keyword: text("keyword").notNull(),
+    locationCode: integer("location_code").notNull(),
+    languageCode: text("language_code").notNull(),
+    keywordDifficulty: integer("keyword_difficulty").notNull(),
+    localScore: integer("local_score"),
+    organicScore: integer("organic_score"),
+    locationName: text("location_name"),
+    observedAt: text("observed_at").notNull(),
+    computedAt: text("computed_at").notNull(),
+  },
+  (t) => [
+    primaryKey({
+      // Named: the generated name is past Postgres' 63-character limit.
+      name: "keyword_difficulty_estimates_pk",
+      columns: [t.projectId, t.keyword, t.locationCode, t.languageCode],
+    }),
+  ],
 );

@@ -7,12 +7,20 @@ import {
   exportSavedKeywordsSchema,
   removeSavedKeywordsSchema,
   refreshSavedKeywordMetricsSchema,
+  estimateKeywordDifficultySchema,
   serpAnalysisSchema,
   updateSavedKeywordTagSchema,
   updateSavedKeywordTagsSchema,
 } from "@/types/schemas/keywords";
 import { KeywordResearchService } from "@/server/features/keywords/services/KeywordResearchService";
-import { requireProjectContext } from "@/serverFunctions/middleware";
+import {
+  difficultyEstimateStatus,
+  estimateProjectKeywordDifficulty,
+} from "@/server/features/serp/services/difficultyEstimate";
+import {
+  requireAuthenticatedContext,
+  requireProjectContext,
+} from "@/serverFunctions/middleware";
 import { resolveMarket } from "@/shared/keyword-locations";
 
 function shouldUseKeywordE2eFixtures() {
@@ -133,3 +141,45 @@ export const getSerpAnalysis = createServerFn({ method: "POST" })
       context,
     ),
   );
+
+/** Whether this server estimates keyword difficulty. */
+export const getKeywordDifficultyEstimateStatus = createServerFn({
+  method: "GET",
+})
+  .middleware(requireAuthenticatedContext)
+  .handler(() => difficultyEstimateStatus());
+
+/**
+ * OpenSEO's keyword difficulty estimates for up to 50 keywords: free from
+ * saved Google pages, at most 10 searched live on Bright Data per call.
+ */
+export const estimateKeywordDifficulty = createServerFn({ method: "POST" })
+  .middleware(requireProjectContext)
+  .validator(estimateKeywordDifficultySchema)
+  .handler(async ({ data, context }) => {
+    const result = await estimateProjectKeywordDifficulty({
+      organizationId: context.organizationId,
+      project: context.project,
+      keywords: data.keywords,
+      locationCode: data.locationCode,
+      languageCode: data.languageCode,
+    });
+    return {
+      estimated: result.estimates.filter(
+        (estimate) => estimate.keywordDifficulty != null,
+      ).length,
+      // A page without a local pack needs Open PageRank for an estimate.
+      withoutEstimate: result.estimates
+        .filter((estimate) => estimate.keywordDifficulty == null)
+        .map((estimate) => estimate.keyword),
+      searchedLive: result.estimates.filter(
+        (estimate) => estimate.source === "live",
+      ).length,
+      failed: result.failed.map(({ keyword, reason }) => ({
+        keyword,
+        error: reason instanceof Error ? reason.message : String(reason),
+      })),
+      notChecked: result.notChecked,
+      authorityUnavailable: result.authorityUnavailable,
+    };
+  });

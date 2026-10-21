@@ -130,6 +130,7 @@ OpenSEO MCP exposes tools for SEO research workflows:
 - On a self-hosted install without DataForSEO, run the rank grid, Maps SERP, and local business search on the Google Places API instead, and read a competitor's Google Maps listing with up to 5 reviews. See the [free Google APIs guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).
 - On a self-hosted install without DataForSEO, read live Google results for rank tracking, SERP results, and SERP competitors from Bright Data's SERP API, within its free monthly tier. SERP results include the first page's People Also Ask, featured snippet, AI Overview, knowledge panel, ads, and related searches. See the same guide.
 - On a self-hosted install without DataForSEO, research keywords and hydrate keyword metrics with search volumes and ideas from your own Google Ads account's Keyword Planner, for a country or a city. See the same guide.
+- Self-hosted only, with Bright Data: estimate keyword difficulty from a keyword's Google page (local pack reviews and, with a free Open PageRank key, the top 10's authority). Estimates are labeled "OpenSEO estimate" and also show in keyword research, saved keywords and rank trackers. See the same guide.
 - Hydrate keywords with search volume, difficulty, intent, CPC, and trends.
 - List saved keywords from an OpenSEO project.
 - Save useful keywords back to OpenSEO.

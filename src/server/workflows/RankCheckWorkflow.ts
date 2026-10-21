@@ -16,6 +16,7 @@ import {
 import { pgStep } from "@/server/workflows/pgStep";
 import { createDataforseoClient } from "@/server/lib/dataforseo";
 import { getBrightDataSerp } from "@/server/lib/brightDataSerp";
+import { estimateKeywordDifficulty } from "@/server/features/serp/services/difficultyEstimate";
 import { captureServerEvent } from "@/server/lib/posthog";
 import { AppError } from "@/server/lib/errors";
 import { autumn } from "@/server/billing/autumn";
@@ -32,6 +33,13 @@ import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 const SINGLE_ATTEMPT_STEP_CONFIG = {
   retries: { limit: 0, delay: "1 second" as const },
   timeout: "2 minutes" as const,
+};
+
+// Open PageRank answers 100 domains per request, and a large tracker's top 10s
+// can need dozens of requests.
+const ESTIMATE_STEP_CONFIG = {
+  retries: { limit: 0, delay: "1 second" as const },
+  timeout: "10 minutes" as const,
 };
 
 interface RankCheckParams {
@@ -390,6 +398,34 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
           queueStats,
         }),
       );
+
+      // Tracked keywords get OpenSEO's difficulty estimate from the first
+      // pages this check saved, with no Bright Data request. After finalize,
+      // so the run's status never waits on it or fails with it.
+      if (brightData) {
+        await pgStep(
+          step,
+          "estimate-difficulty",
+          ESTIMATE_STEP_CONFIG,
+          async () => {
+            const { estimates } = await estimateKeywordDifficulty(brightData, {
+              organizationId: billingCustomer.organizationId,
+              projectId,
+              keywords: keywords.map((keyword) => keyword.keyword),
+              market: { locationCode, languageCode, locationName },
+              // No live search, so the device of live searches is unused.
+              device: "mobile",
+              maxLive: 0,
+            });
+            return estimates.length;
+          },
+        ).catch((error: unknown) => {
+          console.warn(
+            `[rank-check] ${runId} difficulty estimates failed:`,
+            error,
+          );
+        });
+      }
     } catch (error) {
       console.error(`Rank check ${runId} failed:`, error);
       await pgStep(step, "mark-failed", SINGLE_ATTEMPT_STEP_CONFIG, async () =>

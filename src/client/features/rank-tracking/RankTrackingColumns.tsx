@@ -2,7 +2,8 @@ import { useMemo, type MutableRefObject } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Star } from "lucide-react";
 import { makeSelectionColumn } from "@/client/components/table/DataTable";
-import { ScoreBadge } from "@/client/components/table/ScoreBadge";
+import { DifficultyBadge } from "@/client/components/table/ScoreBadge";
+import { shownDifficulty } from "@/shared/keyword-difficulty";
 import { Badge } from "@/client/components/ui/badge";
 import { Button } from "@/client/components/ui/button";
 import { SortableHeader } from "@/client/components/table/SortableHeader";
@@ -62,7 +63,7 @@ function makeVolumeColumn(locationLabel?: string): ColumnDef<RankTrackingRow> {
 
 const kdColumn: ColumnDef<RankTrackingRow> = {
   id: "kd",
-  accessorFn: (row) => row.keywordDifficulty ?? undefined,
+  accessorFn: (row) => shownDifficulty(row) ?? undefined,
   header: ({ column }) => (
     <SortableHeader
       column={column}
@@ -72,9 +73,7 @@ const kdColumn: ColumnDef<RankTrackingRow> = {
     />
   ),
   size: 70,
-  cell: ({ getValue }) => (
-    <ScoreBadge value={getValue<number | undefined>() ?? null} />
-  ),
+  cell: ({ row }) => <DifficultyBadge row={row.original} />,
   sortUndefined: "last",
 };
 

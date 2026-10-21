@@ -267,6 +267,13 @@
       "when": 1792586861606,
       "tag": "0037_serp_observations",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792594765243,
+      "tag": "0038_keyword_difficulty_estimates",
+      "breakpoints": true
     }
   ]
 }

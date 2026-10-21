@@ -18,6 +18,12 @@ import {
 } from "@/server/mcp/table";
 import { projectIdSchema } from "@/server/mcp/schemas";
 import { googleSerpUrl } from "@/shared/google-serp-url";
+import {
+  DIFFICULTY_ESTIMATE_NOTE,
+  difficultyCell,
+  isEstimatedDifficulty,
+} from "@/shared/keyword-difficulty";
+import type { RankTrackingRow } from "@/types/schemas/rank-tracking";
 
 const RANK_RESULT_COLUMNS: McpTableColumn<unknown>[] = [
   { header: "keyword", value: (row) => readPath(row, "keyword") },
@@ -37,6 +43,11 @@ const RANK_RESULT_COLUMNS: McpTableColumn<unknown>[] = [
   },
   { header: "google serp", value: (row) => readPath(row, "googleSerpUrl") },
 ];
+
+const DIFFICULTY_COLUMN: McpTableColumn<RankTrackingRow> = {
+  header: "KD",
+  value: difficultyCell,
+};
 
 /**
  * `lastCheckedAt` comes from the newest snapshot, so a run that finished
@@ -147,15 +158,24 @@ export const getRankTrackerTool = {
       ...allRows.filter((row) => row.pinned),
       ...allRows.filter((row) => !row.pinned),
     ];
+    // On Bright Data, difficulty comes from OpenSEO's estimates (see
+    // estimate_keyword_difficulty), so the table shows it with its label.
+    const brightData = await getBrightDataSerp();
     const text = [
       `Tracker ${config.id} (${config.domain}${config.locationName ? `, ${config.locationName}` : ""}):`,
       `Schedule: ${config.scheduleInterval}, devices: ${config.devices}, depth: ${config.serpDepth}`,
-      ...((await getBrightDataSerp()) ? [brightDataSourceNote(config)] : []),
+      ...(brightData ? [brightDataSourceNote(config)] : []),
       formatLatestRun(results.run),
       `Keywords (${results.rows.length}):`,
       results.rows.length === 0
         ? "No keywords tracked yet."
-        : formatMcpTable(rows, RANK_RESULT_COLUMNS),
+        : formatMcpTable(
+            rows,
+            brightData
+              ? [...RANK_RESULT_COLUMNS, DIFFICULTY_COLUMN]
+              : RANK_RESULT_COLUMNS,
+          ),
+      ...(rows.some(isEstimatedDifficulty) ? [DIFFICULTY_ESTIMATE_NOTE] : []),
     ].join("\n");
     return mcpResponse({
       text,

@@ -179,6 +179,11 @@ function standInProviders(env: EnvRecord): string[] {
     replacements.push(
       "Google AI Overviews answers in AI visibility (Bright Data)",
     );
+    replacements.push(
+      get(env, "OPENPAGERANK_API_KEY")
+        ? "keyword difficulty estimates from the local pack and Open PageRank"
+        : "keyword difficulty estimates from the local pack (set OPENPAGERANK_API_KEY to add the top 10's authority)",
+    );
   }
   return replacements;
 }

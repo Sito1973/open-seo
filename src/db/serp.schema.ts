@@ -6,6 +6,7 @@ import {
   sqliteTable,
   text,
 } from "drizzle-orm/sqlite-core";
+import { projects } from "./app.schema";
 import { organization } from "./better-auth-schema";
 
 // One store for the Google results pages this organization has fetched live
@@ -79,4 +80,40 @@ export const serpObservationFeatures = sqliteTable(
     feature: text("feature").notNull(),
   },
   (t) => [primaryKey({ columns: [t.observationId, t.feature] })],
+);
+
+// OpenSEO's own keyword difficulty estimates, worked out from a saved first
+// page (see estimateDifficulty in features/serp/services/difficultyEstimate.ts).
+// They live here, never in keyword_metrics or rank_tracking_keywords, so an
+// estimate is never mistaken for provider data and a metrics refresh never
+// erases it; reads join them next to the provider's difficulty. One estimate
+// per keyword and country market, like keyword_metrics: the latest one wins.
+export const keywordDifficultyEstimates = sqliteTable(
+  "keyword_difficulty_estimates",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    // Trimmed and lowercased.
+    keyword: text("keyword").notNull(),
+    locationCode: integer("location_code").notNull(),
+    languageCode: text("language_code").notNull(),
+    // 0-100, from the local pack and organic scores below.
+    keywordDifficulty: integer("keyword_difficulty").notNull(),
+    // From the local pack's review counts; null without a local pack.
+    localScore: integer("local_score"),
+    // From the top 10's Open PageRank; null without OPENPAGERANK_API_KEY.
+    organicScore: integer("organic_score"),
+    // The page it came from: its city (null for the whole country) and time.
+    locationName: text("location_name"),
+    observedAt: text("observed_at").notNull(),
+    computedAt: text("computed_at").notNull(),
+  },
+  (t) => [
+    primaryKey({
+      // Named: the generated name is past Postgres' 63-character limit.
+      name: "keyword_difficulty_estimates_pk",
+      columns: [t.projectId, t.keyword, t.locationCode, t.languageCode],
+    }),
+  ],
 );

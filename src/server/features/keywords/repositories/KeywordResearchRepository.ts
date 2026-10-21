@@ -13,6 +13,7 @@ import {
 import { db } from "@/db";
 import { runBatch } from "@/db/runBatch";
 import {
+  keywordDifficultyEstimates,
   keywordMetrics,
   savedKeywordTagAssignments,
   savedKeywords,
@@ -55,8 +56,17 @@ type SavedKeywordSortField =
 type SavedKeywordListRow = {
   row: SavedKeywordRecord;
   metric: KeywordMetricRecord | null;
+  /** OpenSEO's stored difficulty estimate for the keyword, if any. */
+  difficultyEstimate: number | null;
   tags: SavedKeywordTagRecord[];
 };
+
+// The difficulty filters and sorting use: the provider's, else OpenSEO's
+// estimate, as the saved keywords table shows it. Estimates live in their own
+// table (see keywordDifficultyEstimates), joined on read.
+const shownDifficulty = sql<
+  number | null
+>`coalesce(${keywordMetrics.keywordDifficulty}, ${keywordDifficultyEstimates.keywordDifficulty})`;
 
 async function upsertKeywordMetric(params: {
   projectId: string;
@@ -191,10 +201,10 @@ function buildSavedKeywordWhere(params: {
     clauses.push(lte(keywordMetrics.cpc, params.maxCpc));
   }
   if (params.minDifficulty != null) {
-    clauses.push(gte(keywordMetrics.keywordDifficulty, params.minDifficulty));
+    clauses.push(gte(shownDifficulty, params.minDifficulty));
   }
   if (params.maxDifficulty != null) {
-    clauses.push(lte(keywordMetrics.keywordDifficulty, params.maxDifficulty));
+    clauses.push(lte(shownDifficulty, params.maxDifficulty));
   }
   if (params.tagIds && params.tagIds.length > 0) {
     clauses.push(
@@ -224,7 +234,7 @@ function buildSavedKeywordOrderBy(
     case "competition":
       return direction(keywordMetrics.competition);
     case "keywordDifficulty":
-      return direction(keywordMetrics.keywordDifficulty);
+      return direction(shownDifficulty);
     case "fetchedAt":
       return direction(keywordMetrics.fetchedAt);
     case "createdAt":
@@ -270,16 +280,29 @@ async function listSavedKeywordsByProject(
     eq(keywordMetrics.languageCode, savedKeywords.languageCode),
   );
 
+  const estimateJoin = and(
+    eq(keywordDifficultyEstimates.keyword, savedKeywords.keyword),
+    eq(keywordDifficultyEstimates.projectId, savedKeywords.projectId),
+    eq(keywordDifficultyEstimates.locationCode, savedKeywords.locationCode),
+    eq(keywordDifficultyEstimates.languageCode, savedKeywords.languageCode),
+  );
+
   const [{ value: totalCount } = { value: 0 }] = await db
     .select({ value: count() })
     .from(savedKeywords)
     .leftJoin(keywordMetrics, metricJoin)
+    .leftJoin(keywordDifficultyEstimates, estimateJoin)
     .where(where);
 
   const baseQuery = db
-    .select({ row: savedKeywords, metric: keywordMetrics })
+    .select({
+      row: savedKeywords,
+      metric: keywordMetrics,
+      difficultyEstimate: keywordDifficultyEstimates.keywordDifficulty,
+    })
     .from(savedKeywords)
     .leftJoin(keywordMetrics, metricJoin)
+    .leftJoin(keywordDifficultyEstimates, estimateJoin)
     .where(where)
     .orderBy(
       buildSavedKeywordOrderBy(params.sort, params.order),
@@ -301,9 +324,10 @@ async function listSavedKeywordsByProject(
   return {
     totalCount,
     tags,
-    rows: rows.map(({ row, metric }) => ({
+    rows: rows.map(({ row, metric, difficultyEstimate }) => ({
       row,
       metric,
+      difficultyEstimate,
       tags: tagsByKeywordId.get(row.id) ?? [],
     })),
   };

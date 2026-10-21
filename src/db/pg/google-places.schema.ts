@@ -13,6 +13,8 @@ export const googlePlacesUsage = pgTable(
         "brightdata_serp",
         "serpapi",
         "dataforseo_backlinks",
+        "open_pagerank",
+        "difficulty_estimate",
       ],
     }).notNull(),
     calls: integer("calls").notNull().default(0),

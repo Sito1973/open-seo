@@ -5,6 +5,11 @@ import { buildProjectMeta } from "@/server/mcp/context";
 import { optionalMetaOutputSchema } from "@/server/mcp/output-schemas";
 import { withMcpProjectAuth } from "@/server/mcp/project-auth";
 import { projectIdSchema } from "@/server/mcp/schemas";
+import {
+  DIFFICULTY_ESTIMATE_NOTE,
+  difficultyCell,
+  isEstimatedDifficulty,
+} from "@/shared/keyword-difficulty";
 import type { SavedKeywordRow, SavedKeywordTagSummary } from "@/types/keywords";
 
 // The app reads the full SavedKeywordRow through its own server functions. The
@@ -15,6 +20,7 @@ const savedKeywordOutputSchema = z.looseObject({
   keyword: z.string(),
   searchVolume: z.number().nullable(),
   keywordDifficulty: z.number().nullable(),
+  keywordDifficultyEstimate: z.number().optional(),
   cpc: z.number().nullable(),
   competition: z.number().nullable(),
   intent: z.string().nullable(),
@@ -29,6 +35,9 @@ function toMcpRow(
     keyword: row.keyword,
     searchVolume: row.searchVolume,
     keywordDifficulty: row.keywordDifficulty,
+    ...(row.keywordDifficultyEstimate == null
+      ? {}
+      : { keywordDifficultyEstimate: row.keywordDifficultyEstimate }),
     cpc: row.cpc,
     competition: row.competition,
     intent: row.intent,
@@ -102,9 +111,12 @@ export const listSavedKeywordsTool = {
                   row.tags.length > 0
                     ? `  tags:${row.tags.map((tag) => tag.name).join(",")}`
                     : "";
-                return `- ${row.keyword}  id:${row.id}  vol:${row.searchVolume ?? "?"}  kd:${row.keywordDifficulty ?? "?"}  cpc:${row.cpc != null ? `$${row.cpc.toFixed(2)}` : "?"}${tagText}`;
+                return `- ${row.keyword}  id:${row.id}  vol:${row.searchVolume ?? "?"}  kd:${difficultyCell(row) ?? "?"}  cpc:${row.cpc != null ? `$${row.cpc.toFixed(2)}` : "?"}${tagText}`;
               })
-              .join("\n");
+              .join("\n") +
+            (rows.some(isEstimatedDifficulty)
+              ? `\n${DIFFICULTY_ESTIMATE_NOTE}`
+              : "");
       return mcpResponse({
         text,
         meta: buildProjectMeta(
