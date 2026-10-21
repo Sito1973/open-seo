@@ -3,9 +3,13 @@ import {
   GscNotConnectedError,
   GscService,
 } from "@/server/features/gsc/services/GscService";
+import { AppError } from "@/server/lib/errors";
+import type { AdsKeywordClient } from "@/server/lib/googleAdsKeywordPlanner";
+import type { CreditFeature } from "@/shared/billing-credit-features";
 import type { ResolvedResearchKeywordsInput } from "@/types/schemas/keywords";
 import { normalizeKeyword, type EnrichedKeyword } from "./helpers";
 import { loadIntentRules, ruleIntent } from "./intent";
+import { fetchGoogleAdsResearchRows } from "./research-data";
 
 // Enough of the site's queries to pick the most seen ones: Search Console
 // sorts by clicks.
@@ -20,7 +24,7 @@ const BRIDGE_QUERY_ROWS = 1_000;
  * stored. Null when the project has no Search Console data for the seed, so
  * the caller reports the pending access instead.
  */
-export async function searchConsoleBridge(
+async function searchConsoleBridge(
   input: ResolvedResearchKeywordsInput,
   seedKeyword: string,
 ): Promise<{
@@ -67,4 +71,39 @@ export async function searchConsoleBridge(
       ];
     });
   return { rows, source: "search_console", usedFallback: false };
+}
+
+/**
+ * Keyword ideas from Google Ads data (DataForSEO's Google Ads endpoints or the
+ * self-hosted Keyword Planner), or the Search Console bridge above while the
+ * Keyword Planner reports pending Basic access.
+ */
+export async function fetchGoogleAdsRows(
+  input: ResolvedResearchKeywordsInput,
+  seedKeyword: string,
+  ads: AdsKeywordClient,
+  creditFeature?: CreditFeature,
+) {
+  try {
+    const rows = await fetchGoogleAdsResearchRows(
+      {
+        seedKeyword,
+        locationCode: input.locationCode,
+        languageCode: input.languageCode,
+        resultLimit: input.resultLimit,
+        creditFeature,
+      },
+      ads,
+    );
+    return { rows, source: "google_ads" as const, usedFallback: false };
+  } catch (error) {
+    // Only the self-hosted Keyword Planner reports pending access.
+    const pending =
+      error instanceof AppError && error.code === "GOOGLE_ADS_ACCESS_PENDING";
+    const bridge = pending
+      ? await searchConsoleBridge(input, seedKeyword)
+      : null;
+    if (!bridge) throw error;
+    return bridge;
+  }
 }

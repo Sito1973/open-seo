@@ -1314,6 +1314,7 @@ async function findBrightDataSerpCompetitors(
   const found = await findSerpCompetitors(config, {
     organizationId: context.billing.organizationId,
     userId: context.billing.userId,
+    projectId: context.project.id,
     keywords: args.keywords,
     market: searchMarket,
     device,

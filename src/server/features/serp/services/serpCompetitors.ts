@@ -110,14 +110,14 @@ function listingKey(
  * server's Cloud project has Basic access.
  */
 async function plannerMetrics(
-  userId: string,
+  owner: { userId: string; projectId: string },
   keywords: string[],
   market: Market,
 ): Promise<
   | { metrics: Map<string, KeywordMetricRow>; unavailable: null }
   | { metrics: null; unavailable: string }
 > {
-  const planner = await getKeywordPlannerClient(userId);
+  const planner = await getKeywordPlannerClient(owner.userId, owner.projectId);
   if (!planner) {
     return {
       metrics: null,
@@ -285,6 +285,7 @@ export async function findSerpCompetitors(
   input: {
     organizationId: string;
     userId: string;
+    projectId: string;
     keywords: string[];
     market: Market;
     /** The device of live searches; saved pages count from either device. */
@@ -338,7 +339,7 @@ export async function findSerpCompetitors(
   if (pages.length === 0 && failed[0]) throw failed[0].reason;
 
   const { metrics, unavailable } = await plannerMetrics(
-    input.userId,
+    input,
     pages.map((page) => page.keyword),
     input.market,
   );

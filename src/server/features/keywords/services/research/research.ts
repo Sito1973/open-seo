@@ -22,15 +22,12 @@ import {
   normalizeKeyword,
   type EnrichedKeyword,
 } from "./helpers";
-import { searchConsoleBridge } from "./search-console-bridge";
+import { fetchGoogleAdsRows } from "./search-console-bridge";
 import {
   assertLocalResearchLocation,
   localizeResearchRows,
 } from "./local-volume";
-import {
-  fetchGoogleAdsResearchRows,
-  fetchResearchRowsBySource,
-} from "./research-data";
+import { fetchResearchRowsBySource } from "./research-data";
 import { storedDifficultyEstimates } from "@/server/features/serp/services/difficultyEstimate";
 import { fetchStandInRows } from "./stand-in-modes";
 import {
@@ -180,38 +177,6 @@ async function fetchAutoRows(
     source: "blended",
     usedFallback: true,
   };
-}
-
-async function fetchGoogleAdsRows(
-  input: ResolvedResearchKeywordsInput,
-  seedKeyword: string,
-  ads: AdsKeywordClient,
-  creditFeature?: CreditFeature,
-): Promise<ResearchResult> {
-  let rows: EnrichedKeyword[];
-  try {
-    rows = await fetchGoogleAdsResearchRows(
-      {
-        seedKeyword,
-        locationCode: input.locationCode,
-        languageCode: input.languageCode,
-        resultLimit: input.resultLimit,
-        creditFeature,
-      },
-      ads,
-    );
-  } catch (error) {
-    // Only the self-hosted Keyword Planner reports pending access.
-    const pending =
-      error instanceof AppError && error.code === "GOOGLE_ADS_ACCESS_PENDING";
-    const bridge = pending
-      ? await searchConsoleBridge(input, seedKeyword)
-      : null;
-    if (!bridge) throw error;
-    return bridge;
-  }
-
-  return { rows, source: "google_ads", usedFallback: false };
 }
 
 async function fetchManualRows(
@@ -393,7 +358,7 @@ async function researchRows(
     return cached;
   }
 
-  const result = effectiveInput.locationName
+  const result: ResearchResult = effectiveInput.locationName
     ? await researchLocal(
         effectiveInput,
         effectiveInput.locationName,

@@ -322,9 +322,12 @@ export async function loadPromptCandidates(input: {
 export async function plannerVolumes(
   texts: string[],
   market: Market,
-  userId: string,
+  billing: { userId: string; projectId: string },
 ): Promise<{ volumes: Map<string, number>; note: string | null }> {
-  const planner = await getKeywordPlannerClient(userId);
+  const planner = await getKeywordPlannerClient(
+    billing.userId,
+    billing.projectId,
+  );
   if (!planner || !texts.length) return { volumes: new Map(), note: null };
   try {
     const items = await fetchAdsSearchVolumeForKeywords(planner, {

@@ -251,7 +251,7 @@ export async function researchAiPromptsFromGoogle(
       .filter((group) => !bestVolume(group))
       .map((group) => plannerText(group[0].text)),
     market,
-    customer.userId,
+    { userId: customer.userId, projectId: input.projectId },
   );
   const ranked = sortBy(
     groups.map((group) => {
