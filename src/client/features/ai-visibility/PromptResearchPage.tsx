@@ -18,6 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/client/components/ui/table";
+import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import { getAiPromptResearchSource } from "@/serverFunctions/ai-visibility";
 import { PromptResearchKeyword } from "./PromptResearchKeyword";
 import {
   AiQueryError,
@@ -184,6 +186,13 @@ function KeywordSearch({
   const navigate = useNavigate();
   const [draft, setDraft] = useState(keyword ?? "");
   const [error, setError] = useState<string | null>(null);
+  const hosted = isHostedClientAuthMode();
+  const source = useQuery({
+    queryKey: ["ai-prompt-research-source"],
+    queryFn: () => getAiPromptResearchSource(),
+    enabled: !hosted,
+    staleTime: Infinity,
+  }).data;
   return (
     <SearchCard
       onSubmit={(event) => {
@@ -205,7 +214,11 @@ function KeywordSearch({
           id="ai-keyword-research-cost"
           className="text-xs text-muted-foreground"
         >
-          About $0.25 in credits per keyword.
+          {source?.fromGoogle
+            ? "From Google: one Bright Data request per new keyword, cached 7 days. Autocomplete, Search Console and Business Profile are free."
+            : hosted || source
+              ? "About $0.25 in credits per keyword."
+              : null}
         </p>
       }
     >

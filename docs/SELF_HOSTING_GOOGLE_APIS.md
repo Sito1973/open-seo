@@ -528,6 +528,8 @@ A domain outside the top 10 costs one more request per 10 results of depth.
 Keywords that several sites track cost less, because scheduled checks reuse
 saved first pages. Google AI Overviews tracking adds one request per prompt
 per check: 40 prompts checked weekly send up to 200 a month.
+[Prompt Research](#prompt-research-without-dataforseo) sends at most one
+request per keyword a week.
 
 There is no setting to raise the budget. The counter shares the table and the
 caveats of the [Google Places budget](#built-in-monthly-budget): it covers one
@@ -775,7 +777,8 @@ calls it too often. OpenSEO calls `suggestqueries.google.com` gently:
   "cerca", "domicilio"...);
 - one lookup a second, so a new seed takes about 40 seconds;
 - each answer cached for 30 days, so a repeated seed sends nothing;
-- at most 2,000 lookups a month, counted like the other budgets;
+- at most 2,000 lookups a month, counted like the other budgets and shared
+  with [Prompt Research](#prompt-research-without-dataforseo);
 - when Google refuses a lookup (HTTP 429 or 403, or its captcha page), every
   lookup pauses for 24 hours, and the note says until when.
 
@@ -1065,3 +1068,53 @@ prompts you already track. Without a topic, it uses the first Prompt Research
 keyword that is not a topic yet. Edit them into questions a customer would ask
 an AI assistant before saving. Without Bright Data, it returns no suggestions
 and says so.
+
+## Prompt Research without DataForSEO
+
+Prompt Research normally reads DataForSEO's database of questions with
+ChatGPT's answers, which has no free replacement. On a self-hosted install
+without DataForSEO for other features, the Prompt Research page and
+`research_ai_visibility_prompts` list Google's own candidates for the keyword
+instead, in the tracker's country and language:
+
+- People Also Ask questions, with Google's short answer and its source link,
+  and related searches, from the keyword's first Google results page near the
+  project's tracked city. That page is one request from the
+  [Bright Data](#bright-data-live-google-serp-for-rank-tracking) budget,
+  cached for 7 days and saved as a [first page](#saved-first-pages).
+- Google autocomplete for the keyword's question forms: in Spanish, "donde
+  comer", "cual es el mejor", "que" and "recomienden" before it, and "en" and
+  the tracked city after it. That is five lookups, cached for 30 days and
+  counted in the [autocomplete budget](#keyword-sources).
+- Your site's questions in Search Console over the last 3 months: queries that
+  start with qué, cuál, dónde, cómo, cuándo, cuánto, quién, por qué, mejor,
+  recomienden or their English equivalents, with their impressions. This
+  needs Search Console connected to the project.
+- What people searched on Google before your Business Profile listing showed,
+  over the last 3 complete months, with impressions. This needs Google
+  Business Profile connected to the project. An account with several listings
+  uses the one whose website is the project's domain.
+- The prompts you already track under the keyword's topic, or that contain
+  the keyword, with their last collected answer.
+
+Autocomplete suggestions, Search Console questions and Business Profile
+searches are kept only when they contain every word of the keyword. Accents
+are ignored, a plural matches its singular, and the tracked city may be left
+out. Candidates with the same words merge into one row.
+
+Each row says where Google showed it and carries a labeled search signal. Rows
+are ranked by Business Profile impressions first, then Search Console
+impressions, then Keyword Planner monthly searches (once Google approves
+[Basic access](#access-level)), then rows with none. None of these counts how
+often people ask an AI assistant; no source offers that figure.
+
+No AI model is involved. On the page, a note explains this and lists the
+sources that are missing and why. **Track prompts** lets you reword each
+candidate as a customer would ask an AI assistant before you save it. Over
+[MCP](https://openseo.so/docs/mcp), the result carries `withoutModel.guidance`,
+so your own assistant rewrites the candidates, shows them to you and saves
+them with `save_ai_visibility_tracker`.
+
+A source that is not set up, or that does not answer, leaves a note instead of
+failing the research. Hosted OpenSEO and installs with DataForSEO for every
+feature keep DataForSEO's ChatGPT research.

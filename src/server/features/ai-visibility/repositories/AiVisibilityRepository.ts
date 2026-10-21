@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   lte,
   ne,
@@ -191,6 +192,33 @@ async function listAnsweredPromptIds(trackerId: string) {
   return rows.map((row) => row.promptId);
 }
 
+/** A prompt's newest answer with text, from any engine and run. */
+async function getLatestAnswer(promptId: string) {
+  return (
+    (
+      await db
+        .select({
+          id: aiObservations.id,
+          engine: aiObservations.engine,
+          collectedAt: aiObservations.collectedAt,
+          answerMarkdown: aiObservations.answerMarkdown,
+        })
+        .from(aiObservations)
+        .where(
+          and(
+            eq(aiObservations.promptId, promptId),
+            eq(aiObservations.status, "completed"),
+            ne(aiObservations.answerMarkdown, ""),
+            // Postgres sorts NULL first in descending order, SQLite last.
+            isNotNull(aiObservations.collectedAt),
+          ),
+        )
+        .orderBy(desc(aiObservations.collectedAt), desc(aiObservations.id))
+        .limit(1)
+    )[0] ?? null
+  );
+}
+
 /** Replaces an answer's evidence, so a retried collect step stays idempotent. */
 async function persistAnswer(input: {
   observationId: string;
@@ -340,6 +368,7 @@ export const AiVisibilityRepository = {
   getObservations,
   getObservation,
   listAnsweredPromptIds,
+  getLatestAnswer,
   getObservationStatuses: (runIds: string[]) =>
     runIds.length
       ? db

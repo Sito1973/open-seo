@@ -309,6 +309,52 @@ export const aiPromptResearchOutput = z.looseObject({
       ownDomainCited: flag,
       brandMentioned: flag,
       tracked: flag,
+      origins: z
+        .array(
+          z.enum([
+            "tracked",
+            "people_also_ask",
+            "related_search",
+            "autocomplete",
+            "search_console",
+            "business_profile",
+          ]),
+        )
+        .optional()
+        .describe("Google candidates only: where Google showed this text."),
+      volume: z
+        .looseObject({
+          source: z.enum([
+            "business_profile",
+            "search_console",
+            "keyword_planner",
+          ]),
+          value: count,
+          below: flag.describe("Business Profile reports fewer than value."),
+        })
+        .nullable()
+        .optional()
+        .describe(
+          "Google candidates only: Business Profile search impressions (last 3 complete months), the site's Search Console impressions (last 3 months), or Keyword Planner average monthly searches. Never AI prompt volume.",
+        ),
+      answer: z
+        .looseObject({
+          kind: z.enum(["last_answer", "people_also_ask"]),
+          engine: engine.optional(),
+          collectedAt: nullableText.optional(),
+          text,
+        })
+        .nullable()
+        .optional()
+        .describe(
+          "Google candidates only: a tracked prompt's last collected answer (shortened), else Google's People Also Ask answer, which is not an AI answer.",
+        ),
     }),
   ),
+  withoutModel: z
+    .looseObject({ guidance: text, notes: z.array(text) })
+    .optional()
+    .describe(
+      "Set when prompts are Google's raw candidates: guidance says how to rewrite them; notes say which sources are missing and why.",
+    ),
 });

@@ -111,12 +111,14 @@ function utcMinute(iso: string) {
  * this server, past the monthly budget, or Google did not answer), the
  * suggestions gathered so far come back and `unavailable` says why. Never on
  * hosted or next to DataForSEO for other features, as getGoogleFallbackKey
- * rules for every Google stand-in.
+ * rules for every Google stand-in. `queries` replaces the seed's usual
+ * lookups with exactly these.
  */
 export async function fetchGoogleAutocomplete(input: {
   seed: string;
   locationCode: number;
   languageCode: string;
+  queries?: string[];
 }): Promise<{ suggestions: string[]; unavailable: string | null }> {
   if ((await getDataforseoKey("other")) || (await isHostedServerAuthMode())) {
     return {
@@ -138,7 +140,10 @@ export async function fetchGoogleAutocomplete(input: {
   });
 
   const seed = input.seed.trim().toLowerCase();
-  for (const query of lookupQueries(seed, input.languageCode)) {
+  const queries = input.queries
+    ? unique(input.queries.map((query) => query.trim().toLowerCase()))
+    : lookupQueries(seed, input.languageCode);
+  for (const query of queries) {
     const cacheKey = await buildCacheKey("google-autocomplete", {
       query,
       hl,
