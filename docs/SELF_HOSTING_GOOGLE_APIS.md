@@ -37,7 +37,8 @@ Under **APIs & Services → Credentials → Create credentials → API key**, cr
 key, then edit it:
 
 - **API restrictions:** choose **Restrict key** and select only the
-  **PageSpeed Insights API**.
+  **PageSpeed Insights API**, plus the **Chrome UX Report API** if you want
+  [real-user Core Web Vitals](#chrome-ux-report-real-user-core-web-vitals).
 - **Application restrictions:** choose **None**, or **IP addresses** if your
   server's outbound IP address never changes. Do not use **Websites** (HTTP
   referrers): OpenSEO calls the API from the server, not from a browser, so
@@ -67,6 +68,70 @@ The API's **Quotas** page in the Cloud Console shows your daily and per-minute
 limits and how much you have used. The defaults are far above what audits use.
 If a check fails (quota, timeout, or a page Lighthouse could not load), the
 audit marks that one check as failed and carries on.
+
+## Chrome UX Report: real-user Core Web Vitals
+
+The PageSpeed Insights key also runs the `get_core_web_vitals` MCP tool. It
+reads real-user field data from the
+[Chrome UX Report (CrUX) API](https://developer.chrome.com/docs/crux/api) and
+the [CrUX History API](https://developer.chrome.com/docs/crux/history-api). It
+works for any public site, so you can compare your sites with your competitors'.
+The site audit's Lighthouse checks measure one lab page load from Google's
+servers; CrUX reports what real Chrome visitors experienced.
+
+For up to 5 sites per call, on phone and desktop (or all devices combined), the
+tool returns:
+
+- the 75th percentile (p75) of LCP, INP, CLS, FCP and TTFB over the last 28
+  days, rated good, needs improvement or poor with Google's thresholds;
+- the share of page loads in each of those three ratings;
+- Google's Core Web Vitals assessment: passed when LCP, CLS and INP (when INP
+  has data) are all good;
+- with `historyWeeks`, up to 40 weekly p75 values, each over the 28 days ending
+  that week.
+
+Ask for a single page with `level: "url"`. It needs far more traffic than the
+whole site.
+
+### 1) Enable the API
+
+1. In the Google Cloud project of your PageSpeed Insights key, enable the
+   [Chrome UX Report API](https://console.cloud.google.com/apis/library/chromeuxreport.googleapis.com).
+2. If the key has API restrictions, add the **Chrome UX Report API** to them.
+
+No new environment variable is needed, and the change applies without a
+restart. Until the API is enabled, the tool answers with an error that names
+the key.
+
+### 2) Cost and quota
+
+The CrUX API is free. Google allows 150 queries per minute per Cloud project,
+shared by both CrUX endpoints, and does not sell more, so it cannot add charges.
+A call sends one query per site and device, one more when a bare domain is
+retried with `www.`, and one more for history: at most 30 queries for 5 sites.
+When the per-minute quota runs out, the tool says so; wait a minute and retry.
+
+### No data for a site
+
+CrUX only includes sites and pages with enough Chrome visits in the last 28
+days, and Google does not publish the threshold. Small sites often have none,
+so the tool answers "no field data" for them instead of failing. Combining
+devices (`device: "all"`) has data more often than phone or desktop alone. For
+sites without field data, use the site audit's Lighthouse checks.
+
+CrUX keys its data by the exact address visitors land on: `https://example.com`
+and `https://www.example.com` are different sites. A bare domain such as
+`example.com`, the form projects store their domain in, is tried as
+`https://example.com` and then as `https://www.example.com`.
+
+### What the numbers cover
+
+- Chrome users worldwide on desktop and Android. Chrome on iOS, Android WebViews
+  and other Chromium browsers such as Edge are not counted, and the CrUX APIs
+  have no country filter.
+- The daily data runs about two days behind. The history updates on Mondays.
+- OpenSEO stores nothing from CrUX. For trends, ask for `historyWeeks` instead
+  of keeping snapshots.
 
 ## Google Places: Maps rank grid, local SERP and business search
 

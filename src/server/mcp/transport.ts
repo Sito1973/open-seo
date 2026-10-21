@@ -126,7 +126,8 @@ async function handleLegacyJsonRequest(
 // derived from the request's own Host would accept a DNS-rebinding page
 // trivially. Non-browser MCP clients send no Origin and are unaffected either
 // way.
-// `selfHosted` registers the self-hosted-only tools (Business Profile).
+// `selfHosted` registers the self-hosted-only tools (Business Profile, Core
+// Web Vitals).
 function createRequestHandler(
   props: McpProps,
   options: { selfHosted: boolean; allowedOriginHostnames?: string[] },

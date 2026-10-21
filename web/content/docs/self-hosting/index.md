@@ -38,4 +38,6 @@ A self-hosted install can connect your own Google Business Profile account so MC
 
 A Docker install without a DataForSEO key can run the site audit's Lighthouse checks through Google's free PageSpeed Insights API instead. Set `GOOGLE_PAGESPEED_API_KEY` and leave `DATAFORSEO_API_KEY` unset. When both are set, OpenSEO uses DataForSEO.
 
+With the Chrome UX Report API enabled on it, the same key runs the `get_core_web_vitals` MCP tool, which compares real-user Core Web Vitals across your sites and your competitors'. The Chrome UX Report API is free and cannot add charges.
+
 The same install can run the Maps rank grid, local SERP and local business search MCP tools on the Google Places API. Set `GOOGLE_PLACES_API_KEY`. The Places API needs a billing account, and OpenSEO keeps usage under Google's free monthly allowance with built-in budgets. See the [free Google APIs guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).

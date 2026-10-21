@@ -150,7 +150,9 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
     // Free Google APIs that stand in for DataForSEO while it is unset.
     const replacements: string[] = [];
     if (get(env, "GOOGLE_PAGESPEED_API_KEY")) {
-      replacements.push("site audit Lighthouse checks (PageSpeed Insights)");
+      replacements.push(
+        "site audit Lighthouse checks (PageSpeed Insights), real-user Core Web Vitals (Chrome UX Report)",
+      );
     }
     if (get(env, "GOOGLE_PLACES_API_KEY")) {
       replacements.push(
