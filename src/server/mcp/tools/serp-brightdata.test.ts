@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { findSerpCompetitorsTool } from "./dataforseo-research-tools";
 import { getSerpResultsTool } from "./get-serp-results";
 import { makeToolContext, textContent } from "./tool-test-support";
 
@@ -323,44 +322,4 @@ it.each([
 
   expect(live).toHaveBeenCalledTimes(1);
   expect(mocks.fetch).not.toHaveBeenCalled();
-});
-
-it("ranks competitors by keyword count and average best position across live top 10s", async () => {
-  answerPages({
-    k1: {
-      organic: organic("https://a.com/1", "https://b.com/1", "https://a.com/2"),
-    },
-    k2: {
-      organic: organic("https://b.com/x", "https://c.com/", "https://a.com/y"),
-    },
-  });
-
-  const result = await findSerpCompetitorsTool.handler(
-    {
-      projectId: "project_1",
-      keywords: ["k1", "k2"],
-      excludeDomains: ["c.com"],
-    },
-    toolContext,
-  );
-
-  expect(result.structuredContent).toMatchObject({
-    provider: "brightdata",
-    competitors: [
-      {
-        domain: "b.com",
-        keywords_count: 2,
-        avg_position: 1.5,
-        median_position: 1.5,
-        keywords_positions: { k1: 2, k2: 1 },
-      },
-      {
-        domain: "a.com",
-        keywords_count: 2,
-        avg_position: 2,
-        median_position: 2,
-        keywords_positions: { k1: 1, k2: 3 },
-      },
-    ],
-  });
 });

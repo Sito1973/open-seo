@@ -379,11 +379,14 @@ It runs:
   `related_searches`). These rows rank within their own section. If Bright
   Data changes the shape of one section, that section is left out and the rest
   of the page still comes back.
-- **`find_serp_competitors`**: up to 10 keywords per call, from each keyword's
-  live top 10 organic results. Each domain gets its keyword count, average and
-  median position, and its position per keyword. Visibility and traffic
-  estimates need search volumes, which a live results page does not have, so
-  they are not returned, and only organic results are counted.
+- **`find_serp_competitors`**: competitors from each keyword's first results
+  page, the top 10 organic results and the local pack. A keyword with a
+  [saved first page](#saved-first-pages) from the last 14 days costs nothing,
+  so a call can cover all of a project's tracked keywords; the others are
+  searched live, at most 10 per call (repeat the call for the next 10). On
+  the project's own market it searches near the city of the project's rank
+  tracker, on mobile when that tracker checks mobile only. See
+  [Competitors and visibility](#competitors-and-visibility).
 - **The SERP Analysis card** in keyword research: the top 20 organic results
   (two requests), and up to 50 when you page past them ("Load top 50").
   Google pages by offset here, so loading more sends requests only for
@@ -419,7 +422,9 @@ Each request fetches one Google results page with about 10 organic results:
   `Pereira,Risaralda,Colombia`, as a tracker's or query's `locationName`. Google
   may ignore a name it does not recognize and return country-wide results.
 - **Device:** mobile checks ask Bright Data for a mobile browser
-  (`brd_mobile=1`); `get_serp_results` and `find_serp_competitors` use desktop.
+  (`brd_mobile=1`); `get_serp_results` uses desktop, and
+  `find_serp_competitors` uses mobile only for a project whose rank tracker
+  checks mobile only.
 - **Depth:** each further 10 results is one more request (`start=10`,
   `start=20`, …). A rank check stops at the page where the tracked domain
   appears, so a domain on page 1 costs one request whatever the tracker's
@@ -456,11 +461,44 @@ other, the second check reuses the first one's page. The check's date is the day
 days older. A manual check ("Check rankings" or `run_rank_tracker`) always
 fetches live, and saves the page it gets.
 
+`find_serp_competitors` reads the latest saved first page of each keyword
+from the last 14 days, in the same market and from either device, before it
+searches anything. Weekly rank checks keep every tracked keyword inside that
+window.
+
 `get_serp_results` does not answer from saved pages, because they keep only
 the organic results and the local pack, not People Also Ask, ads or the AI
-Overview. It keeps its own 12-hour cache. Desktop and mobile pages are never
-mixed: `get_serp_results` and `find_serp_competitors` ask for desktop, so only
-a desktop tracker can reuse their pages.
+Overview. It keeps its own 12-hour cache. Rank checks never mix desktop and
+mobile pages: `get_serp_results` asks for desktop, so only a desktop tracker
+can reuse its pages, and `find_serp_competitors` asks for the device of the
+project's tracker.
+
+### Competitors and visibility
+
+`find_serp_competitors` lists every site on those first pages: organic results
+by domain, and local pack listings by their website. A listing that links to
+a social or delivery profile (Instagram, Facebook, Linktree, WhatsApp, Rappi),
+to Google, or to no site is listed by its business name instead. Each
+competitor gets its keyword count, its organic position per keyword (average
+and median) and its local pack position per keyword.
+
+Visibility and traffic are OpenSEO estimates, not Google data. They come from
+one click-through-rate curve by position (27.6% at #1 down to 2.4% at #10),
+40% lower on a page where an AI Overview was detected. A competitor with both
+an organic result and a local pack listing on a keyword gets the better of
+the two.
+
+- **Visibility**: the competitor's clicks across the keywords as a share of
+  what a #1 on every keyword would get, from 0 to 1.
+- **`etv`**: Keyword Planner monthly searches times that click-through rate,
+  summed over the keywords. It is empty without
+  [Keyword Planner](#google-ads-keyword-planner-search-volume-and-keyword-ideas)
+  volumes, including while Google has not granted Basic access.
+- **`estimated_paid_traffic_cost`**: `etv` times the Keyword Planner CPC,
+  empty while Keyword Planner returns no CPC.
+
+Sort by `visibility` (the default), `traffic_estimate`, `avg_position` or
+`keyword_count`. Paid results and featured snippets are not counted.
 
 ### Built-in monthly budget
 
@@ -525,12 +563,14 @@ locations.
 ### What OpenSEO stores
 
 A rank check stores what a DataForSEO check stores: each keyword's position,
-ranking URL and the names of the SERP features on the page. It keeps no copy
-of the results page. `get_serp_results` keeps its rows for 12 hours, as
-it does with DataForSEO, so repeating a call within that time sends no new
-request. `find_serp_competitors` is not cached, so repeating it sends new
-requests. The SERP Analysis card and the searches of project setup and prompt
-suggestions also keep their results for 12 hours.
+ranking URL and the names of the SERP features on the page. Every request's
+first page also goes to the [saved first pages](#saved-first-pages).
+`get_serp_results` keeps its rows for 12 hours, as it does with DataForSEO,
+so repeating a call within that time sends no new request.
+`find_serp_competitors` keeps no results of its own: repeating it reads the
+first pages it saved, so it sends no new request for those keywords. The SERP
+Analysis card and the searches of project setup and prompt suggestions also
+keep their results for 12 hours.
 
 ## Google Ads Keyword Planner: search volume and keyword ideas
 
@@ -545,6 +585,9 @@ instead, for free. It runs:
   searches, the monthly trend and paid competition.
 - **`get_keyword_metrics`**, refreshing saved keywords and a rank tracker's
   keyword metrics: volumes for a list of keywords, up to 700 per request.
+- **`find_serp_competitors`** on Bright Data: the volumes behind each
+  competitor's estimated traffic (see
+  [Competitors and visibility](#competitors-and-visibility)).
 
 Keyword Planner has no keyword difficulty or search intent, so those columns
 stay empty, as they do for the countries DataForSEO serves from Google Ads

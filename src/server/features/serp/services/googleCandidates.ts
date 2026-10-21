@@ -26,7 +26,9 @@ type Market = {
  * Where a project's own live searches run: its country and language, near
  * the city of its rank tracker in that market when it has one, so a local
  * business sees its city's local pack. The tracker (preferring one with a
- * city) also says which keywords the project follows.
+ * city) also says which keywords the project follows, and on which device:
+ * mobile when it checks mobile only, so its next scheduled check can reuse
+ * a page fetched on that device.
  */
 export async function projectSearchTracker(project: {
   id: string;
@@ -49,6 +51,10 @@ export async function projectSearchTracker(project: {
       locationName: tracker?.locationName ?? null,
     },
     trackerId: tracker?.id ?? null,
+    device:
+      tracker?.devices === "mobile"
+        ? ("mobile" as const)
+        : ("desktop" as const),
   };
 }
 

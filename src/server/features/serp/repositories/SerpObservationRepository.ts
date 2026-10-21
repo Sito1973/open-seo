@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { runBatch } from "@/db/runBatch";
 import {
@@ -16,11 +16,14 @@ type ResultRow = Omit<
 
 export type SerpObservationOrigin = ObservationRow["origin"];
 
-/** What makes two requests the same Google search for one organization. */
-type SerpSearch = Pick<
+/** Where a search ran: country, language and city (null for the country). */
+type SerpMarket = Pick<
   ObservationRow,
-  "organizationId" | "keyword" | "locationCode" | "languageCode" | "device"
+  "organizationId" | "locationCode" | "languageCode"
 > & { locationName?: string | null };
+
+/** What makes two requests the same Google search for one organization. */
+type SerpSearch = SerpMarket & Pick<ObservationRow, "keyword" | "device">;
 
 function searchColumns(search: SerpSearch) {
   return {
@@ -31,6 +34,19 @@ function searchColumns(search: SerpSearch) {
     locationName: search.locationName ?? null,
     device: search.device,
   };
+}
+
+/** The organization's pages in this market observed at or after `since`. */
+function inMarketSince(market: SerpMarket, since: string) {
+  return and(
+    eq(serpObservations.organizationId, market.organizationId),
+    eq(serpObservations.locationCode, market.locationCode),
+    eq(serpObservations.languageCode, market.languageCode),
+    market.locationName == null
+      ? isNull(serpObservations.locationName)
+      : eq(serpObservations.locationName, market.locationName),
+    gte(serpObservations.observedAt, since),
+  );
 }
 
 /** Saves one first results page, its rows and its SERP features at once. */
@@ -58,6 +74,36 @@ async function record(
   ]);
 }
 
+/** Each observation with its organic results, local pack and features. */
+async function readPages<Observation extends { id: string }>(
+  observations: Observation[],
+) {
+  if (observations.length === 0) return [];
+  const ids = observations.map((observation) => observation.id);
+  const [results, features] = await Promise.all([
+    db
+      .select()
+      .from(serpObservationResults)
+      .where(inArray(serpObservationResults.observationId, ids))
+      .orderBy(asc(serpObservationResults.position)),
+    db
+      .select()
+      .from(serpObservationFeatures)
+      .where(inArray(serpObservationFeatures.observationId, ids)),
+  ]);
+  return observations.map((observation) => {
+    const rows = results.filter((row) => row.observationId === observation.id);
+    return {
+      ...observation,
+      organic: rows.filter((row) => row.section === "organic"),
+      localPack: rows.filter((row) => row.section === "local_pack"),
+      features: features
+        .filter((row) => row.observationId === observation.id)
+        .map((row) => row.feature),
+    };
+  });
+}
+
 /**
  * The organization's latest first page for this search observed at or after
  * `since` (an ISO timestamp), or null. Another organization's pages never
@@ -73,38 +119,56 @@ async function findLatest(input: SerpSearch & { since: string }) {
     .from(serpObservations)
     .where(
       and(
-        eq(serpObservations.organizationId, search.organizationId),
-        eq(serpObservations.locationCode, search.locationCode),
-        eq(serpObservations.languageCode, search.languageCode),
+        inMarketSince(search, input.since),
         eq(serpObservations.keyword, search.keyword),
         eq(serpObservations.device, search.device),
-        search.locationName == null
-          ? isNull(serpObservations.locationName)
-          : eq(serpObservations.locationName, search.locationName),
-        gte(serpObservations.observedAt, input.since),
       ),
     )
     .orderBy(desc(serpObservations.observedAt))
     .limit(1);
   if (!observation) return null;
-
-  const [results, features] = await Promise.all([
-    db
-      .select()
-      .from(serpObservationResults)
-      .where(eq(serpObservationResults.observationId, observation.id))
-      .orderBy(asc(serpObservationResults.position)),
-    db
-      .select({ feature: serpObservationFeatures.feature })
-      .from(serpObservationFeatures)
-      .where(eq(serpObservationFeatures.observationId, observation.id)),
-  ]);
-  return {
-    observedAt: observation.observedAt,
-    organic: results.filter((row) => row.section === "organic"),
-    localPack: results.filter((row) => row.section === "local_pack"),
-    features: features.map((row) => row.feature),
-  };
+  const [page] = await readPages([observation]);
+  return page ?? null;
 }
 
-export const SerpObservationRepository = { record, findLatest };
+/**
+ * For each keyword, the organization's latest first page of it in this market
+ * observed at or after `since`, from either device. Keyed by normalized
+ * keyword; a keyword without one is missing.
+ */
+async function findLatestForKeywords(
+  input: SerpMarket & { keywords: string[]; since: string },
+) {
+  const keywords = [...new Set(input.keywords.map(normalizeKeyword))];
+  const observations =
+    keywords.length === 0
+      ? []
+      : await db
+          .select({
+            id: serpObservations.id,
+            keyword: serpObservations.keyword,
+            device: serpObservations.device,
+            observedAt: serpObservations.observedAt,
+          })
+          .from(serpObservations)
+          .where(
+            and(
+              inMarketSince(input, input.since),
+              inArray(serpObservations.keyword, keywords),
+            ),
+          )
+          .orderBy(desc(serpObservations.observedAt));
+  const latest = new Map<string, (typeof observations)[number]>();
+  for (const observation of observations) {
+    if (!latest.has(observation.keyword))
+      latest.set(observation.keyword, observation);
+  }
+  const pages = await readPages([...latest.values()]);
+  return new Map(pages.map((page) => [page.keyword, page]));
+}
+
+export const SerpObservationRepository = {
+  record,
+  findLatest,
+  findLatestForKeywords,
+};
