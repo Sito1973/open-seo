@@ -37,9 +37,10 @@ Deliver through the `seo-report` skill, saving with `skill: "local-seo"`. If tha
 - `get_local_serp_results`: the Maps/Local Finder result set near a coordinate. The rows carry `cid` and `place_id` — collect them once and reuse them everywhere below.
 - `get_business_profile`: the full profile for one business (hours, rating breakdown) when the `search_local_businesses` row isn't enough.
 - `get_business_reviews`: reviews with ratings, text, and whether the owner replied. Queued: a `processing` response returns a `taskId` — call again with it after 30-60 seconds, at no extra cost.
+- On self-hosted installs without DataForSEO, these two and `get_business_updates` need `placeId` or `cid`. The project's own Business Profile locations come back in full (every review, rating breakdown, photo count, posts); other businesses come from Google Places, with no rating breakdown, claimed status or photo count, at most 5 reviews and no posts.
 - `get_local_rank_grid`: rank at every point of a grid around a coordinate, with each point's result count and #1 business. 3x3 is nine searches; only go to 5x5 when the service area is genuinely wide. On self-hosted installs using Google Places, a `target.placeId` grid is free.
 - `get_place_details`: one competitor's listing from Google Places (primary type, hours, delivery, takeout and reservations, rating and review count) on self-hosted installs without DataForSEO.
-- `get_google_business_questions`: Q&A on the profile (accepts `cid`/`placeId`).
+- `get_google_business_questions`: Q&A on the profile (accepts `cid`/`placeId`). Google retired Business Profile Q&A in November 2025; when the tool is not listed, skip Q&A.
 - `get_business_updates`: posts published on the profile, with dates.
 - `list_business_categories`: valid category slugs for `search_local_businesses`.
 

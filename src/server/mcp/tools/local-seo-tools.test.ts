@@ -58,6 +58,8 @@ vi.mock("@/server/features/gbp/services/GbpListingService", () => ({
 const toolContext = makeToolContext();
 
 beforeEach(() => {
+  // The DataForSEO path; without a key these tools run on Google.
+  vi.stubEnv("DATAFORSEO_API_KEY", "dataforseo-key");
   mocks.getProjectForOrganization.mockResolvedValue({
     id: "project_1",
     locationCode: 2840,
@@ -65,6 +67,10 @@ beforeEach(() => {
   });
   mocks.getCached.mockResolvedValue(null);
   mocks.setCached.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("get_business_profile", () => {
@@ -435,12 +441,7 @@ describe("list_business_categories", () => {
     { category: "plumber", businessCount: 90 },
   ];
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it("caches the full list and filters it in memory", async () => {
-    vi.stubEnv("DATAFORSEO_API_KEY", "dataforseo-key");
     mocks.fetchBusinessListingsCategories.mockResolvedValue({
       data: categories,
       billing: { path: [], costUsd: 0 },

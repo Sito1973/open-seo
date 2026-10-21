@@ -107,6 +107,9 @@ it("refuses the local tools that would run on Google Places", async () => {
     "search_local_businesses",
     "get_local_serp_results",
     "get_local_rank_grid",
+    "get_business_profile",
+    "get_business_reviews",
+    "get_business_updates",
   ]) {
     await expect(
       tools[name]?.execute?.({}, callOptions),

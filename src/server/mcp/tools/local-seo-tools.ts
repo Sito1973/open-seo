@@ -52,6 +52,11 @@ import {
   placesNotes,
 } from "@/server/mcp/tools/local-seo-places";
 import { listGoogleBusinessCategories } from "@/server/mcp/tools/business-categories-google";
+import {
+  readGoogleBusinessProfile,
+  readGoogleBusinessReviews,
+  readGoogleBusinessUpdates,
+} from "@/server/mcp/tools/business-listings-google";
 
 // ---------------------------------------------------------------------------
 // Shared plumbing
@@ -246,6 +251,17 @@ export const getBusinessProfileTool = {
     },
   },
   handler: withMcpProjectAuth(async (args: GetBusinessProfileArgs, context) => {
+    if (await usesGoogleFallbacks()) {
+      const google = await readGoogleBusinessProfile(args, context);
+      return mcpResponse({
+        text: [
+          `Google Business Profile:\n${formatProfileText(google.profile)}`,
+          ...google.notes,
+        ].join("\n"),
+        meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
+        structuredContent: { profile: google.profile, ...google.fields },
+      });
+    }
     const identifier = resolveBusinessIdentifier(args);
     const client = createDataforseoClient(context.billing);
     const profile = await client.business.myBusinessInfo({
@@ -374,6 +390,17 @@ const REVIEW_COLUMNS: McpTableColumn<unknown>[] = [
   },
 ];
 
+function reviewsText(
+  reviews: unknown[],
+  totals: { reviews_count?: unknown } | null,
+  columns: McpTableColumn<unknown>[],
+): string {
+  const header = `Collected ${reviews.length} reviews${typeof totals?.reviews_count === "number" ? ` of ${totals.reviews_count} total` : ""}.`;
+  return reviews.length === 0
+    ? `${header} This profile has no reviews matching the request.`
+    : `${header} Review text is truncated in this table; full text is in the structured result.\n${formatMcpTable(reviews, columns)}`;
+}
+
 export const getBusinessReviewsTool = {
   name: "get_business_reviews",
   config: {
@@ -395,6 +422,27 @@ export const getBusinessReviewsTool = {
     },
   },
   handler: withMcpProjectAuth(async (args: GetBusinessReviewsArgs, context) => {
+    if (await usesGoogleFallbacks()) {
+      const google = await readGoogleBusinessReviews(args, context);
+      // Google Places does not say whether the owner replied.
+      const columns = google.ownerReplies
+        ? REVIEW_COLUMNS
+        : REVIEW_COLUMNS.filter((column) => column.header !== "owner replied");
+      return mcpResponse({
+        text: [
+          reviewsText(google.reviews, google.totals, columns),
+          ...google.notes,
+        ].join("\n"),
+        meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
+        structuredContent: {
+          status: "completed",
+          taskId: "",
+          reviews: google.reviews,
+          totals: google.totals,
+          ...google.fields,
+        },
+      });
+    }
     const includeOtherSources = args.includeOtherSources ?? false;
     let task: { endpoint: BusinessTaskEndpoint; taskId: string };
     let publicTaskId: string;
@@ -443,12 +491,8 @@ export const getBusinessReviewsTool = {
         }
       : null;
 
-    const header = `Collected ${reviews.length} reviews${typeof totals?.reviews_count === "number" ? ` of ${totals.reviews_count} total` : ""}.`;
     return mcpResponse({
-      text:
-        reviews.length === 0
-          ? `${header} This profile has no reviews matching the request.`
-          : `${header} Review text is truncated in this table; full text is in the structured result.\n${formatMcpTable(reviews, REVIEW_COLUMNS)}`,
+      text: reviewsText(reviews, totals, REVIEW_COLUMNS),
       meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
       structuredContent: {
         status: "completed",
@@ -515,6 +559,13 @@ const BUSINESS_UPDATE_COLUMNS: McpTableColumn<unknown>[] = [
   { header: "url", value: (row) => readPath(row, "url") },
 ];
 
+function updatesText(updates: unknown[]): string {
+  const header = `Collected ${updates.length} Google Business posts.`;
+  return updates.length === 0
+    ? `${header} This profile has published no posts.`
+    : `${header}\n${formatMcpTable(updates, BUSINESS_UPDATE_COLUMNS)}`;
+}
+
 export const getBusinessUpdatesTool = {
   name: "get_business_updates",
   config: {
@@ -535,6 +586,19 @@ export const getBusinessUpdatesTool = {
     },
   },
   handler: withMcpProjectAuth(async (args: GetBusinessUpdatesArgs, context) => {
+    if (await usesGoogleFallbacks()) {
+      const google = await readGoogleBusinessUpdates(args);
+      return mcpResponse({
+        text: [updatesText(google.updates), ...google.notes].join("\n"),
+        meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
+        structuredContent: {
+          status: "completed",
+          taskId: "",
+          updates: google.updates,
+          ...google.fields,
+        },
+      });
+    }
     let taskId: string;
     if (args.taskId) {
       if (args.taskId.includes(":")) {
@@ -569,12 +633,8 @@ export const getBusinessUpdatesTool = {
     const updates = resultItems(outcome.result).map((row) =>
       pickRowFields(row, BUSINESS_UPDATE_ROW_FIELDS),
     );
-    const header = `Collected ${updates.length} Google Business posts.`;
     return mcpResponse({
-      text:
-        updates.length === 0
-          ? `${header} This profile has published no posts.`
-          : `${header}\n${formatMcpTable(updates, BUSINESS_UPDATE_COLUMNS)}`,
+      text: updatesText(updates),
       meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
       structuredContent: { status: "completed", taskId, updates },
     });

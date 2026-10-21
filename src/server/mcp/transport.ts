@@ -20,8 +20,11 @@ import {
 } from "@/server/mcp/context";
 import { getPublicOrigin } from "@/server/mcp/public-origin";
 import { createOpenSeoMcpServer } from "@/server/mcp/server";
+import { usesGoogleFallbacks } from "@/server/lib/runtime-env";
 import { AuthRepository } from "@/server/auth/repositories/AuthRepository";
 import { resolveExistingActiveHostedOrganization } from "@/server/auth/default-hosted-organization";
+
+type ServerOptions = NonNullable<Parameters<typeof createOpenSeoMcpServer>[1]>;
 
 // Mirrors the agents SDK's DEFAULT_CORS_OPTIONS so legacy responses carry the
 // same CORS surface as the modern handler's.
@@ -80,7 +83,7 @@ function validateLegacyRequest(
 async function handleLegacyJsonRequest(
   request: Request,
   props: McpProps,
-  selfHosted: boolean,
+  serverOptions: ServerOptions,
 ) {
   if (request.method !== "POST") {
     return withMcpCors(
@@ -103,7 +106,7 @@ async function handleLegacyJsonRequest(
   // before the request completes. JSON mode silently drops server-to-client
   // requests (sampling/elicitation) and would hang the buffered response —
   // no OpenSEO tool issues them.
-  const server = createOpenSeoMcpServer(props, { selfHosted });
+  const server = createOpenSeoMcpServer(props, serverOptions);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
@@ -130,11 +133,11 @@ async function handleLegacyJsonRequest(
 // Web Vitals, place details).
 function createRequestHandler(
   props: McpProps,
-  options: { selfHosted: boolean; allowedOriginHostnames?: string[] },
+  options: ServerOptions & { allowedOriginHostnames?: string[] },
 ) {
-  const { selfHosted, allowedOriginHostnames } = options;
+  const { allowedOriginHostnames, ...serverOptions } = options;
   const modernHandler = createMcpHandler(
-    () => createOpenSeoMcpServer(props, { selfHosted }),
+    () => createOpenSeoMcpServer(props, serverOptions),
     {
       route: MCP_ROUTE,
       allowedOriginHostnames,
@@ -160,7 +163,7 @@ function createRequestHandler(
     }
 
     const rejection = validateLegacyRequest(request, allowedOriginHostnames);
-    return rejection ?? handleLegacyJsonRequest(request, props, selfHosted);
+    return rejection ?? handleLegacyJsonRequest(request, props, serverOptions);
   };
 }
 
@@ -267,5 +270,8 @@ export async function handleSelfHostedOpenSeoMcpRequest(
     userAgent: request.headers.get("user-agent") ?? undefined,
   });
 
-  return createRequestHandler(props, { selfHosted: true })(request, env, ctx);
+  return createRequestHandler(props, {
+    selfHosted: true,
+    googleFallbacks: await usesGoogleFallbacks(),
+  })(request, env, ctx);
 }

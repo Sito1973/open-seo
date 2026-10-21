@@ -63,7 +63,7 @@ function parseUrl(value: string | undefined): URL | null {
 }
 
 /** Places has no cid field; its googleMapsUri is "https://maps.google.com/?cid=<cid>". */
-function cidFromMapsUri(uri: string | undefined): string | null {
+export function cidFromMapsUri(uri: string | undefined): string | null {
   return parseUrl(uri)?.searchParams.get("cid") ?? null;
 }
 

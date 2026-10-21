@@ -10,6 +10,7 @@ import {
   googleUpdatedSchema,
   listingLocationSchema,
   localPostsResponseSchema,
+  mediaCountSchema,
   type foodMenuSchema,
   type rawAttributeSchema,
 } from "@/server/lib/gbpApiSchemas";
@@ -197,10 +198,15 @@ export function createGbpListingApi(request: GbpRequest) {
       await request("DELETE", `${reviewUrl(input)}/reply`);
     },
 
-    /** The most recent posts, newest first (Google leaves the order open). */
-    async listLocalPosts(input: { accountName: string; location: string }) {
+    /** The most recent posts (10 unless `max`, up to Google's 100), newest
+     *  first (Google leaves the order open). */
+    async listLocalPosts(input: {
+      accountName: string;
+      location: string;
+      max?: number;
+    }) {
       const url = new URL(`${V4_API_BASE}/${v4LocationName(input)}/localPosts`);
-      url.searchParams.set("pageSize", String(RECENT_POSTS));
+      url.searchParams.set("pageSize", String(input.max ?? RECENT_POSTS));
       const data = localPostsResponseSchema.parse(await get(url));
       const posts = (data.localPosts ?? []).map((post) => ({
         topicType: post.topicType ?? null,
@@ -210,6 +216,19 @@ export function createGbpListingApi(request: GbpRequest) {
         searchUrl: post.searchUrl ?? null,
       }));
       return sortBy(posts, [(post) => post.createTime ?? "", "desc"]);
+    },
+
+    /** Photos and videos on the listing: the owner's and customers'. */
+    async countMedia(input: { accountName: string; location: string }) {
+      const media = `${V4_API_BASE}/${v4LocationName(input)}/media`;
+      const count = async (url: string) =>
+        mediaCountSchema.parse(await get(`${url}?pageSize=1`))
+          .totalMediaItemCount;
+      const [owner, customers] = await Promise.all([
+        count(media),
+        count(`${media}/customers`),
+      ]);
+      return { owner, customers };
     },
 
     async createLocalPost(input: {

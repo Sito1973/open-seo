@@ -325,6 +325,12 @@ export const localPostsResponseSchema = z.object({
     .optional(),
 });
 
+// The owner's and the customers' media lists both carry the full count, so one
+// item per page is enough. proto3 JSON leaves a zero count out.
+export const mediaCountSchema = z.object({
+  totalMediaItemCount: z.number().int().default(0),
+});
+
 export const createdLocalPostSchema = z.object({
   name: z.string(),
   state: z.string().optional(),

@@ -275,9 +275,25 @@ and up to 5 reviews with their authors. Google picks the reviews by relevance,
 so they are a sample, not the newest reviews or the full history. Pass it a
 `place_id` from the other local tools to look at a competitor.
 
-These tools still need DataForSEO: `get_business_profile` and
-`get_business_reviews` (on Places, use `get_place_details`),
-`get_business_updates` and `get_google_business_questions`.
+`get_business_profile`, `get_business_reviews` and `get_business_updates`
+take a `placeId` or `cid` here, not a business name:
+
+- A place that is one of the project's own locations in its connected
+  [Business Profile](SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md) account is read
+  through Business Profile, with no Places budget: the star breakdown counted
+  over every review (the newest 3,000 at most), the owner's and customers'
+  photo and video counts, up to 200 reviews with your replies in the order you
+  ask for, and your latest posts (up to 100, each cut to 200 characters).
+- Any other business is read from Place Details, one call from the Place
+  Details budget. Places has no star breakdown, claim status, photo count or
+  additional categories, so they come back as null. Its reviews are Google's 5
+  most relevant, without owner replies, so `sortBy` and `depth` do not apply.
+  Google has no API for another business's posts, so `get_business_updates`
+  refuses it.
+
+`get_google_business_questions` is not listed. Google retired the Business
+Profile Q&A API on November 3, 2025, and OpenSEO reads Q&A only through
+DataForSEO, so the tool appears only when DataForSEO serves every feature.
 
 `list_business_categories` needs no Places key. With Google Business Profile
 connected to the project (see the
@@ -295,12 +311,12 @@ Unlike PageSpeed Insights, the Places API needs a billing account. Google gives
 each billing account a free monthly allowance per SKU, and OpenSEO stays under
 it with hard-coded budgets that reset at the start of each month, Pacific time:
 
-| What OpenSEO sends                                                          | Google SKU                            | Free per month | OpenSEO budget |
-| --------------------------------------------------------------------------- | ------------------------------------- | -------------- | -------------- |
-| One rank grid point for a target with a `placeId`                           | Text Search Essentials (IDs Only)     | Unlimited      | None needed    |
-| One rank grid point for a target with only a `cid` or `name` (3x3 grid = 9) | Text Search Pro                       | 5,000          | 4,500          |
-| One page of up to 20 local SERP or business search rows (at most 3 pages)   | Text Search Enterprise                | 1,000          | 900            |
-| One `get_place_details` call                                                | Place Details Enterprise + Atmosphere | 1,000          | 900            |
+| What OpenSEO sends                                                              | Google SKU                            | Free per month | OpenSEO budget |
+| ------------------------------------------------------------------------------- | ------------------------------------- | -------------- | -------------- |
+| One rank grid point for a target with a `placeId`                               | Text Search Essentials (IDs Only)     | Unlimited      | None needed    |
+| One rank grid point for a target with only a `cid` or `name` (3x3 grid = 9)     | Text Search Pro                       | 5,000          | 4,500          |
+| One page of up to 20 local SERP or business search rows (at most 3 pages)       | Text Search Enterprise                | 1,000          | 900            |
+| One `get_place_details` call, or a profile or reviews call for another business | Place Details Enterprise + Atmosphere | 1,000          | 900            |
 
 Except for place-ID rank grids, which Google does not bill, OpenSEO counts
 each request before sending it. When the budget for a SKU runs out, the tool
@@ -388,8 +404,10 @@ review, credit its author and Google Maps and link to the review on Google Maps.
 Google Maps link for this.
 
 SAM, the in-app agent, saves its chat history, which would store Places results.
-So while Google Places is in use, SAM refuses the three search tools, and it
-does not offer `get_place_details` at all. Run them from an MCP client instead.
+So while Google Places is in use, SAM refuses the three search tools and
+`get_business_profile`, `get_business_reviews` and `get_business_updates`, and
+it does not offer `get_place_details` at all. Run them from an MCP client
+instead.
 
 ## Bright Data: live Google SERP for rank tracking
 

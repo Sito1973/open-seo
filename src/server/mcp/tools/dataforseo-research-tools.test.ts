@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { fetchKeywordMetricsForList as FetchKeywordMetricsForList } from "@/server/lib/dataforseo/keyword-metrics";
 import * as researchTools from "./dataforseo-research-tools";
@@ -42,6 +42,10 @@ const usProjectRow = {
 describe("DataForSEO research MCP tools", () => {
   beforeEach(() => {
     mocks.getProjectForOrganization.mockResolvedValue(usProjectRow);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("searches local businesses, rounding fractional radii and trimming rows", async () => {
@@ -168,6 +172,7 @@ describe("DataForSEO research MCP tools", () => {
   });
 
   it("fetches Google Business Q&A as an explicit tool", async () => {
+    vi.stubEnv("DATAFORSEO_API_KEY", "dataforseo-key");
     const questionsAnswers = vi
       .fn()
       .mockResolvedValue([{ question_text: "Do you serve breakfast?" }]);
@@ -204,6 +209,26 @@ describe("DataForSEO research MCP tools", () => {
     expect(content.questions).toEqual([
       { question_text: "Do you serve breakfast?" },
     ]);
+  });
+
+  // Google retired Q&A, so DataForSEO is its only source; a key kept to
+  // backlinks counts as none.
+  it("refuses Google Business Q&A when DataForSEO is kept to backlinks", async () => {
+    vi.stubEnv("DATAFORSEO_API_KEY", "dataforseo-key");
+    vi.stubEnv("DATAFORSEO_SCOPE", "backlinks");
+    vi.stubEnv("AUTH_MODE", "");
+
+    await expect(
+      researchTools.getGoogleBusinessQuestionsTool.handler(
+        {
+          projectId: "project_1",
+          cid: "123",
+          near: { latitude: 4.8, longitude: -75.7, radiusKm: 5 },
+        },
+        toolContext,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mocks.createDataforseoClient).not.toHaveBeenCalled();
   });
 
   it("filters SERP competitors only by explicit excluded domains", async () => {

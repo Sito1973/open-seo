@@ -19,7 +19,10 @@ import { PLACES_MAX_ROWS, searchListings } from "@/server/lib/googlePlaces";
 import { getKeywordPlannerClient } from "@/server/lib/googleAdsKeywordPlanner";
 import { KEYWORD_PLANNER_SOURCE_NOTE } from "@/server/lib/keywordPlannerConfig";
 import { isPlacesBusinessType } from "@/server/lib/placesTypes";
-import { getGoogleFallbackKey } from "@/server/lib/runtime-env";
+import {
+  getGoogleFallbackKey,
+  usesGoogleFallbacks,
+} from "@/server/lib/runtime-env";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
 import {
@@ -953,7 +956,7 @@ async function searchPlacesBusinesses(
       : otherCategories;
   const lines = [
     `Found ${businesses.length} local businesses for "${textQuery}"${includedType ? ` of the place type ${includedType}` : ""} on Google Places, within ±${args.near.radiusKm} km of the point.`,
-    "On Google Places this row is the full listing. For up to 5 reviews and whether a place offers delivery, dine-in, takeout, reservations or outdoor seating, call get_place_details with its place_id; get_business_profile and get_business_reviews need DataForSEO.",
+    "On Google Places this row is the full listing. For up to 5 reviews and whether a place offers delivery, dine-in, takeout, reservations or outdoor seating, call get_place_details with its place_id. For the project's own listings, get_business_profile and get_business_reviews read every review through Business Profile.",
   ];
   if (ignoredCategories.length > 0) {
     lines.push(
@@ -1178,6 +1181,13 @@ export const getGoogleBusinessQuestionsTool = {
   },
   handler: withMcpProjectAuth(
     async (args: GetGoogleBusinessQuestionsArgs, context) => {
+      // Not listed there; this answers clients that cached the tool list.
+      if (await usesGoogleFallbacks()) {
+        throw new AppError(
+          "NOT_FOUND",
+          "Google Business Profile Q&A needs DataForSEO, which this server does not use for it. Google retired the Business Profile Q&A API on November 3, 2025, so no Google API stands in.",
+        );
+      }
       const identifier = resolveBusinessIdentifier(args);
       const client = createDataforseoClient(context.billing);
       const rows = await client.business.questionsAnswers({

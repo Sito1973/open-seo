@@ -189,7 +189,11 @@ function registerOpenSeoTool<Input extends ToolSchema>(
 
 export function createOpenSeoMcpServer(
   authProps: McpProps,
-  options: { selfHosted: boolean } = { selfHosted: false },
+  // googleFallbacks: a self-hosted install that runs stand-ins for
+  // DataForSEO (usesGoogleFallbacks), which hides the tools that have none.
+  options: { selfHosted: boolean; googleFallbacks?: boolean } = {
+    selfHosted: false,
+  },
 ) {
   const server = new McpServer(
     {
@@ -265,7 +269,9 @@ export function createOpenSeoMcpServer(
   register(findSerpCompetitorsTool);
   register(searchLocalBusinessesTool);
   register(getLocalSerpResultsTool);
-  register(getGoogleBusinessQuestionsTool);
+  // Google retired Business Profile Q&A in November 2025, so only DataForSEO
+  // still serves it.
+  if (!options.googleFallbacks) register(getGoogleBusinessQuestionsTool);
   register(getBusinessProfileTool);
   register(getBusinessReviewsTool);
   register(getBusinessUpdatesTool);

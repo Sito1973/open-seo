@@ -19,10 +19,11 @@ import {
 } from "@/server/mcp/tools/local-seo-places";
 
 // One competitor's (or the owner's) Google Maps listing with up to 5 reviews,
-// fetched live from Place Details. It stands in for get_business_profile and
-// get_business_reviews on self-hosted installs that run the local tools on
-// Google Places, so it follows the same provider rule: never on hosted, never
-// next to DATAFORSEO_API_KEY. Registered only on the self-hosted MCP
+// fetched live from Place Details, on self-hosted installs that run the local
+// tools on Google Places: one call for what get_business_profile and
+// get_business_reviews return there for another business, plus its dining
+// options. It follows the same provider rule: never on hosted, never next to
+// DATAFORSEO_API_KEY. Registered only on the self-hosted MCP
 // transport, and not in SAM, which saves its chat history.
 
 const NOT_CONFIGURED =
@@ -50,7 +51,7 @@ const inputSchema = {
 type Args = z.infer<z.ZodObject<typeof inputSchema>>;
 
 /** Google truncates a review's visit date to its year and month. */
-function formatVisitDate(date?: { year?: number; month?: number }) {
+export function formatVisitDate(date?: { year?: number; month?: number }) {
   if (!date?.year) return null;
   if (!date.month) return String(date.year);
   return `${date.year}-${String(date.month).padStart(2, "0")}`;
@@ -61,7 +62,7 @@ export const getPlaceDetailsTool = {
   config: {
     title: "Get Google Maps place details",
     description:
-      "Reads one Google Maps listing live from the Google Places API: rating, review count, price level, primary type, opening hours, website, whether it offers delivery, dine-in, takeout, reservations and outdoor seating, and up to 5 reviews (Google's relevance order) with their authors. Use it to compare a competitor's listing with the project's, on self-hosted installs that run the local tools on Google Places instead of get_business_profile and get_business_reviews. Each call spends one of this server's monthly Place Details calls (900, below Google's free 1,000). Self-hosted installs with GOOGLE_PLACES_API_KEY and no DataForSEO key only. Read-only.",
+      "Reads one Google Maps listing live from the Google Places API: rating, review count, price level, primary type, opening hours, website, whether it offers delivery, dine-in, takeout, reservations and outdoor seating, and up to 5 reviews (Google's relevance order) with their authors. Use it to compare a competitor's listing with the project's, on self-hosted installs that run the local tools on Google Places. Each call spends one of this server's monthly Place Details calls (900, below Google's free 1,000). Self-hosted installs with GOOGLE_PLACES_API_KEY and no DataForSEO key only. Read-only.",
     inputSchema,
     outputSchema: z.looseObject({
       provider: z.string(),
