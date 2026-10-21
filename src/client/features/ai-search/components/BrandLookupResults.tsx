@@ -6,6 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/client/components/ui/table";
+import { Link } from "@tanstack/react-router";
 import { Info, TriangleAlert } from "lucide-react";
 import { Alert, AlertTitle } from "@/client/components/ui/alert";
 import { Badge } from "@/client/components/ui/badge";
@@ -15,6 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/client/components/ui/tooltip";
+import { AiAssistantVisitsCard } from "@/client/features/ai-search/components/AiAssistantVisitsCard";
 import { DomainLevelBadge } from "@/client/features/ai-search/components/DomainLevelBadge";
 import { BrandLookupMentionTrendCard } from "@/client/features/ai-search/components/BrandLookupMentionTrendCard";
 import { BrandLookupShareOfVoice } from "@/client/features/ai-search/components/BrandLookupShareOfVoice";
@@ -36,6 +38,70 @@ const DOMAIN_LEVEL_TIP =
   "AI search providers report mentions per domain, not per page. This number covers the whole domain — the cited pages below are limited to your scope.";
 
 export function BrandLookupResults({ result, projectId }: Props) {
+  const collected = result.collectedAnswers;
+  if (!collected)
+    return <LookupResults result={result} projectId={projectId} />;
+  return (
+    <div className="space-y-4">
+      <CollectedAnswersNote collected={collected} projectId={projectId} />
+      {collected.ownBrand ? (
+        <AiAssistantVisitsCard projectId={projectId} />
+      ) : null}
+      {collected.answers > 0 ? (
+        <LookupResults result={result} projectId={projectId} />
+      ) : null}
+    </div>
+  );
+}
+
+/** What a lookup over this server's own collected answers covers. */
+function CollectedAnswersNote({
+  collected,
+  projectId,
+}: {
+  collected: NonNullable<BrandLookupResult["collectedAnswers"]>;
+  projectId: string;
+}) {
+  if (collected.answers === 0) {
+    return (
+      <Alert variant="info">
+        <Info aria-hidden />
+        <AlertTitle className="font-normal">
+          This server has no AI answers for this project from the last 12 weeks.
+          Brand Lookup counts the answers{" "}
+          <Link
+            to="/p/$projectId/ai-visibility"
+            params={{ projectId }}
+            className="underline"
+          >
+            Prompt Tracking
+          </Link>{" "}
+          collects, so set up tracking and run a check first.
+        </AlertTitle>
+      </Alert>
+    );
+  }
+  const since = collected.since
+    ? new Date(collected.since).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+  return (
+    <p className="text-sm text-muted-foreground">
+      Based on the AI answers this server collected:{" "}
+      {formatCount(collected.answers)} answers from{" "}
+      {collected.engines.map(formatPlatformLabel).join(", ")}
+      {since ? ` since ${since}` : null}
+      {collected.truncated ? " (the latest 50 checks)" : null}. A mention is an
+      answer that names the brand or cites its site. No AI search volume: no
+      source reports it.
+    </p>
+  );
+}
+
+function LookupResults({ result, projectId }: Props) {
   if (!result.hasData) {
     const erroredPlatforms = result.perPlatform.filter(
       (p) => p.status === "error",
@@ -133,6 +199,7 @@ function BrandHeader({ result }: { result: BrandLookupResult }) {
 }
 
 function StatsCard({ result }: { result: BrandLookupResult }) {
+  const collected = result.collectedAnswers !== null;
   return (
     <div className="w-full max-w-xl rounded-lg border border-border p-3">
       {result.aggregatesAreDomainLevel && (
@@ -150,12 +217,14 @@ function StatsCard({ result }: { result: BrandLookupResult }) {
                 <InfoTooltip text="AI answers that mention your brand or cite your website." />
               </span>
             </TableHead>
-            <TableHead className="text-right">
-              <span className="inline-flex items-center gap-1">
-                AI search volume
-                <InfoTooltip text="Estimated monthly searches for prompts where your brand appears in AI answers." />
-              </span>
-            </TableHead>
+            {collected ? null : (
+              <TableHead className="text-right">
+                <span className="inline-flex items-center gap-1">
+                  AI search volume
+                  <InfoTooltip text="Estimated monthly searches for prompts where your brand appears in AI answers." />
+                </span>
+              </TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -164,9 +233,11 @@ function StatsCard({ result }: { result: BrandLookupResult }) {
             <TableCell className="text-right tabular-nums">
               {formatCount(result.totalMentions)}
             </TableCell>
-            <TableCell className="text-right tabular-nums">
-              {formatCount(result.totalAiSearchVolume)}
-            </TableCell>
+            {collected ? null : (
+              <TableCell className="text-right tabular-nums">
+                {formatCount(result.totalAiSearchVolume)}
+              </TableCell>
+            )}
           </TableRow>
           {result.perPlatform.map((row) => (
             <TableRow key={row.platform}>
@@ -176,7 +247,7 @@ function StatsCard({ result }: { result: BrandLookupResult }) {
                     className={`size-1.5 rounded-full ${PLATFORM_DOT_CLASS[row.platform]}`}
                   />
                   {formatPlatformLabel(row.platform)}
-                  {row.platform === "chat_gpt" && (
+                  {row.platform === "chat_gpt" && !collected && (
                     <InfoTooltip text="ChatGPT data covers US English only." />
                   )}
                   {row.status === "error" && (
@@ -187,11 +258,13 @@ function StatsCard({ result }: { result: BrandLookupResult }) {
               <TableCell className="text-right tabular-nums">
                 {formatCount(row.status === "error" ? null : row.mentions)}
               </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {formatCount(
-                  row.status === "error" ? null : row.aiSearchVolume,
-                )}
-              </TableCell>
+              {collected ? null : (
+                <TableCell className="text-right tabular-nums">
+                  {formatCount(
+                    row.status === "error" ? null : row.aiSearchVolume,
+                  )}
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

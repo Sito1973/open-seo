@@ -19,6 +19,8 @@ type Props = {
   onSubmit: (event: FormEvent) => void;
   isLoading: boolean;
   validationError: { field: "query" | "competitors"; message: string } | null;
+  /** The lookup reads this server's collected answers, at no cost. */
+  fromCollectedAnswers: boolean;
 };
 
 /**
@@ -57,6 +59,7 @@ export function BrandLookupSearchCard({
   onSubmit,
   isLoading,
   validationError,
+  fromCollectedAnswers,
 }: Props) {
   const hasCompetitors = competitors.trim().length > 0;
   const queryError = validationError?.field === "query";
@@ -88,20 +91,27 @@ export function BrandLookupSearchCard({
               Voice.
             </FieldDescription>
           </Field>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            Est.{" "}
-            <span className="font-medium text-foreground">
-              ${BRAND_LOOKUP_DISPLAYED_COST_USD.toFixed(2)}
-            </span>
-            {hasCompetitors ? (
-              <span>
-                {" "}
-                plus ~$
-                {BRAND_LOOKUP_COMPETITOR_DISPLAYED_COST_USD.toFixed(2)} to
-                compare competitors
+          {fromCollectedAnswers ? (
+            <p className="text-xs text-muted-foreground">
+              Free: counts the AI answers this server&rsquo;s prompt tracking
+              collected in the last 12 weeks.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground tabular-nums">
+              Est.{" "}
+              <span className="font-medium text-foreground">
+                ${BRAND_LOOKUP_DISPLAYED_COST_USD.toFixed(2)}
               </span>
-            ) : null}
-          </p>
+              {hasCompetitors ? (
+                <span>
+                  {" "}
+                  plus ~$
+                  {BRAND_LOOKUP_COMPETITOR_DISPLAYED_COST_USD.toFixed(2)} to
+                  compare competitors
+                </span>
+              ) : null}
+            </p>
+          )}
         </>
       }
     >

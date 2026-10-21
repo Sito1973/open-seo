@@ -3,6 +3,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 import { shiftGa4Date } from "@/server/features/ga4/services/Ga4Dates";
+import { Ga4AiAssistantService } from "@/server/features/ga4/services/Ga4AiAssistantService";
 import { Ga4OrganicOverviewService } from "@/server/features/ga4/services/Ga4OrganicOverviewService";
 import { Ga4Service } from "@/server/features/ga4/services/Ga4Service";
 import { AppError } from "@/server/lib/errors";
@@ -128,6 +129,38 @@ export const getGa4DashboardReport = createServerFn({ method: "POST" })
       // Google's per-property reporting quota is exhausted: an external,
       // transient condition, not an app fault. Surface it as RATE_LIMITED so
       // error tracking skips it — the card keeps its own "try again" copy.
+      if (
+        error instanceof Ga4ReportError &&
+        error.code === "ga4_quota_exhausted"
+      ) {
+        throw new AppError("RATE_LIMITED");
+      }
+      throw error;
+    }
+  });
+
+/** Brand Lookup's card of visits from AI assistants to the project's site. */
+export const getGa4AiAssistantVisits = createServerFn({ method: "POST" })
+  .middleware(requireProjectContext)
+  .validator(projectScopedSchema)
+  .handler(async ({ context }) => {
+    try {
+      return {
+        connected: true as const,
+        ...(await Ga4AiAssistantService.getAiAssistantVisits(
+          context.projectId,
+        )),
+      };
+    } catch (error) {
+      // Same expected failures as the dashboard card: show the connect hint.
+      if (
+        error instanceof Ga4ReportError &&
+        (error.code === "ga4_not_connected" ||
+          error.code === "ga4_reconnect_required" ||
+          error.code === "ga4_property_inaccessible")
+      ) {
+        return { connected: false as const };
+      }
       if (
         error instanceof Ga4ReportError &&
         error.code === "ga4_quota_exhausted"

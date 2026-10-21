@@ -8,6 +8,7 @@ import { Input } from "@/client/components/ui/input";
 import type { CitationTab } from "@/client/features/ai-search/brandLookupFilterTypes";
 import { formatPlatformLabel } from "@/client/features/ai-search/platformLabels";
 import type { BrandLookupFiltersState } from "@/client/features/ai-search/useBrandLookupFilters";
+import type { BrandLookupPlatform } from "@/types/schemas/ai-search";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyForm = { Field: React.ComponentType<any> };
@@ -79,20 +80,27 @@ function FilterRangeInputs({
   );
 }
 
-const PLATFORM_ITEMS = [
-  { value: "all", icon: null, label: "All" },
-  { value: "chat_gpt", icon: null, label: formatPlatformLabel("chat_gpt") },
-  { value: "google", icon: null, label: formatPlatformLabel("google") },
-];
-
-function PlatformToggle({ form }: { form: AnyForm }) {
+function PlatformToggle({
+  form,
+  platforms,
+}: {
+  form: AnyForm;
+  platforms: BrandLookupPlatform[];
+}) {
   return (
     <DataTableFilterGroup label="Platform">
       <form.Field name="platform">
         {(field: StringField) => (
           <SegmentedToggle
             showLabels
-            items={PLATFORM_ITEMS}
+            items={[
+              { value: "all", icon: null, label: "All" },
+              ...platforms.map((platform) => ({
+                value: platform,
+                icon: null,
+                label: formatPlatformLabel(platform),
+              })),
+            ]}
             // The stored value for "All" is the empty string.
             value={field.state.value || "all"}
             onChange={(value) =>
@@ -107,8 +115,10 @@ function PlatformToggle({ form }: { form: AnyForm }) {
 
 function TopPagesFilters({
   form,
+  platforms,
 }: {
   form: BrandLookupFiltersState["pages"]["form"];
+  platforms: BrandLookupPlatform[];
 }) {
   return (
     <>
@@ -128,7 +138,7 @@ function TopPagesFilters({
       </div>
 
       <div className="flex flex-wrap items-stretch gap-2">
-        <PlatformToggle form={form} />
+        <PlatformToggle form={form} platforms={platforms} />
         <div className="min-w-[220px]">
           <FilterRangeInputs
             form={form}
@@ -144,8 +154,12 @@ function TopPagesFilters({
 
 function QueriesFilters({
   form,
+  platforms,
+  showVolume,
 }: {
   form: BrandLookupFiltersState["queries"]["form"];
+  platforms: BrandLookupPlatform[];
+  showVolume: boolean;
 }) {
   return (
     <>
@@ -165,15 +179,17 @@ function QueriesFilters({
       </div>
 
       <div className="flex flex-wrap items-stretch gap-2">
-        <PlatformToggle form={form} />
-        <div className="min-w-[220px]">
-          <FilterRangeInputs
-            form={form}
-            title="AI search volume"
-            minName="minVolume"
-            maxName="maxVolume"
-          />
-        </div>
+        <PlatformToggle form={form} platforms={platforms} />
+        {showVolume ? (
+          <div className="min-w-[220px]">
+            <FilterRangeInputs
+              form={form}
+              title="AI search volume"
+              minName="minVolume"
+              maxName="maxVolume"
+            />
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -182,9 +198,14 @@ function QueriesFilters({
 export function BrandLookupFilterPanel({
   activeTab,
   filters,
+  platforms,
+  showVolume,
 }: {
   activeTab: CitationTab;
   filters: BrandLookupFiltersState;
+  /** The platforms the lookup covered, for the platform toggle. */
+  platforms: BrandLookupPlatform[];
+  showVolume: boolean;
 }) {
   const current = filters[activeTab];
 
@@ -194,9 +215,13 @@ export function BrandLookupFilterPanel({
       onReset={current.reset}
     >
       {activeTab === "pages" ? (
-        <TopPagesFilters form={filters.pages.form} />
+        <TopPagesFilters form={filters.pages.form} platforms={platforms} />
       ) : (
-        <QueriesFilters form={filters.queries.form} />
+        <QueriesFilters
+          form={filters.queries.form}
+          platforms={platforms}
+          showVolume={showVolume}
+        />
       )}
     </DataTableFilterPanel>
   );

@@ -854,3 +854,43 @@ compare trends over several checks rather than single answers.
 What it stores for any engine: the answer text, the cited pages with where
 the answer cites them, and each brand's mention and citation. It keeps no copy
 of SerpApi's response.
+
+## Brand Lookup from the answers your tracker collected
+
+Without DataForSEO, Brand Lookup (`/p/<project id>/brand-lookup`; the page is
+not in the sidebar) counts the AI answers this server's prompt tracking
+collected for the project in the last 12 weeks, instead of DataForSEO's
+database of AI answers. It needs no key and costs nothing. It only knows the
+prompts the project tracks, in the tracker's engines and market: on a server
+with SerpApi alone, Google AI Mode.
+
+- An answer counts for a brand when it names the brand or its domain, or cites
+  a page on its site, the same rule as Prompt Tracking. For the project and its
+  saved competitors, searching the domain also counts answers that only give
+  the name, and searching the name also counts answers that cite the site.
+- Mentions per engine, Share of Voice against up to 5 competitors, the prompts
+  whose answers matched and the pages those answers cited all come from the
+  same answers. Scopes work as they do with DataForSEO: under a URL scope the
+  counts stay site-wide and only the pages and prompts are narrowed.
+- There is no AI search volume. No source reports how often people ask AI
+  assistants something, so the volume columns and the monthly trend are
+  hidden. The page says how many answers it counted, from which engines and
+  since when. It reads at most the latest 50 checks.
+- With no answers in the last 12 weeks, the page says so and links to Prompt
+  Tracking.
+
+### Visits from AI assistants
+
+When you look up the project's own domain or name and the project has Google
+Analytics connected, the page adds a card with the sessions and key events AI
+assistants sent to the site in the last 28 days, by source. It counts sessions
+in GA4's AI Assistant channel and sessions whose source names ChatGPT, OpenAI,
+Perplexity, Claude, Gemini or Copilot, which covers properties whose channel
+group has no AI Assistant channel. OpenSEO keeps the report for a day. MCP
+clients can read the same sessions with
+`get_google_analytics_traffic_acquisition` and the `source_medium` breakdown.
+
+### What OpenSEO stores
+
+Nothing new: Brand Lookup reads the answers prompt tracking already stored,
+and the Google Analytics report stays in the app's cache for a day.

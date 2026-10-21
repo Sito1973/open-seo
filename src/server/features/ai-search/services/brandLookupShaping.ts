@@ -153,6 +153,7 @@ export function shapeResult(args: ShapeArgs): BrandLookupResult {
     topPages,
     topQueries,
     monthlyVolume,
+    collectedAnswers: null,
   };
 }
 

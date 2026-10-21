@@ -42,10 +42,16 @@ export function CitationTabsCard({
   result: BrandLookupResult;
   projectId: string;
 }) {
+  // Answers this server collected carry no volume; their rows arrive ranked by
+  // how many answers matched.
+  const showVolume = result.collectedAnswers === null;
   const [activeTab, setActiveTab] = useState<CitationTab>("queries");
-  const [pagesSort, setPagesSort] = useState<SortingState>(DEFAULT_PAGES_SORT);
-  const [queriesSort, setQueriesSort] =
-    useState<SortingState>(DEFAULT_QUERIES_SORT);
+  const [pagesSort, setPagesSort] = useState<SortingState>(
+    showVolume ? DEFAULT_PAGES_SORT : [],
+  );
+  const [queriesSort, setQueriesSort] = useState<SortingState>(
+    showVolume ? DEFAULT_QUERIES_SORT : [],
+  );
   const filters = useBrandLookupFilters(projectId);
 
   // The platform column only earns its place when a tab actually spans >1
@@ -82,20 +88,22 @@ export function CitationTabsCard({
     () =>
       buildTopPagesColumns({
         showPlatform: showPagePlatform,
+        showVolume,
         targetDomain,
         projectId,
         brand,
       }),
-    [showPagePlatform, targetDomain, projectId, brand],
+    [showPagePlatform, showVolume, targetDomain, projectId, brand],
   );
   const queriesColumns = useMemo(
     () =>
       buildTopQueriesColumns({
         showPlatform: showQueryPlatform,
+        showVolume,
         projectId,
         brand,
       }),
-    [showQueryPlatform, projectId, brand],
+    [showQueryPlatform, showVolume, projectId, brand],
   );
 
   const pagesTable = useDataTable({
@@ -164,13 +172,15 @@ export function CitationTabsCard({
                   <strong className="text-foreground">
                     {result.resolvedTarget}
                   </strong>
-                  {isUrlScoped ? "." : " in AI answers."} Prompt examples come
-                  from the fetched sample.
+                  {isUrlScoped ? "." : " in AI answers."}{" "}
+                  {showVolume
+                    ? "Prompt examples come from the fetched sample."
+                    : "Counted over the answers this server collected."}
                 </>
               ) : (
                 <>
-                  Fetched sample of prompts whose AI answer cited{" "}
-                  {isUrlScoped ? "a page within " : null}
+                  {showVolume ? "Fetched sample of prompts" : "Tracked prompts"}{" "}
+                  whose AI answer cited {isUrlScoped ? "a page within " : null}
                   <strong className="text-foreground">
                     {result.resolvedTarget}
                   </strong>
@@ -209,7 +219,12 @@ export function CitationTabsCard({
       </DataTableToolbar>
 
       {filters.showFilters ? (
-        <BrandLookupFilterPanel activeTab={activeTab} filters={filters} />
+        <BrandLookupFilterPanel
+          activeTab={activeTab}
+          filters={filters}
+          platforms={result.perPlatform.map((row) => row.platform)}
+          showVolume={showVolume}
+        />
       ) : null}
     </>
   );

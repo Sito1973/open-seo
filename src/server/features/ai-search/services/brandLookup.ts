@@ -189,8 +189,8 @@ export async function getBrandLookup(
  * narrow. A domain the parser rejects (fake TLD) keeps today's unscoped
  * behavior and fails downstream with the provider's own validation error.
  */
-function resolveResearchTarget(
-  input: BrandLookupInput,
+export function resolveResearchTarget(
+  input: Pick<BrandLookupInput, "query" | "scope">,
   detected: ReturnType<typeof detectTarget>,
 ): ResearchTarget | null {
   if (detected.type !== "domain") return null;
