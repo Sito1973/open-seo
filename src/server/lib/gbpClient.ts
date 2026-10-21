@@ -1,37 +1,36 @@
 import { z } from "zod";
-import { getGoogleAccessToken } from "@/server/features/google/googleOAuth";
-import {
-  GbpApiError,
-  GbpTokenError,
-  type GbpErrorReason,
-} from "@/server/lib/gbpErrors";
-import { GBP_OAUTH_PROVIDER_ID } from "@/shared/gbp";
 import {
   accountsResponseSchema,
   dailyMetricsResponseSchema,
   gbpAccountNameSchema,
   gbpLocationNameSchema,
-  googleErrorSchema,
   locationsResponseSchema,
   type postalAddressSchema,
+  reviewSchema,
   reviewsResponseSchema,
   searchKeywordsResponseSchema,
   type googleDateSchema,
 } from "@/server/lib/gbpApiSchemas";
+import { createGbpListingApi } from "@/server/lib/gbpListingApi";
+import {
+  BUSINESS_INFO_API_BASE,
+  collectPages,
+  createGbpRequest,
+  reviewUrl,
+  V4_API_BASE,
+  v4LocationName,
+} from "@/server/lib/gbpRequest";
 
-// Read-only Google Business Profile client for the owner's own listings
-// (self-hosted only). Every call is a GET; the business.manage scope it rides
-// on is write-capable, so keep it that way.
+// Google Business Profile client for the owner's own listings (self-hosted
+// only). Reads are GETs. The edit functions from gbpListingApi are called
+// only by GbpListingService and GbpContentService, and only from an MCP call
+// with apply: true, except patchLocation with validateOnly in previews.
 
 const ACCOUNTS_URL =
   "https://mybusinessaccountmanagement.googleapis.com/v1/accounts";
-const BUSINESS_INFO_API_BASE =
-  "https://mybusinessbusinessinformation.googleapis.com/v1";
-const REVIEWS_API_BASE = "https://mybusiness.googleapis.com/v4";
 const PERFORMANCE_API_BASE =
   "https://businessprofileperformance.googleapis.com/v1";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
-const MAX_ERROR_BODY_LENGTH = 8_000;
 const MAX_ACCOUNTS = 200;
 const MAX_LOCATIONS = 500;
 const LOCATION_READ_MASK = [
@@ -74,6 +73,25 @@ type GbpReview = {
   reply: { comment: string; updateTime: string | null } | null;
 };
 
+function toReview(review: z.infer<typeof reviewSchema>): GbpReview {
+  return {
+    reviewId: review.reviewId,
+    rating: STAR_RATINGS[review.starRating ?? ""] ?? null,
+    comment: review.comment ?? null,
+    createTime: review.createTime,
+    updateTime: review.updateTime ?? null,
+    reviewer: review.reviewer?.isAnonymous
+      ? null
+      : (review.reviewer?.displayName ?? null),
+    reply: review.reviewReply
+      ? {
+          comment: review.reviewReply.comment,
+          updateTime: review.reviewReply.updateTime ?? null,
+        }
+      : null,
+  };
+}
+
 /** google.type.Date query params from YYYY-MM-DD, or YYYY-MM for a month. */
 function googleDateParams(
   prefix: string,
@@ -107,115 +125,12 @@ function formatAddress(
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
-function classifyError(
-  status: number,
-  details: Array<{ reason?: string; metadata?: Record<string, string> }>,
-): { reason: GbpErrorReason; service?: string } {
-  // Before Google approves a Cloud project for the Business Profile APIs,
-  // every API has a quota of 0 requests and answers 429; an API that is not
-  // enabled answers SERVICE_DISABLED.
-  const pending = details.find(
-    (detail) =>
-      detail.reason === "SERVICE_DISABLED" ||
-      detail.metadata?.quota_limit_value === "0",
-  );
-  if (pending) {
-    return { reason: "api_access_pending", service: pending.metadata?.service };
-  }
-  if (status === 401) return { reason: "reconnect" };
-  if (status === 403) return { reason: "permission_denied" };
-  if (status === 429) return { reason: "rate_limited" };
-  return { reason: "other" };
-}
-
-function messageFor(reason: GbpErrorReason, status: number, service?: string) {
-  switch (reason) {
-    case "api_access_pending":
-      return `Google has not opened ${service ?? "the Business Profile APIs"} to this Google Cloud project yet: the API is disabled or its quota is 0 until Google approves the Business Profile API access request.`;
-    case "reconnect":
-      return "The Google Business Profile connection expired or was revoked.";
-    case "permission_denied":
-      return "Google denied access to this Business Profile account or location.";
-    case "rate_limited":
-      return "Google Business Profile rate limit reached. Retry in a minute.";
-    default:
-      return `Google Business Profile API error (${status}).`;
-  }
-}
-
-async function toApiError(response: Response): Promise<GbpApiError> {
-  const body = await response
-    .text()
-    .then((text) => text.slice(0, MAX_ERROR_BODY_LENGTH))
-    .catch(() => "");
-  let details: Array<{ reason?: string; metadata?: Record<string, string> }> =
-    [];
-  try {
-    const parsed = googleErrorSchema.safeParse(JSON.parse(body));
-    if (parsed.success) details = parsed.data.error.details ?? [];
-  } catch {
-    // Non-JSON error pages collapse to a status-only error.
-  }
-  const { reason, service } = classifyError(response.status, details);
-  return new GbpApiError(
-    response.status,
-    messageFor(reason, response.status, service),
-    reason,
-  );
-}
-
-/** Follows nextPageToken until `max` items are collected or pages run out. */
-async function collectPages<T>(
-  max: number,
-  fetchPage: (
-    pageToken: string | undefined,
-  ) => Promise<{ items: T[]; nextPageToken?: string }>,
-): Promise<T[]> {
-  const items: T[] = [];
-  let pageToken: string | undefined;
-  do {
-    const page = await fetchPage(pageToken);
-    items.push(...page.items);
-    pageToken = page.nextPageToken || undefined;
-  } while (pageToken && items.length < max);
-  return items.slice(0, max);
-}
-
 export function createGbpClient(opts: {
   userId: string;
   googleAccountId: string;
 }) {
-  let tokenPromise: Promise<string> | undefined;
-  const accessToken = () =>
-    (tokenPromise ??= getGoogleAccessToken({
-      providerId: GBP_OAUTH_PROVIDER_ID,
-      userId: opts.userId,
-      accountId: opts.googleAccountId,
-    }).catch((error: unknown) => {
-      throw new GbpTokenError(
-        "Could not mint a Google Business Profile access token.",
-        error,
-      );
-    }));
-
-  async function get(url: URL | string): Promise<unknown> {
-    const token = await accessToken();
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") throw error;
-      throw new GbpApiError(
-        0,
-        "Google Business Profile is temporarily unavailable.",
-        "other",
-      );
-    }
-    if (!response.ok) throw await toApiError(response);
-    return response.json();
-  }
+  const request = createGbpRequest(opts);
+  const get = (url: URL | string) => request("GET", url);
 
   return {
     async getUserInfoEmail(): Promise<string | null> {
@@ -272,13 +187,13 @@ export function createGbpClient(opts: {
       orderBy: "updateTime desc" | "rating" | "rating desc";
       max: number;
     }) {
-      const parent = `${gbpAccountNameSchema.parse(input.accountName)}/${gbpLocationNameSchema.parse(input.location)}`;
+      const parent = v4LocationName(input);
       let summary: { averageRating: number | null; totalReviewCount: number } =
         { averageRating: null, totalReviewCount: 0 };
       const reviews = await collectPages<GbpReview>(
         input.max,
         async (pageToken) => {
-          const url = new URL(`${REVIEWS_API_BASE}/${parent}/reviews`);
+          const url = new URL(`${V4_API_BASE}/${parent}/reviews`);
           url.searchParams.set("pageSize", "50");
           url.searchParams.set("orderBy", input.orderBy);
           if (pageToken) url.searchParams.set("pageToken", pageToken);
@@ -288,22 +203,7 @@ export function createGbpClient(opts: {
             totalReviewCount: page.totalReviewCount ?? 0,
           };
           return {
-            items: (page.reviews ?? []).map((review) => ({
-              reviewId: review.reviewId,
-              rating: STAR_RATINGS[review.starRating ?? ""] ?? null,
-              comment: review.comment ?? null,
-              createTime: review.createTime,
-              updateTime: review.updateTime ?? null,
-              reviewer: review.reviewer?.isAnonymous
-                ? null
-                : (review.reviewer?.displayName ?? null),
-              reply: review.reviewReply
-                ? {
-                    comment: review.reviewReply.comment,
-                    updateTime: review.reviewReply.updateTime ?? null,
-                  }
-                : null,
-            })),
+            items: (page.reviews ?? []).map(toReview),
             nextPageToken: page.nextPageToken,
           };
         },
@@ -380,5 +280,16 @@ export function createGbpClient(opts: {
         };
       });
     },
+
+    async getReview(input: {
+      accountName: string;
+      location: string;
+      reviewId: string;
+    }): Promise<GbpReview> {
+      return toReview(reviewSchema.parse(await get(reviewUrl(input))));
+    },
+
+    // Listing reads and edits, for GbpListingService and GbpContentService.
+    ...createGbpListingApi(request),
   };
 }

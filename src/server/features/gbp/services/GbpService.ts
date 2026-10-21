@@ -47,7 +47,7 @@ const GBP_DAILY_METRICS = {
 
 type GbpMetricKey = keyof typeof GBP_DAILY_METRICS;
 
-async function requireSelfHosted() {
+export async function requireSelfHosted() {
   if (await isHostedServerAuthMode()) {
     throw new AppError(
       "NOT_FOUND",
@@ -182,7 +182,7 @@ async function disconnect(input: { projectId: string }): Promise<void> {
   await GbpConnectionRepository.deleteByProjectId(input.projectId);
 }
 
-async function connectedClient(projectId: string) {
+export async function connectedClient(projectId: string) {
   const connection = await GbpConnectionRepository.getByProjectId(projectId);
   if (!connection) throw new GbpNotConnectedError(projectId);
   const client = createGbpClient({
@@ -203,28 +203,21 @@ async function listLocations(projectId: string) {
 }
 
 /**
- * The location a data call reads: the requested one (it must belong to the
+ * The location a call works on: the requested one (it must belong to the
  * bound account), else the account's only location, else the one whose
  * website is the project's domain. One account can hold several brands, so
- * anything ambiguous asks the caller to choose.
+ * anything ambiguous asks the caller to choose. An edit may only target the
+ * project's own listing when its website identifies one.
  */
 function pickLocation(
   locations: GbpLocation[],
   requested: string | undefined,
   projectDomain: string | null,
+  edit: boolean,
 ): GbpLocation {
   const choices = locations
     .map((location) => `${location.location} — ${location.title}`)
     .join("; ");
-  if (requested) {
-    const match = locations.find((location) => location.location === requested);
-    if (match) return match;
-    throw new AppError(
-      "VALIDATION_ERROR",
-      `${requested} is not a location of the connected Business Profile account. Its locations: ${choices || "none"}.`,
-    );
-  }
-  if (locations.length === 1 && locations[0]) return locations[0];
   const projectHost = projectDomain
     ? safeHostname(`https://${projectDomain}`)
     : null;
@@ -233,7 +226,25 @@ function pickLocation(
         (location) => safeHostname(location.websiteUri) === projectHost,
       )
     : [];
-  if (byWebsite.length === 1 && byWebsite[0]) return byWebsite[0];
+  const own = byWebsite.length === 1 ? byWebsite[0] : undefined;
+  if (requested) {
+    const match = locations.find((location) => location.location === requested);
+    if (!match) {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        `${requested} is not a location of the connected Business Profile account. Its locations: ${choices || "none"}.`,
+      );
+    }
+    if (edit && own && own !== match) {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        `${requested} (${match.title}) is not this project's listing: its website ${projectDomain} belongs to ${own.location} — ${own.title}. Edit another restaurant's listing from its own project.`,
+      );
+    }
+    return match;
+  }
+  if (locations.length === 1 && locations[0]) return locations[0];
+  if (own) return own;
   throw new AppError(
     "VALIDATION_ERROR",
     locations.length === 0
@@ -242,17 +253,24 @@ function pickLocation(
   );
 }
 
-async function resolveLocation(input: {
+export async function resolveLocation(input: {
   projectId: string;
   location?: string;
   projectDomain: string | null;
+  /** Restricts an explicit location to the project's own listing. */
+  edit?: boolean;
 }) {
   const { connection, client } = await connectedClient(input.projectId);
   const locations = await client.listLocations(connection.accountName);
   return {
     connection,
     client,
-    location: pickLocation(locations, input.location, input.projectDomain),
+    location: pickLocation(
+      locations,
+      input.location,
+      input.projectDomain,
+      input.edit ?? false,
+    ),
   };
 }
 

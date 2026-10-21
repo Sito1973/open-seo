@@ -1,14 +1,18 @@
 # Self-hosted Google Business Profile
 
 Connecting Google Business Profile lets an MCP client read your own listings:
-the locations in your Business Profile account, their reviews with your
-replies, daily performance (impressions, calls, direction requests, website and
-menu clicks) and the search terms people used to find them.
+the locations in your Business Profile account, their full profile, reviews
+with your replies, daily performance (impressions, calls, direction requests,
+website and menu clicks) and the search terms people used to find them.
 
-This integration exists only on self-hosted installs. It reads data and never
-changes your listings, but Google's only Business Profile scope
-(`business.manage`) also allows edits, so OpenSEO keeps it off the hosted
-service.
+It can also edit them, one change at a time and only after you approve it in
+chat: categories, description, hours, website, phone numbers and attributes
+such as delivery or the menu link. It can reply to reviews, publish posts and
+change food menu items. See [How edits work](#how-edits-work).
+
+This integration exists only on self-hosted installs. Google's only Business
+Profile scope (`business.manage`) allows edits, so OpenSEO keeps it off the
+hosted service.
 
 ## What you'll need
 
@@ -47,9 +51,11 @@ four:
 - [My Business Account Management API](https://console.cloud.google.com/apis/library/mybusinessaccountmanagement.googleapis.com)
   lists your Business Profile accounts.
 - [My Business Business Information API](https://console.cloud.google.com/apis/library/mybusinessbusinessinformation.googleapis.com)
-  lists their locations.
+  lists their locations and reads and edits the profile: categories,
+  description, hours, website, phone numbers and attributes.
 - [Google My Business API](https://console.cloud.google.com/apis/library/mybusiness.googleapis.com)
-  reads reviews.
+  reads reviews, posts review replies, publishes posts and edits the food
+  menu.
 - [Business Profile Performance API](https://console.cloud.google.com/apis/library/businessprofileperformance.googleapis.com)
   reads daily metrics and search terms.
 
@@ -116,10 +122,49 @@ client directly to your own server:
 - `list_google_business_profile_locations`: the account's locations, with Place
   IDs you can pass to `get_local_rank_grid`.
 - `get_google_business_profile_reviews`: reviews with ratings, your replies and
-  a count of unanswered ones. OpenSEO never posts replies.
+  a count of unanswered ones.
 - `get_google_business_profile_performance`: daily impressions and actions for
   up to 92 days.
 - `get_google_business_profile_search_keywords`: monthly search terms.
+- `get_google_business_profile_listing`: the full editable profile, every
+  attribute Google offers the location with its current value, recent posts,
+  the food menu, and which fields have edits pending Google's review.
+- `search_google_business_profile_categories`: category IDs by name, for
+  example "Hamburgues" for `categories/gcid:hamburger_restaurant`.
+- `update_google_business_profile_listing`: categories, description, regular,
+  holiday and service hours, website and phone numbers.
+- `update_google_business_profile_attributes`: yes/no features, single-choice
+  values and links such as `url_menu`, `url_order_ahead` and
+  `url_reservations`.
+- `reply_to_google_business_profile_review`: post, replace or delete your reply
+  to a review.
+- `create_google_business_profile_post`: publish an update, event or offer,
+  with an optional button and photo.
+- `update_google_business_profile_food_menu`: change, add or remove menu items.
+
+## How edits work
+
+- Every edit tool previews first. Called without `apply`, it reads the current
+  values and returns each field's current and proposed value. Nothing changes
+  on Google.
+- For categories, description, hours, website and phone numbers, Google
+  validates the preview without saving it, so a rejected value shows up before
+  you approve anything. Attributes, replies, posts and menu items are checked
+  against what Google allows for the listing; Google only fully checks them
+  when the change is applied.
+- The agent applies a change only after you approve that exact preview in
+  chat. Changes go live on Google Search and Maps right away, or after Google
+  reviews them. `get_google_business_profile_listing` lists fields with edits
+  still pending review.
+- Every applied change returns the values it replaced, so the agent can
+  preview and apply the undo. Published posts are the exception: delete those
+  in Business Profile.
+- When the project's website matches one of the account's locations, the edit
+  tools change only that location. Edit another brand's listing from its own
+  project.
+- The business name, address, open or closed status, photos and services are
+  not editable here. Change them in Business Profile.
+- The connected Google account must be an owner or manager of the listing.
 
 ## What OpenSEO stores
 
@@ -127,7 +172,8 @@ Google's Business Profile API policies limit how long its content may be kept.
 OpenSEO stores only the selected account's name and ID, which Google account
 connected it, and the encrypted OAuth tokens. Reviews, metrics and search terms
 are fetched when a tool runs and are never saved. Each tool response asks the
-agent to keep that content out of saved reports and project context.
+agent to keep that content out of saved reports and project context. Edits go
+straight to Google; OpenSEO keeps no copy.
 
 ## Troubleshooting
 
@@ -143,3 +189,20 @@ See step 3.
 
 **`redirect_uri_mismatch`**: the registered URI must match the scheme, host,
 port, and `/api/gbp/oauth/callback` path of the deployment exactly.
+
+**"Google rejected the request: STALE_DATA"**: Google recently changed that
+field itself. Review the value in Business Profile; only the owner can accept
+or override it there.
+
+**"Google rejected the request: PROFILE_DESCRIPTION_CONTAINS_URL" or
+`STRING_TOO_LONG`**: the description has a link or is over 750 characters.
+Shorten it and preview again.
+
+**A post shows `REJECTED`**: Google refused it after publishing, often for a
+phone number in the text or an image it could not download. Use the call
+button instead of a number, and a public image URL.
+
+**The food menu is not editable**: Google allows menus only for some
+categories, and `get_google_business_profile_listing` reports
+`canHaveFoodMenus: false`. Link a menu page with the `url_menu` attribute
+instead.

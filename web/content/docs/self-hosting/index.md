@@ -32,7 +32,7 @@ Search Console is optional and works in self-hosted deployments using your own G
 
 ### Google Business Profile
 
-A self-hosted install can connect your own Google Business Profile account so MCP clients can read your locations, reviews, daily performance and search terms. It reuses the Search Console OAuth client and needs Google to approve Business Profile API access for your Cloud project first. It is not available on hosted OpenSEO. See the [Google Business Profile guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md).
+A self-hosted install can connect your own Google Business Profile account so MCP clients can read your locations, reviews, daily performance and search terms. After you approve each change in chat, they can also edit the listing, reply to reviews, publish posts and update the food menu. It reuses the Search Console OAuth client and needs Google to approve Business Profile API access for your Cloud project first. It is not available on hosted OpenSEO. See the [Google Business Profile guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md).
 
 ### Free Google APIs
 

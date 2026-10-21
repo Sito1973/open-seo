@@ -2,7 +2,8 @@
 export const GBP_OAUTH_PROVIDER_ID = "google-business-profile";
 
 // business.manage is the only Business Profile scope and it is write-capable.
-// OpenSEO only ever sends GET requests with it.
+// OpenSEO reads with it, and writes only through the Business Profile edit
+// tools after a preview the user approves.
 export const GBP_OAUTH_SCOPES = [
   "openid",
   "email",

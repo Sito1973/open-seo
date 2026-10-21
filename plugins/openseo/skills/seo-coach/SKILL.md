@@ -92,7 +92,7 @@ Want to go deeper?
 - `keyword-clustering`: groups keywords by intent and maps clusters to existing or proposed pages.
 - `competitive-landscape`: identifies who wins across a market and what content/backlink patterns are working.
 - `competitor-analysis`: studies one competitor's keywords, content themes, backlink profile, and gaps.
-- `local-seo`: audits a Google Business Profile against local competitors and maps Maps visibility around a location.
+- `local-seo`: audits a Google Business Profile against local competitors and maps Maps visibility around a location; on self-hosted installs it also applies the fixes you approve to your own listing.
 - `link-prospecting`: finds likely link opportunities, discovers contact paths, and drafts outreach.
 - `seo-report`: the report-writing skill the workflows above deliver through. It carries the starter template and the save rules; users do not run it on its own.
 

@@ -43,6 +43,17 @@ import { getSerpResultsTool } from "@/server/mcp/tools/get-serp-results";
 import { getCoreWebVitalsTool } from "@/server/mcp/tools/core-web-vitals";
 import { getPlaceDetailsTool } from "@/server/mcp/tools/place-details";
 import {
+  createGoogleBusinessProfilePostTool,
+  replyToGoogleBusinessProfileReviewTool,
+  updateGoogleBusinessProfileFoodMenuTool,
+} from "@/server/mcp/tools/business-profile-content-tools";
+import {
+  getGoogleBusinessProfileListingTool,
+  searchGoogleBusinessProfileCategoriesTool,
+  updateGoogleBusinessProfileAttributesTool,
+  updateGoogleBusinessProfileListingTool,
+} from "@/server/mcp/tools/business-profile-edit-tools";
+import {
   getGoogleBusinessProfilePerformanceTool,
   getGoogleBusinessProfileReviewsTool,
   getGoogleBusinessProfileSearchKeywordsTool,
@@ -288,15 +299,23 @@ export function createOpenSeoMcpServer(
   register(saveReportTemplateTool);
   register(deleteReportTemplateTool);
 
-  // Business Profile reads the owner's own listings with a write-capable
-  // scope that only self-hosted installs grant, and Core Web Vitals and place
-  // details run only on GOOGLE_PAGESPEED_API_KEY and GOOGLE_PLACES_API_KEY,
-  // which hosted never uses. Hosted never lists these.
+  // Business Profile reads and, after the user approves a preview, edits the
+  // owner's own listings with a scope only self-hosted installs grant, and
+  // Core Web Vitals and place details run only on GOOGLE_PAGESPEED_API_KEY
+  // and GOOGLE_PLACES_API_KEY, which hosted never uses. Hosted never lists
+  // these.
   if (options.selfHosted) {
     register(listGoogleBusinessProfileLocationsTool);
     register(getGoogleBusinessProfileReviewsTool);
     register(getGoogleBusinessProfilePerformanceTool);
     register(getGoogleBusinessProfileSearchKeywordsTool);
+    register(getGoogleBusinessProfileListingTool);
+    register(searchGoogleBusinessProfileCategoriesTool);
+    register(updateGoogleBusinessProfileListingTool);
+    register(updateGoogleBusinessProfileAttributesTool);
+    register(replyToGoogleBusinessProfileReviewTool);
+    register(createGoogleBusinessProfilePostTool);
+    register(updateGoogleBusinessProfileFoodMenuTool);
     register(getCoreWebVitalsTool);
     register(getPlaceDetailsTool);
   }
