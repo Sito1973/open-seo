@@ -197,7 +197,7 @@ const reviewsInput = {
     .boolean()
     .optional()
     .describe(
-      "Only reviews without an owner reply, from the 200 most recent in the chosen order.",
+      "Only reviews without an owner reply, taken from the first 200 reviews in the chosen order.",
     ),
 } as const;
 
@@ -237,7 +237,7 @@ export const getGoogleBusinessProfileReviewsTool = {
   ),
 };
 
-const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const dateSchema = z.iso.date();
 
 const performanceInput = {
   projectId: projectIdSchema,

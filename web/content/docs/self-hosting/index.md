@@ -32,10 +32,10 @@ Search Console is optional and works in self-hosted deployments using your own G
 
 ### Google Business Profile
 
-A self-hosted install can connect your own Google Business Profile account so MCP clients can read your locations, reviews, daily performance and search terms. It reuses the Search Console OAuth client and needs Google to approve Business Profile API access for your Cloud project first. It is not available on hosted OpenSEO. See the [Google Business Profile guide on GitHub](https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md).
+A self-hosted install can connect your own Google Business Profile account so MCP clients can read your locations, reviews, daily performance and search terms. It reuses the Search Console OAuth client and needs Google to approve Business Profile API access for your Cloud project first. It is not available on hosted OpenSEO. See the [Google Business Profile guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md).
 
 ### Free Google APIs
 
 A Docker install without a DataForSEO key can run the site audit's Lighthouse checks through Google's free PageSpeed Insights API instead. Set `GOOGLE_PAGESPEED_API_KEY` and leave `DATAFORSEO_API_KEY` unset. When both are set, OpenSEO uses DataForSEO.
 
-The same install can run the Maps rank grid, local SERP and local business search MCP tools on the Google Places API. Set `GOOGLE_PLACES_API_KEY`. The Places API needs a billing account, and OpenSEO keeps usage under Google's free monthly allowance with built-in budgets. See the [free Google APIs guide on GitHub](https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).
+The same install can run the Maps rank grid, local SERP and local business search MCP tools on the Google Places API. Set `GOOGLE_PLACES_API_KEY`. The Places API needs a billing account, and OpenSEO keeps usage under Google's free monthly allowance with built-in budgets. See the [free Google APIs guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).

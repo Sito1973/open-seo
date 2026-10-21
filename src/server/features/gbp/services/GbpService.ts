@@ -307,7 +307,7 @@ function resolveDateRange(startDate?: string, endDate?: string) {
   const end = endDate ?? shiftGa4Date(utcToday(), -PERFORMANCE_LAG_DAYS);
   const start = startDate ?? shiftGa4Date(end, 1 - PERFORMANCE_DEFAULT_DAYS);
   const days = inclusiveGa4Days(start, end);
-  // Negated so an invalid calendar date (NaN days) is rejected too.
+  // Negated so an unparseable date (NaN days) is rejected too.
   if (!(days >= 1 && days <= PERFORMANCE_MAX_DAYS)) {
     throw new AppError(
       "VALIDATION_ERROR",
