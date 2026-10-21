@@ -159,6 +159,19 @@ it("runs the grid free on place IDs alone when the target has a placeId", async 
   );
 });
 
+it("warns that a placeId found at no point may be stale", async () => {
+  placesAnswer([{ id: "p-other" }]);
+
+  const result = await getLocalRankGridTool.handler(
+    { ...gridArgs, target: { placeId: "p-acme" } },
+    toolContext,
+  );
+
+  expect(textContent(result)).toContain(
+    "placeId p-acme did not appear at any point. It may be outdated",
+  );
+});
+
 it("reads one place's details and reviews live under a reserved Place Details call", async () => {
   mocks.fetch.mockImplementation(async () =>
     Response.json({
@@ -175,8 +188,10 @@ it("reads one place's details and reviews live under a reserved Place Details ca
           authorAttribution: {
             displayName: "Ana",
             uri: "https://www.google.com/maps/contrib/1",
+            photoUri: "https://lh3.googleusercontent.com/a/1",
           },
           googleMapsUri: "https://www.google.com/maps/reviews/1",
+          visitDate: { year: 2026, month: 9 },
         },
       ],
     }),
@@ -217,9 +232,10 @@ it("reads one place's details and reviews live under a reserved Place Details ca
       },
     ],
   });
-  // Google requires each review to credit its author and link to Maps.
+  // Google requires each review to credit its author (avatar, name, profile
+  // link), link to Maps, and show the visit date when it gives one.
   expect(textContent(result)).toContain(
-    "by Ana (https://www.google.com/maps/contrib/1) on Google Maps (https://www.google.com/maps/reviews/1): Excelente",
+    ", visited 2026-09, by Ana (https://www.google.com/maps/contrib/1, avatar https://lh3.googleusercontent.com/a/1) on Google Maps (https://www.google.com/maps/reviews/1): Excelente",
   );
 });
 

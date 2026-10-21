@@ -155,6 +155,14 @@ const placeDetailsSchema = placeSchema.extend({
         publishTime: z.string().optional(),
         googleMapsUri: z.string().optional(),
         flagContentUri: z.string().optional(),
+        // Year and month only; Google requires it shown for places in France.
+        visitDate: z
+          .object({
+            year: z.number().optional(),
+            month: z.number().optional(),
+            day: z.number().optional(),
+          })
+          .optional(),
         authorAttribution: z
           .object({
             displayName: z.string().optional(),

@@ -32,7 +32,7 @@ const SOURCE_NOTE =
   "Source: Google Maps (Places API Place Details), fetched live for this call.";
 
 const REVIEWS_NOTE =
-  "Reviews: Google returns at most 5, in its own relevance order, so they are a sample, not the newest reviews or the full history. When you show or quote a review, credit its author by name and Google Maps and give the review's Google Maps link. Review text is Google Maps content: never copy it into save_report or update_project_context.";
+  "Reviews: Google returns at most 5, in its own relevance order, so they are a sample, not the newest reviews or the full history. When you show or quote a review, credit its author with their avatar (author_photo_uri), name and profile link, plus Google Maps, give the review's Google Maps link, and show the visit date when one is given. Review text is Google Maps content: never copy it into save_report or update_project_context.";
 
 const inputSchema = {
   projectId: projectIdSchema,
@@ -48,6 +48,13 @@ const inputSchema = {
 } as const;
 
 type Args = z.infer<z.ZodObject<typeof inputSchema>>;
+
+/** Google truncates a review's visit date to its year and month. */
+function formatVisitDate(date?: { year?: number; month?: number }) {
+  if (!date?.year) return null;
+  if (!date.month) return String(date.year);
+  return `${date.year}-${String(date.month).padStart(2, "0")}`;
+}
 
 export const getPlaceDetailsTool = {
   name: "get_place_details",
@@ -100,6 +107,7 @@ export const getPlaceDetailsTool = {
       author_photo_uri: review.authorAttribution?.photoUri ?? null,
       published: review.relativePublishTimeDescription ?? null,
       publish_time: review.publishTime ?? null,
+      visit_date: formatVisitDate(review.visitDate),
       google_maps_uri: review.googleMapsUri ?? null,
       flag_content_uri: review.flagContentUri ?? null,
     }));
@@ -124,7 +132,7 @@ export const getPlaceDetailsTool = {
         : `${reviews.length} of its reviews, in Google's relevance order:`,
       ...reviews.map(
         (review, index) =>
-          `${index + 1}. ${formatMcpCell(review.rating)}★, ${formatMcpCell(review.published)}, by ${formatMcpCell(review.author)} (${formatMcpCell(review.author_uri)}) on Google Maps (${formatMcpCell(review.google_maps_uri)}): ${formatMcpCell(review.text)}`,
+          `${index + 1}. ${formatMcpCell(review.rating)}★, ${formatMcpCell(review.published)}${review.visit_date ? `, visited ${review.visit_date}` : ""}, by ${formatMcpCell(review.author)} (${formatMcpCell(review.author_uri)}, avatar ${formatMcpCell(review.author_photo_uri)}) on Google Maps (${formatMcpCell(review.google_maps_uri)}): ${formatMcpCell(review.text)}`,
       ),
     ];
 

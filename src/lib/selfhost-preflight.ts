@@ -154,7 +154,7 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
     }
     if (get(env, "GOOGLE_PLACES_API_KEY")) {
       replacements.push(
-        "the Maps rank grid, local SERP and local business search (Google Places)",
+        "the Maps rank grid, local SERP, local business search and place details (Google Places)",
       );
     }
     const impact = replacements.length

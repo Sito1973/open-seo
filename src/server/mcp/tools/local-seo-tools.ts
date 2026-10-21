@@ -746,7 +746,7 @@ const getLocalRankGridInputSchema = {
         .max(200)
         .optional()
         .describe(
-          "Match rows whose title contains this text (case-insensitive). Used only when cid/placeId do not match.",
+          "Match rows whose title contains this text (case-insensitive). Used only when cid/placeId do not match (on Google Places, ignored when placeId is given).",
         ),
     })
     .describe(
@@ -1081,7 +1081,8 @@ export const getLocalRankGridTool = {
       // recover from, and the Maps terms restrict caching its results. A
       // place ID target needs only IDs back, which Google does not bill; cid
       // and name matching need the Pro fields they are read from.
-      const idsOnly = args.target.placeId != null;
+      const { placeId } = args.target;
+      const idsOnly = placeId != null;
       const radiusM = Math.round(spacingKm * 1000);
       const places = await fetchPlacesGridOutcomes(placesKey, {
         points,
@@ -1090,6 +1091,15 @@ export const getLocalRankGridTool = {
         idsOnly,
         ...placesLocale(languageCode, context.project),
       });
+      // Place IDs can change, and one place can have several, so an ID that
+      // never appears may be stale rather than a sign of not ranking.
+      const placeIdMissing =
+        idsOnly &&
+        !places.outcomes.some(
+          (outcome) =>
+            outcome.status === "completed" &&
+            outcome.items.some((item) => item.place_id === placeId),
+        );
       return buildRankGridResponse({
         outcomes: places.outcomes,
         points,
@@ -1103,6 +1113,11 @@ export const getLocalRankGridTool = {
           ...(idsOnly
             ? [
                 "Free place-ID-only search: the target was matched by placeId alone, and topResult and matchedBusiness carry a placeId but no name. To name a place, match its placeId against search_local_businesses rows (place_id) or call get_place_details.",
+              ]
+            : []),
+          ...(placeIdMissing
+            ? [
+                `placeId ${placeId} did not appear at any point. It may be outdated or an alternate ID for this listing: confirm it with search_local_businesses (place_id), or rerun with name only, before reading this as not ranking.`,
               ]
             : []),
           ...placesNotes(places.fields),

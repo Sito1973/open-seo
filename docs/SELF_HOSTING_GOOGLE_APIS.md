@@ -156,7 +156,8 @@ Text Search instead of DataForSEO:
   Places does not say whether a listing is claimed.
 
 The tools keep their names and output shapes. Their responses add
-`provider: "google_places"`, the Google Maps attribution and the month's budget.
+`provider: "google_places"`, the Google Maps attribution and the month's budget
+(null on a place-ID grid, which uses none).
 
 A fourth tool, `get_place_details`, exists only on self-hosted installs that
 use Google Places. It reads one place live from
@@ -185,9 +186,10 @@ it with hard-coded budgets that reset at the start of each month, Pacific time:
 | One page of up to 20 local SERP or business search rows (at most 3 pages)   | Text Search Enterprise                | 1,000          | 900            |
 | One `get_place_details` call                                                | Place Details Enterprise + Atmosphere | 1,000          | 900            |
 
-OpenSEO counts each request before sending it. When the budget for a SKU runs
-out, the tool says so and sends nothing until next month. A rank grid reserves
-all of its points up front, so it either runs whole or not at all. Failed
+Except for place-ID rank grids, which Google does not bill, OpenSEO counts
+each request before sending it. When the budget for a SKU runs out, the tool
+says so and sends nothing until next month. A rank grid billed as Text Search
+Pro reserves all of its points up front, so it either runs whole or not at all. Failed
 requests still count, so the counter can run slightly ahead of Google's.
 
 There is no setting to raise the budgets. The free allowance belongs to the
