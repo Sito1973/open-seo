@@ -16,9 +16,10 @@ COPY . .
 
 EXPOSE 3001
 
-# The Cloudflare Vite plugin turns on Miniflare's local explorer by default,
-# including a raw D1 SQL route under /cdn-cgi/ that Miniflare serves before the
-# app (and so before SELFHOST_ACCESS_KEY). Self-hosting never needs it.
+# The Cloudflare Vite plugin turns on Miniflare's local explorer (a raw D1 SQL
+# route under /cdn-cgi/) by default. vite-plugin-preview-cdn-cgi-guard.ts blocks
+# /cdn-cgi/ on HTTP requests, but WebSocket upgrades skip it; self-hosting never
+# needs the explorer, so switch it off.
 ENV X_LOCAL_EXPLORER=false
 
 # Readiness probe against the unauthenticated setup/health endpoint. The long

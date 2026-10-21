@@ -54,7 +54,13 @@ describe("Docker local scheduler", () => {
       signal: stop.signal,
       fetchImpl,
       sleepImpl,
+      token: "boot-token",
     });
+    expect(
+      new Headers(fetchImpl.mock.calls[3][1]?.headers).get(
+        "x-openseo-scheduler-token",
+      ),
+    ).toBe("boot-token");
     const paths = fetchImpl.mock.calls.map(([url]) =>
       url instanceof URL ? url.pathname : "invalid",
     );

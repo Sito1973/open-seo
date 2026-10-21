@@ -1,9 +1,16 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
 const INTERVAL_MS = 5 * 60_000;
 const REQUEST_TIMEOUT_MS = 150_000;
+/**
+ * Per-boot secret the preview's /cdn-cgi/ guard (vite-plugin-preview-cdn-cgi-guard.ts)
+ * requires on the scheduled-handler route, so only this process can trigger it.
+ */
+export const SCHEDULER_TOKEN_ENV = "OPENSEO_SCHEDULER_TOKEN";
+export const SCHEDULER_TOKEN_HEADER = "x-openseo-scheduler-token";
 
 /** @param {string | number} port */
 export function scheduledUrl(port) {
@@ -21,7 +28,7 @@ export function scheduledUrl(port) {
  * One call only. A timeout may have reached the handler, so do not retry it
  * immediately. The application's durable run guards protect scheduled work.
  * @param {string | number} port
- * @param {{ signal?: AbortSignal, fetchImpl?: typeof fetch }} [options]
+ * @param {{ signal?: AbortSignal, fetchImpl?: typeof fetch, token?: string }} [options]
  */
 export async function triggerScheduled(port, options = {}) {
   const url = scheduledUrl(port);
@@ -29,6 +36,7 @@ export async function triggerScheduled(port, options = {}) {
   try {
     const response = await (options.fetchImpl ?? fetch)(url, {
       redirect: "manual",
+      headers: options.token ? { [SCHEDULER_TOKEN_HEADER]: options.token } : {},
       signal: AbortSignal.any([
         signal,
         AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -59,7 +67,7 @@ async function sleep(ms, signal) {
 /**
  * Serial loop: never starts a second request while one is outstanding.
  * @param {{port: string | number, signal: AbortSignal, fetchImpl?: typeof fetch,
- * sleepImpl?: typeof sleep, log?: (message: string) => void}} options
+ * sleepImpl?: typeof sleep, log?: (message: string) => void, token?: string}} options
  */
 export async function runSelfhostScheduler(options) {
   const {
@@ -68,6 +76,7 @@ export async function runSelfhostScheduler(options) {
     fetchImpl = fetch,
     sleepImpl = sleep,
     log = console.warn,
+    token,
   } = options;
   const health = new URL("/api/health", scheduledUrl(port));
   let ready = false;
@@ -90,7 +99,7 @@ export async function runSelfhostScheduler(options) {
     throw new Error("Local preview did not become ready for scheduled work.");
   while (!signal.aborted) {
     const nextTick = Date.now() + INTERVAL_MS;
-    const ok = await triggerScheduled(port, { signal, fetchImpl });
+    const ok = await triggerScheduled(port, { signal, fetchImpl, token });
     if (!ok && !signal.aborted)
       log(
         "[scheduler] Local scheduled handler failed; retrying at the next five-minute tick.",
@@ -103,6 +112,7 @@ export async function runSelfhostScheduler(options) {
 async function serveWithScheduler() {
   const port = process.env.PORT ?? "3001";
   scheduledUrl(port); // Validate before spawning anything.
+  const token = randomBytes(32).toString("hex");
   const stop = new AbortController();
   const preview = spawn(
     process.execPath,
@@ -115,7 +125,7 @@ async function serveWithScheduler() {
       port,
       "--strictPort",
     ],
-    { stdio: "inherit" },
+    { stdio: "inherit", env: { ...process.env, [SCHEDULER_TOKEN_ENV]: token } },
   );
   const shutdown = () => {
     stop.abort();
@@ -133,7 +143,7 @@ async function serveWithScheduler() {
     process.exitCode = process.exitCode || code || 0;
   });
   try {
-    await runSelfhostScheduler({ port, signal: stop.signal });
+    await runSelfhostScheduler({ port, signal: stop.signal, token });
   } catch {
     if (!stop.signal.aborted) {
       console.error("[scheduler] Local scheduler stopped unexpectedly.");

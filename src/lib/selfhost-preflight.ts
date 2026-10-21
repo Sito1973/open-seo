@@ -59,12 +59,16 @@ function checkAuthMode(env: EnvRecord, items: PreflightItem[]): void {
         message:
           "local_noauth — no auth, single admin user. Do not expose publicly without SELFHOST_ACCESS_KEY or your own auth in front.",
       });
-    } else if (accessKey.length < MIN_SELFHOST_ACCESS_KEY_LENGTH) {
+    } else if (
+      accessKey.length < MIN_SELFHOST_ACCESS_KEY_LENGTH ||
+      // The key travels in a URL query, a Bearer header and a Basic login.
+      !/^[A-Za-z0-9._~-]+$/.test(accessKey)
+    ) {
       items.push({
         key: "auth",
         name: "AUTH_MODE",
         level: "fail",
-        message: `SELFHOST_ACCESS_KEY must be at least ${MIN_SELFHOST_ACCESS_KEY_LENGTH} characters. Generate one with: openssl rand -hex 32`,
+        message: `SELFHOST_ACCESS_KEY must be at least ${MIN_SELFHOST_ACCESS_KEY_LENGTH} characters of letters, digits, '.', '_', '~' or '-'. Generate one with: openssl rand -hex 32`,
       });
     } else {
       items.push({

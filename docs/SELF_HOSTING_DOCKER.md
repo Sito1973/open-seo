@@ -50,14 +50,16 @@ Set `SELFHOST_ACCESS_KEY` to require a key for the web app and the MCP server:
 
 ```bash
 echo "SELFHOST_ACCESS_KEY=$(openssl rand -hex 32)" >> .env
-docker compose up -d --force-recreate open-seo
+docker compose pull open-seo && docker compose up -d open-seo
 ```
+
+Once the container is up, `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3001/` prints `401`. If it prints `200`, the image predates the access key (pull it, or rebuild it if you build your own) or the key did not reach the container.
 
 - The browser asks for a login. Use any username and the key as the password.
 - MCP clients send the key as `Authorization: Bearer <key>`, for example `claude mcp add --transport http openseo https://yourdomain.com/mcp --header "Authorization: Bearer <key>"`. Clients that only take a URL, such as Claude.ai custom connectors, use `https://yourdomain.com/mcp?key=<key>` with the OAuth fields left empty. Prefer the header when the client supports it, because URLs can end up in proxy logs.
 - `/api/health` stays public. It reports setup status only.
 - Serve the app over HTTPS: the key travels with every request.
-- If your proxy rewrites the `Host` header to the container's address, block `/cdn-cgi/` at the proxy. The local runtime serves debug routes there before the app sees the request.
+- If your proxy rewrites the `Host` header to the container's address (nginx does by default unless you set `proxy_set_header Host $host`), block `/cdn-cgi/` at the proxy. The container refuses those internal routes on normal requests, but the local runtime still checks only the `Host` header on WebSocket upgrades.
 
 ## Telemetry
 

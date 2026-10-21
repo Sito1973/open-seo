@@ -146,7 +146,7 @@ For MCP output that passes external SDK class instances through `structuredConte
 
 ### Deployment modes
 
-OpenSEO supports `hosted`, `cloudflare_access`, and `local_noauth` modes. `local_noauth` is an intentionally trusted local mode and is unsafe for public exposure; its lack of login is not automatically a vulnerability. Hosted mode uses Better Auth and organization-level Autumn billing. Self-hosted modes use the operator's provider key and intentionally bypass Autumn.
+OpenSEO supports `hosted`, `cloudflare_access`, and `local_noauth` modes. `local_noauth` without `SELFHOST_ACCESS_KEY` is an intentionally trusted local mode and is unsafe for public exposure; its lack of login is not automatically a vulnerability. When `SELFHOST_ACCESS_KEY` is set, `checkSelfHostAccess` in `handleFetch` (plus the preview `/cdn-cgi/` guard) is the authentication boundary for a public Docker server: a request that reaches the app or `/mcp` without passing it, or a widening of its open paths, is a real vulnerability. Hosted mode uses Better Auth and organization-level Autumn billing. Self-hosted modes use the operator's provider key and intentionally bypass Autumn.
 
 ### Workspaces and fixtures
 
