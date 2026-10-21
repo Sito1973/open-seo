@@ -2,20 +2,24 @@ import { z } from "zod";
 import { GooglePlacesUsageRepository } from "@/server/features/google-places/repositories/GooglePlacesUsageRepository";
 import { AppError } from "@/server/lib/errors";
 
-// Places API (New) Text Search: the stand-in for DataForSEO's Maps SERP on
-// self-hosted installs without DataForSEO. The URL is a fixed Google host, so
-// no SSRF screening applies.
+// Places API (New) Text Search and Place Details: the stand-in for
+// DataForSEO's Maps SERP and business data on self-hosted installs without
+// DataForSEO. The URLs are a fixed Google host, so no SSRF screening applies.
 const SEARCH_TEXT_URL = "https://places.googleapis.com/v1/places:searchText";
+const PLACE_DETAILS_URL = "https://places.googleapis.com/v1/places/";
 const REQUEST_TIMEOUT_MS = 15_000;
 const PAGE_SIZE = 20;
 /** Text Search returns at most 60 places (3 pages of 20) for one query. */
 export const PLACES_MAX_ROWS = 60;
 
 // Google bills each request at the highest SKU of any field in the mask, so
-// these masks set the price. A grid point needs only identity (Text Search
-// Pro); a listing adds contact, rating and hours (Text Search Enterprise).
-// Never add reviews, photos, editorialSummary or other Atmosphere fields.
+// these masks set the price. A grid point matched by place ID needs only IDs
+// (Text Search Essentials IDs Only, free and unmetered); matching by cid or
+// name needs googleMapsUri and displayName (Text Search Pro). A listing adds
+// contact, rating and hours (Text Search Enterprise). Never add reviews,
+// photos, editorialSummary or other Atmosphere fields to a search mask.
 // `attributions` and `nextPageToken` are IDs Only and do not raise the SKU.
+const GRID_IDS_ONLY_FIELD_MASK = "places.id,places.attributions";
 const GRID_FIELD_MASK =
   "places.id,places.displayName,places.googleMapsUri,places.attributions";
 const LISTING_FIELD_MASK = [
@@ -35,13 +39,45 @@ const LISTING_FIELD_MASK = [
   "places.attributions",
   "nextPageToken",
 ].join(",");
+// One place, live, for the get_place_details tool. Reviews and the restaurant
+// attributes (delivery through outdoorSeating) are Atmosphere fields, so the
+// whole request bills as Place Details Enterprise + Atmosphere. Place Details
+// masks name fields without the `places.` prefix.
+const DETAILS_FIELD_MASK = [
+  "id",
+  "displayName",
+  "formattedAddress",
+  "location",
+  "primaryType",
+  "primaryTypeDisplayName",
+  "googleMapsUri",
+  "businessStatus",
+  "rating",
+  "userRatingCount",
+  "websiteUri",
+  "nationalPhoneNumber",
+  "priceLevel",
+  "regularOpeningHours",
+  "delivery",
+  "dineIn",
+  "takeout",
+  "reservable",
+  "outdoorSeating",
+  "reviews",
+  "attributions",
+].join(",");
 
 // Hard-coded below Google's free monthly caps (5,000 Text Search Pro, 1,000
-// Text Search Enterprise) so a self-hosted install is never charged. There is
-// deliberately no setting to raise them.
+// Text Search Enterprise, 1,000 Place Details Enterprise + Atmosphere) so a
+// self-hosted install is never charged. There is deliberately no setting to
+// raise them. Text Search IDs Only has no cap to guard.
 const BUDGETS = {
   text_search_pro: { limit: 4500, label: "Text Search Pro" },
   text_search_enterprise: { limit: 900, label: "Text Search Enterprise" },
+  place_details_enterprise_atmosphere: {
+    limit: 900,
+    label: "Place Details Enterprise + Atmosphere",
+  },
 } as const;
 
 type PlacesSku = keyof typeof BUDGETS;
@@ -79,6 +115,7 @@ const placeSchema = z.object({
   regularOpeningHours: z
     .object({
       openNow: z.boolean().optional(),
+      weekdayDescriptions: z.array(z.string()).optional(),
       periods: z
         .array(
           z.object({
@@ -100,6 +137,35 @@ const placeSchema = z.object({
 });
 
 export type GooglePlace = z.infer<typeof placeSchema>;
+
+const placeDetailsSchema = placeSchema.extend({
+  primaryType: z.string().optional(),
+  delivery: z.boolean().optional(),
+  dineIn: z.boolean().optional(),
+  takeout: z.boolean().optional(),
+  reservable: z.boolean().optional(),
+  outdoorSeating: z.boolean().optional(),
+  reviews: z
+    .array(
+      z.object({
+        rating: z.number().optional(),
+        text: localizedTextSchema.optional(),
+        originalText: localizedTextSchema.optional(),
+        relativePublishTimeDescription: z.string().optional(),
+        publishTime: z.string().optional(),
+        googleMapsUri: z.string().optional(),
+        flagContentUri: z.string().optional(),
+        authorAttribution: z
+          .object({
+            displayName: z.string().optional(),
+            uri: z.string().optional(),
+            photoUri: z.string().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+});
 
 // Google answers an empty result set with `{}`.
 const searchTextResponseSchema = z.object({
@@ -143,7 +209,7 @@ function budgetExhausted(sku: PlacesSku, count: number): AppError {
   const { limit, label } = BUDGETS[sku];
   return new AppError(
     "RATE_LIMITED",
-    `This server's monthly Google Places budget for ${label} (${limit.toLocaleString("en-US")} calls in ${billingMonth()}) has fewer than ${count} calls left, so no search was sent. It resets next month.`,
+    `This server's monthly Google Places budget for ${label} (${limit.toLocaleString("en-US")} calls in ${billingMonth()}) has fewer than ${count} calls left, so no request was sent. It resets next month.`,
   );
 }
 
@@ -164,6 +230,9 @@ function placesHttpError(status: number, message: string): AppError {
       `Google Places refused GOOGLE_PLACES_API_KEY: ${message} Enable Places API (New) in the key's project, link a billing account, and check the key's API and application restrictions.`,
     );
   }
+  if (status === 404) {
+    return new AppError("NOT_FOUND", `Google Places: ${message}`);
+  }
   if (status === 429) {
     return new AppError(
       "RATE_LIMITED",
@@ -173,22 +242,27 @@ function placesHttpError(status: number, message: string): AppError {
   return new AppError("UPSTREAM_UNAVAILABLE", `Google Places: ${message}`);
 }
 
-async function searchText(
+/** POSTs `body` as JSON when given, otherwise GETs `url`. */
+async function placesRequest<T>(
   apiKey: string,
-  fieldMask: string,
-  body: Record<string, unknown>,
-) {
+  input: {
+    url: string;
+    fieldMask: string;
+    schema: z.ZodType<T>;
+    body?: Record<string, unknown>;
+  },
+): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(SEARCH_TEXT_URL, {
-      method: "POST",
+    response = await fetch(input.url, {
+      method: input.body ? "POST" : "GET",
       headers: {
-        "Content-Type": "application/json",
+        ...(input.body ? { "Content-Type": "application/json" } : {}),
         // A header, never ?key=, so the key stays out of logged URLs.
         "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": fieldMask,
+        "X-Goog-FieldMask": input.fieldMask,
       },
-      body: JSON.stringify(body),
+      body: input.body ? JSON.stringify(input.body) : undefined,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
@@ -211,7 +285,7 @@ async function searchText(
     throw placesHttpError(response.status, message);
   }
 
-  const parsed = searchTextResponseSchema.safeParse(json);
+  const parsed = input.schema.safeParse(json);
   if (!parsed.success) {
     console.warn("[google-places] unexpected response:", parsed.error.message);
     throw new AppError(
@@ -225,21 +299,44 @@ async function searchText(
 type Locale = { languageCode: string; regionCode: string };
 type LatLng = { latitude: number; longitude: number };
 
+function searchText(
+  apiKey: string,
+  fieldMask: string,
+  body: Record<string, unknown>,
+) {
+  return placesRequest(apiKey, {
+    url: SEARCH_TEXT_URL,
+    fieldMask,
+    schema: searchTextResponseSchema,
+    body,
+  });
+}
+
 /**
- * One Text Search Pro request per grid point, each biased to a circle around
- * the point. The whole grid is reserved up front, so nothing is sent unless
- * every point fits in the budget.
+ * One Text Search request per grid point, each biased to a circle around the
+ * point. `idsOnly` returns place IDs alone, which Google does not bill, so it
+ * needs no budget. Otherwise the whole grid is reserved up front as Text
+ * Search Pro, and nothing is sent unless every point fits in the budget.
  */
 export async function searchGrid(
   apiKey: string,
-  input: Locale & { points: LatLng[]; textQuery: string; radiusM: number },
+  input: Locale & {
+    points: LatLng[];
+    textQuery: string;
+    radiusM: number;
+    idsOnly: boolean;
+  },
 ) {
-  const budget = await reserveBudget("text_search_pro", input.points.length);
-  if (!budget) throw budgetExhausted("text_search_pro", input.points.length);
+  let budget: PlacesBudget | null = null;
+  if (!input.idsOnly) {
+    budget = await reserveBudget("text_search_pro", input.points.length);
+    if (!budget) throw budgetExhausted("text_search_pro", input.points.length);
+  }
+  const fieldMask = input.idsOnly ? GRID_IDS_ONLY_FIELD_MASK : GRID_FIELD_MASK;
 
   const results = await Promise.allSettled(
     input.points.map(async (point) => {
-      const page = await searchText(apiKey, GRID_FIELD_MASK, {
+      const page = await searchText(apiKey, fieldMask, {
         textQuery: input.textQuery,
         languageCode: input.languageCode,
         regionCode: input.regionCode,
@@ -320,4 +417,23 @@ export async function searchListings(
   }
 
   return { places: places.slice(0, input.maxRows), budget, budgetStopped };
+}
+
+/** One place's details and up to 5 reviews, live, under a reserved call. */
+export async function fetchPlaceDetails(
+  apiKey: string,
+  input: Locale & { placeId: string },
+) {
+  const budget = await reserveBudget("place_details_enterprise_atmosphere", 1);
+  if (!budget) throw budgetExhausted("place_details_enterprise_atmosphere", 1);
+  const query = new URLSearchParams({
+    languageCode: input.languageCode,
+    regionCode: input.regionCode,
+  });
+  const place = await placesRequest(apiKey, {
+    url: `${PLACE_DETAILS_URL}${encodeURIComponent(input.placeId)}?${query}`,
+    fieldMask: DETAILS_FIELD_MASK,
+    schema: placeDetailsSchema,
+  });
+  return { place, budget };
 }

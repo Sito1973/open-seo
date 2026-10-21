@@ -338,7 +338,7 @@ describe("get_local_rank_grid", () => {
       expect.objectContaining({
         rank: null,
         resultsCount: 1,
-        topResult: { title: "Other Cafe", cid: "999" },
+        topResult: { title: "Other Cafe", cid: "999", placeId: null },
       }),
     );
   });

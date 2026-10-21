@@ -41,6 +41,7 @@ import { runRankTrackerTool } from "@/server/mcp/tools/run-rank-tracker";
 import { searchSerpLocationsTool } from "@/server/mcp/tools/search-serp-locations";
 import { getSerpResultsTool } from "@/server/mcp/tools/get-serp-results";
 import { getCoreWebVitalsTool } from "@/server/mcp/tools/core-web-vitals";
+import { getPlaceDetailsTool } from "@/server/mcp/tools/place-details";
 import {
   getGoogleBusinessProfilePerformanceTool,
   getGoogleBusinessProfileReviewsTool,
@@ -288,15 +289,16 @@ export function createOpenSeoMcpServer(
   register(deleteReportTemplateTool);
 
   // Business Profile reads the owner's own listings with a write-capable
-  // scope that only self-hosted installs grant, and Core Web Vitals runs only
-  // on GOOGLE_PAGESPEED_API_KEY, which hosted never uses. Hosted never lists
-  // these.
+  // scope that only self-hosted installs grant, and Core Web Vitals and place
+  // details run only on GOOGLE_PAGESPEED_API_KEY and GOOGLE_PLACES_API_KEY,
+  // which hosted never uses. Hosted never lists these.
   if (options.selfHosted) {
     register(listGoogleBusinessProfileLocationsTool);
     register(getGoogleBusinessProfileReviewsTool);
     register(getGoogleBusinessProfilePerformanceTool);
     register(getGoogleBusinessProfileSearchKeywordsTool);
     register(getCoreWebVitalsTool);
+    register(getPlaceDetailsTool);
   }
 
   return server;

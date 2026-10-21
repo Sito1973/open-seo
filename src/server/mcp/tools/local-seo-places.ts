@@ -20,6 +20,9 @@ import { getIsoCountryCode } from "@/shared/keyword-locations";
 const PLACES_SOURCE_NOTE =
   "Source: Google Maps (Places API). Ranks approximate the Maps app (no zoom, personalization or ads); compare only with other google_places results.";
 
+const IDS_ONLY_BUDGET_NOTE =
+  "Google Places budget: none used. Searches that return only place IDs (Text Search Essentials IDs Only) are free and unmetered.";
+
 const PLACES_STORAGE_NOTE =
   "Google Maps terms: keep listing details (names, addresses, phones, websites, ratings, review counts, hours, coordinates) in this chat. Do not copy them into save_report or update_project_context, and do not add competitors from these rows. Reports may keep place_id, ranks, grid coordinates, the user's own business details and your own conclusions.";
 
@@ -165,9 +168,12 @@ function wrapLongitude(longitude: number): number {
   return ((((longitude + 180) % 360) + 360) % 360) - 180;
 }
 
-/** Provider fields every Places response adds to its structured content. */
+/**
+ * Provider fields every Places response adds to its structured content.
+ * `budget` is null when only free IDs-only requests were sent.
+ */
 export function placesResponseFields(
-  budget: PlacesBudget,
+  budget: PlacesBudget | null,
   places: GooglePlace[],
 ) {
   const attributions = new Map<
@@ -195,26 +201,27 @@ export function placesResponseFields(
  * ends with. Google requires third-party attributions to be shown with the
  * results, and most clients give the model only the text.
  */
-export function placesNotes({
-  budget,
-  attributions,
-}: ReturnType<typeof placesResponseFields>): string[] {
+export function placesNotes(
+  { budget, attributions }: ReturnType<typeof placesResponseFields>,
+  sourceNote = PLACES_SOURCE_NOTE,
+): string[] {
   return [
-    PLACES_SOURCE_NOTE,
+    sourceNote,
     ...attributions.map(({ provider, providerUri }) =>
       provider && providerUri
         ? `Also attribute: ${provider} (${providerUri})`
         : `Also attribute: ${provider ?? providerUri}`,
     ),
     PLACES_STORAGE_NOTE,
-    placesBudgetLine(budget),
+    budget ? placesBudgetLine(budget) : IDS_ONLY_BUDGET_NOTE,
   ];
 }
 
 /**
- * Runs a rank grid on Places, one Text Search Pro call per point, and returns
- * outcomes in the DataForSEO collector's shape so the grid tool ranks both
- * providers with the same matcher.
+ * Runs a rank grid on Places, one Text Search call per point (free when
+ * `idsOnly`, Text Search Pro otherwise), and returns outcomes in the
+ * DataForSEO collector's shape so the grid tool ranks both providers with the
+ * same matcher. IDs-only rows have no title or cid.
  */
 export async function fetchPlacesGridOutcomes(
   apiKey: string,

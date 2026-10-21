@@ -68,8 +68,9 @@ declare namespace Cloudflare {
     // Lighthouse checks while DATAFORSEO_API_KEY is unset, and the Chrome UX
     // Report (get_core_web_vitals) with or without DATAFORSEO_API_KEY.
     GOOGLE_PAGESPEED_API_KEY?: string;
-    // Places API (New) key for the Maps rank grid, local SERP and business
-    // search. Used only on self-hosted installs without DATAFORSEO_API_KEY.
+    // Places API (New) key for the Maps rank grid, local SERP, business search
+    // and place details. Used only on self-hosted installs without
+    // DATAFORSEO_API_KEY.
     GOOGLE_PLACES_API_KEY?: string;
     AI_VISIBILITY_WORKFLOW: Workflow<
       (

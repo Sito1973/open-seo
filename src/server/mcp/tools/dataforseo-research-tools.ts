@@ -932,7 +932,7 @@ async function searchPlacesBusinesses(
     : (args.categories ?? []).slice(1);
   const lines = [
     `Found ${businesses.length} local businesses for "${textQuery}" on Google Places, within ±${args.near.radiusKm} km of the point.`,
-    "On Google Places this row is the full listing; get_business_profile needs DataForSEO.",
+    "On Google Places this row is the full listing. For up to 5 reviews and whether a place offers delivery, dine-in, takeout, reservations or outdoor seating, call get_place_details with its place_id; get_business_profile and get_business_reviews need DataForSEO.",
   ];
   if (ignoredCategories.length > 0) {
     lines.push(

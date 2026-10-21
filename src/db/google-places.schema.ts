@@ -15,7 +15,11 @@ export const googlePlacesUsage = sqliteTable(
     // "YYYY-MM" in America/Los_Angeles, the zone Google resets the caps in.
     month: text("month").notNull(),
     sku: text("sku", {
-      enum: ["text_search_pro", "text_search_enterprise"],
+      enum: [
+        "text_search_pro",
+        "text_search_enterprise",
+        "place_details_enterprise_atmosphere",
+      ],
     }).notNull(),
     calls: integer("calls").notNull().default(0),
   },

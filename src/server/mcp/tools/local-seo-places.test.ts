@@ -4,10 +4,11 @@ import {
   searchLocalBusinessesTool,
 } from "./dataforseo-research-tools";
 import { getLocalRankGridTool } from "./local-seo-tools";
+import { getPlaceDetailsTool } from "./place-details";
 import { makeToolContext, textContent } from "./tool-test-support";
 
-// The Google Places path of the three switched local tools: a self-hosted
-// install with GOOGLE_PLACES_API_KEY and no DataForSEO key.
+// The Google Places path of the local tools: a self-hosted install with
+// GOOGLE_PLACES_API_KEY and no DataForSEO key.
 
 const mocks = vi.hoisted(() => ({
   createDataforseoClient: vi.fn(),
@@ -42,6 +43,7 @@ const gridArgs = {
   spacingKm: 1,
 };
 const serpArgs = { projectId: "project_1", keyword: "cafe", near };
+const detailsArgs = { projectId: "project_1", placeId: "p-acme" };
 
 beforeEach(() => {
   vi.stubEnv("DATAFORSEO_API_KEY", "");
@@ -131,6 +133,106 @@ it("runs the rank grid as one Text Search Pro search per point under one reserva
   expect(mocks.createDataforseoClient).not.toHaveBeenCalled();
 });
 
+it("runs the grid free on place IDs alone when the target has a placeId", async () => {
+  placesAnswer([{ id: "p-other" }, { id: "p-acme" }]);
+
+  const result = await getLocalRankGridTool.handler(
+    { ...gridArgs, target: { placeId: "p-acme", name: "acme cafe" } },
+    toolContext,
+  );
+
+  // Text Search Essentials (IDs Only) is free and unmetered: no reservation.
+  expect(mocks.reserveCalls).not.toHaveBeenCalled();
+  const requests = sentRequests();
+  expect(requests).toHaveLength(9);
+  for (const request of requests) {
+    expect(request.fieldMask).toBe("places.id,places.attributions");
+  }
+  expect(result.structuredContent).toMatchObject({
+    summary: { pointsFound: 9, averageRank: 2 },
+    matchedBusiness: { title: null, cid: null, placeId: "p-acme" },
+    budget: null,
+  });
+  expect(result.structuredContent).toHaveProperty(
+    "grid.0.topResult.placeId",
+    "p-other",
+  );
+});
+
+it("reads one place's details and reviews live under a reserved Place Details call", async () => {
+  mocks.fetch.mockImplementation(async () =>
+    Response.json({
+      id: "p-acme",
+      displayName: { text: "Acme Cafe" },
+      rating: 4.6,
+      userRatingCount: 210,
+      delivery: true,
+      reviews: [
+        {
+          rating: 5,
+          text: { text: "Excellent" },
+          originalText: { text: "Excelente" },
+          authorAttribution: {
+            displayName: "Ana",
+            uri: "https://www.google.com/maps/contrib/1",
+          },
+          googleMapsUri: "https://www.google.com/maps/reviews/1",
+        },
+      ],
+    }),
+  );
+
+  const result = await getPlaceDetailsTool.handler(detailsArgs, toolContext);
+
+  expect(mocks.reserveCalls).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sku: "place_details_enterprise_atmosphere",
+      count: 1,
+      limit: 900,
+    }),
+  );
+  expect(sentRequests()).toEqual([
+    expect.objectContaining({
+      url: "https://places.googleapis.com/v1/places/p-acme?languageCode=es&regionCode=CO",
+      apiKey: "places-key",
+      // Reviews and the attributes make this Enterprise + Atmosphere.
+      fieldMask:
+        "id,displayName,formattedAddress,location,primaryType,primaryTypeDisplayName,googleMapsUri,businessStatus,rating,userRatingCount,websiteUri,nationalPhoneNumber,priceLevel,regularOpeningHours,delivery,dineIn,takeout,reservable,outdoorSeating,reviews,attributions",
+    }),
+  ]);
+  expect(result.structuredContent).toMatchObject({
+    provider: "google_places",
+    place: {
+      title: "Acme Cafe",
+      rating: { value: 4.6, votes_count: 210 },
+      attributes: { delivery: true, dine_in: null },
+    },
+    reviews: [
+      {
+        rating: 5,
+        text: "Excelente",
+        author: "Ana",
+        author_uri: "https://www.google.com/maps/contrib/1",
+        google_maps_uri: "https://www.google.com/maps/reviews/1",
+      },
+    ],
+  });
+  // Google requires each review to credit its author and link to Maps.
+  expect(textContent(result)).toContain(
+    "by Ana (https://www.google.com/maps/contrib/1) on Google Maps (https://www.google.com/maps/reviews/1): Excelente",
+  );
+});
+
+it("refuses place details next to a DataForSEO key without sending a request", async () => {
+  vi.stubEnv("DATAFORSEO_API_KEY", "dataforseo-key");
+
+  await expect(
+    getPlaceDetailsTool.handler(detailsArgs, toolContext),
+  ).rejects.toMatchObject({ code: "AUTH_CONFIG_MISSING" });
+  expect(mocks.reserveCalls).not.toHaveBeenCalled();
+  expect(mocks.fetch).not.toHaveBeenCalled();
+});
+
 it.each([
   [
     "get_local_rank_grid",
@@ -139,6 +241,10 @@ it.each([
   [
     "get_local_serp_results",
     () => getLocalSerpResultsTool.handler(serpArgs, toolContext),
+  ],
+  [
+    "get_place_details",
+    () => getPlaceDetailsTool.handler(detailsArgs, toolContext),
   ],
 ])(
   "%s sends nothing once the monthly budget is used up",

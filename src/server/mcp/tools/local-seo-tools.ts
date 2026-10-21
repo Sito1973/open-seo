@@ -737,7 +737,9 @@ const getLocalRankGridInputSchema = {
         .min(1)
         .max(256)
         .optional()
-        .describe("Match rows whose place_id equals this value."),
+        .describe(
+          "Match rows whose place_id equals this value. On Google Places it makes the grid free, and cid and name are then ignored.",
+        ),
       name: z
         .string()
         .min(1)
@@ -805,7 +807,11 @@ type GridPointResult = GridPoint & {
   // rank with a full result set means outranked; with a near-empty one it
   // means a sparse SERP. Both absent when the point's search failed.
   resultsCount?: number;
-  topResult?: { title: string | null; cid: string | null } | null;
+  topResult?: {
+    title: string | null;
+    cid: string | null;
+    placeId: string | null;
+  } | null;
   error?: boolean;
 };
 
@@ -945,6 +951,7 @@ function buildRankGridResponse(input: {
           : {
               title: readString(first, "title"),
               cid: readString(first, "cid"),
+              placeId: readString(first, "place_id"),
             },
     };
   });
@@ -993,7 +1000,7 @@ export const getLocalRankGridTool = {
   config: {
     title: "Get local rank grid",
     description:
-      "Runs one Google Maps search per point of a square grid around a coordinate and reports where the target business ranks at each point — plus each point's result count and #1 business — revealing how far its Maps visibility reaches. Cost scales with the grid: gridSize squared SERP calls (3x3 = 9, the sensible default; 5x5 = 25). Charges credits per grid point. The searches run as one queued batch that usually finishes within this call; if some are still running you get status 'processing'. Calling again with the same arguments within an hour collects the same searches at no extra charge, so repeat the call in about a minute to finish a 'processing' grid or to recover a lost response. On self-hosted installs using Google Places, each call spends gridSize squared of the monthly Text Search Pro budget and always completes in one call; repeat it only if the grid actually failed.",
+      "Runs one Google Maps search per point of a square grid around a coordinate and reports where the target business ranks at each point — plus each point's result count and #1 business — revealing how far its Maps visibility reaches. Cost scales with the grid: gridSize squared SERP calls (3x3 = 9, the sensible default; 5x5 = 25). Charges credits per grid point. The searches run as one queued batch that usually finishes within this call; if some are still running you get status 'processing'. Calling again with the same arguments within an hour collects the same searches at no extra charge, so repeat the call in about a minute to finish a 'processing' grid or to recover a lost response. On self-hosted installs using Google Places, the grid always completes in one call; repeat it only if the grid actually failed. There, a target with placeId runs free (place IDs only: the target is matched by placeId alone and no business names come back), while a target with only cid or name spends gridSize squared of the monthly Text Search Pro budget.",
     inputSchema: getLocalRankGridInputSchema,
     outputSchema: z.looseObject({
       status: z.enum(["completed", "processing"]),
@@ -1013,6 +1020,7 @@ export const getLocalRankGridTool = {
               .looseObject({
                 title: z.string().nullable(),
                 cid: z.string().nullable(),
+                placeId: z.string().nullable().optional(),
               })
               .nullable()
               .optional(),
@@ -1070,12 +1078,16 @@ export const getLocalRankGridTool = {
     const placesKey = await getGoogleFallbackKey("GOOGLE_PLACES_API_KEY");
     if (placesKey) {
       // Places answers each search directly: no queue, so no receipt to
-      // recover from, and the Maps terms restrict caching its results.
+      // recover from, and the Maps terms restrict caching its results. A
+      // place ID target needs only IDs back, which Google does not bill; cid
+      // and name matching need the Pro fields they are read from.
+      const idsOnly = args.target.placeId != null;
       const radiusM = Math.round(spacingKm * 1000);
       const places = await fetchPlacesGridOutcomes(placesKey, {
         points,
         textQuery: args.keyword,
         radiusM,
+        idsOnly,
         ...placesLocale(languageCode, context.project),
       });
       return buildRankGridResponse({
@@ -1084,9 +1096,17 @@ export const getLocalRankGridTool = {
         gridSize,
         target: args.target,
         header: `Local rank grid for "${args.keyword}" on Google Places (${gridSize}x${gridSize}, ${spacingKm} km spacing, each point biased to a ${radiusM} m circle, top ${RANK_GRID_DEPTH} checked; zoom and device do not apply).`,
-        failedLegend:
-          '"x" = search failed (still counted against the monthly budget)',
-        notes: placesNotes(places.fields),
+        failedLegend: idsOnly
+          ? '"x" = search failed'
+          : '"x" = search failed (still counted against the monthly budget)',
+        notes: [
+          ...(idsOnly
+            ? [
+                "Free place-ID-only search: the target was matched by placeId alone, and topResult and matchedBusiness carry a placeId but no name. To name a place, match its placeId against search_local_businesses rows (place_id) or call get_place_details.",
+              ]
+            : []),
+          ...placesNotes(places.fields),
+        ],
         meta,
         providerFields: places.fields,
       });
