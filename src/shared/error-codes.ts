@@ -21,6 +21,7 @@ const ERROR_CODES = [
   "GOOGLE_ADS_NOT_CONNECTED",
   "GOOGLE_ADS_ACCESS_PENDING",
   "RATE_LIMITED",
+  "MONTHLY_BUDGET_EXHAUSTED",
   "UPSTREAM_UNAVAILABLE",
   "CONFLICT",
   "INTERNAL_ERROR",
@@ -35,6 +36,8 @@ const NON_REPORTABLE_ERROR_CODES = new Set<ErrorCode>([
   // External throttling (Google Analytics quota, Autumn, DataForSEO): expected
   // and transient, and nothing in the app can act on it.
   "RATE_LIMITED",
+  // A self-hosted provider budget doing its job.
+  "MONTHLY_BUDGET_EXHAUSTED",
   "NOT_FOUND",
   "PAYMENT_REQUIRED",
   "INSUFFICIENT_CREDITS",

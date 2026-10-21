@@ -5,7 +5,7 @@ import {
 } from "../repositories/AiVisibilityRepository";
 import { AiVisibilityError } from "./aiVisibilityErrors";
 import { activeAiPrompts, trackerEngines } from "./aiVisibilityConfiguration";
-import { getOptionalEnvValue } from "@/server/lib/runtime-env";
+import { getDataforseoKey } from "@/server/lib/runtime-env";
 import {
   fetchSerpApiAccount,
   getSerpApiKey,
@@ -25,11 +25,12 @@ type AiCollectionProvider = "dataforseo" | "serpapi";
 
 /**
  * Who collects answers on this server. DataForSEO collects every engine but
- * Google AI Mode. Without it, a self-hosted install with SERPAPI_API_KEY
- * collects Google AI Mode only, through SerpApi. Null: setup only.
+ * Google AI Mode. Without it (or with DATAFORSEO_SCOPE=backlinks), a
+ * self-hosted install with SERPAPI_API_KEY collects Google AI Mode only,
+ * through SerpApi. Null: setup only.
  */
 export async function aiCollectionProvider(): Promise<AiCollectionProvider | null> {
-  if (await getOptionalEnvValue("DATAFORSEO_API_KEY")) return "dataforseo";
+  if (await getDataforseoKey("other")) return "dataforseo";
   return (await getSerpApiKey()) ? "serpapi" : null;
 }
 
@@ -54,8 +55,8 @@ export function requireAiEngines(
     "ENGINE_UNAVAILABLE",
     `${unavailable.map((engine) => AI_ENGINE_LABELS[engine]).join(" and ")} cannot collect answers on this server. ${
       provider === "serpapi"
-        ? "Without DATAFORSEO_API_KEY it collects Google AI Mode only, through SerpApi. Remove the other engines."
-        : "Google AI Mode is collected through SerpApi, only on self-hosted servers without DATAFORSEO_API_KEY. Remove it."
+        ? "Without DataForSEO (DATAFORSEO_API_KEY unset or DATAFORSEO_SCOPE=backlinks) it collects Google AI Mode only, through SerpApi. Remove the other engines."
+        : "Google AI Mode is collected through SerpApi, only on self-hosted servers without DataForSEO (DATAFORSEO_API_KEY unset or DATAFORSEO_SCOPE=backlinks). Remove it."
     }`,
   );
 }

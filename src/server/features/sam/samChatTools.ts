@@ -265,7 +265,7 @@ function refuseOnPlaces(base: Tool): Tool {
       if (await getGoogleFallbackKey("GOOGLE_PLACES_API_KEY")) {
         return {
           error:
-            "Google Places results can't be used in SAM because its chat history is saved. Use an MCP client, or set DATAFORSEO_API_KEY.",
+            "Google Places results can't be used in SAM because its chat history is saved. Use an MCP client, or use DataForSEO for every feature (DATAFORSEO_API_KEY without DATAFORSEO_SCOPE).",
         };
       }
       const result: unknown = await baseExecute(args, options);

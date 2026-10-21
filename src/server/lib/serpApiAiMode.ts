@@ -129,7 +129,7 @@ export async function fetchSerpApiAiMode(
   });
   if (used == null)
     throw new AppError(
-      "RATE_LIMITED",
+      "MONTHLY_BUDGET_EXHAUSTED",
       `This server's monthly SerpApi budget (${SERPAPI_MONTHLY_BUDGET} searches in ${month}, UTC) is used up, so no search was sent. It resets on the 1st.`,
     );
 

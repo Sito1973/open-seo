@@ -22,7 +22,7 @@ vi.mock("@/db", () => ({ db: testDb.db }));
 vi.mock("@/db/runBatch", () => ({ runBatch: testDb.runBatch }));
 vi.mock("@/server/lib/runtime-env", () => ({
   // DATAFORSEO_API_KEY
-  getOptionalEnvValue: keys.dataforseo,
+  getDataforseoKey: keys.dataforseo,
   // SERPAPI_API_KEY, which applies only without DATAFORSEO_API_KEY.
   getGoogleFallbackKey: keys.serpApi,
   isHostedServerAuthMode: async () => false,
@@ -34,7 +34,7 @@ const workflowStatus = (status: string) =>
 
 /** A self-hosted server with SERPAPI_API_KEY and no DataForSEO key. */
 function serpApiOnly() {
-  keys.dataforseo.mockResolvedValue(undefined);
+  keys.dataforseo.mockResolvedValue(null);
   keys.serpApi.mockResolvedValue("serpapi-key");
 }
 

@@ -33,6 +33,7 @@ Optional env values:
 - `ALLOWED_HOST` (single reverse-proxy hostname to allow in Vite preview)
 - `AUTH_MODE=local_noauth` (already set in compose)
 - `OPEN_SEO_IMAGE` (defaults to `ghcr.io/every-app/open-seo:latest`)
+- `DATAFORSEO_SCOPE=backlinks` (use DataForSEO for backlinks only, at most `DATAFORSEO_BACKLINKS_MONTHLY_REQUESTS` requests a month, 300 by default, so at most $18 a month; every other feature runs as without a DataForSEO key. See the [free Google APIs guide](./SELF_HOSTING_GOOGLE_APIS.md#dataforseo-for-backlinks-only))
 
 AI Visibility uses your `DATAFORSEO_API_KEY` and sends tracked questions to DataForSEO. Set `OPENROUTER_API_KEY` for setup research and generated prompt suggestions. You pay providers directly; the app shows the collection cost before a check or schedule starts. Keep the container running for background answers and daily, weekly, or monthly tracking. The built-in scheduler checks for due work every five minutes; no host cron setup is required. See the [AI Visibility guide](https://openseo.so/docs/ai-visibility).
 

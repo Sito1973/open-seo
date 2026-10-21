@@ -63,7 +63,11 @@ import {
   fetchAiTrackingLiveAnswer,
   postAiTrackingTasks,
 } from "@/server/lib/dataforseo/ai-tracking";
-import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import { reserveBacklinksRequest } from "@/server/lib/dataforseo/backlinks-budget";
+import {
+  isDataforseoBacklinksOnly,
+  isHostedServerAuthMode,
+} from "@/server/lib/runtime-env";
 import { AppError } from "@/server/lib/errors";
 
 export { mapDataforseoPathToCreditFeature };
@@ -95,6 +99,26 @@ function meter<I, T>(
       creditsForProviderUsd(estimateRawUsd(input)),
       input.creditFeature ?? defaultFeature,
     );
+}
+
+/**
+ * meter() for a Backlinks API call. With DATAFORSEO_SCOPE=backlinks on a
+ * self-hosted install, the call first takes one request from the monthly
+ * budget (backlinks-budget.ts). Elsewhere this adds nothing: hosted meters
+ * credits, and a server that uses DataForSEO for everything has no budget.
+ */
+function meterBacklinks<I, T>(
+  customer: BillingCustomerContext,
+  fetcher: (input: I) => Promise<DataforseoApiResponse<T>>,
+  estimateRawUsd: (input: I) => number,
+): (input: I & { creditFeature?: CreditFeature }) => Promise<T> {
+  const metered = meter(customer, fetcher, estimateRawUsd);
+  return async (input) => {
+    if (await isDataforseoBacklinksOnly()) {
+      await reserveBacklinksRequest(estimateRawUsd(input));
+    }
+    return metered(input);
+  };
 }
 
 export function createDataforseoClient(customer: BillingCustomerContext) {
@@ -134,27 +158,27 @@ export function createDataforseoClient(customer: BillingCustomerContext) {
       ),
     },
     backlinks: {
-      summary: meter(
+      summary: meterBacklinks(
         customer,
         fetchBacklinksSummary,
         dataforseoPricing.backlinks.summary,
       ),
-      rows: meter(
+      rows: meterBacklinks(
         customer,
         fetchBacklinksRows,
         dataforseoPricing.backlinks.rows,
       ),
-      referringDomains: meter(
+      referringDomains: meterBacklinks(
         customer,
         fetchReferringDomains,
         dataforseoPricing.backlinks.referringDomains,
       ),
-      domainPages: meter(
+      domainPages: meterBacklinks(
         customer,
         fetchDomainPagesSummary,
         dataforseoPricing.backlinks.domainPages,
       ),
-      history: meter(
+      history: meterBacklinks(
         customer,
         fetchBacklinksHistory,
         dataforseoPricing.backlinks.history,

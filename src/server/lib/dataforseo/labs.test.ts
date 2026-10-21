@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { fetchRelatedKeywords } from "./labs";
 
 vi.mock("@/server/lib/runtime-env", () => ({
-  getRequiredEnvValue: vi.fn(async () => "test-api-key"),
+  getDataforseoKey: vi.fn(async () => "test-api-key"),
 }));
 
 afterEach(() => vi.unstubAllGlobals());

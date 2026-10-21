@@ -167,7 +167,8 @@ function labsUsd(rows: number, clickstream?: boolean) {
   return (LABS_TASK_USD + rows * LABS_ROW_USD) * (clickstream ? 2 : 1);
 }
 
-function backlinksUsd(rows: number) {
+/** One Backlinks API request that returns `rows` rows. */
+export function backlinksUsd(rows: number) {
   return BACKLINKS_TASK_USD + rows * BACKLINKS_ROW_USD;
 }
 

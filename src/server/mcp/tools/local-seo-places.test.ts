@@ -267,7 +267,9 @@ it.each([
   async (_tool, call) => {
     mocks.reserveCalls.mockResolvedValue(null);
 
-    await expect(call()).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    await expect(call()).rejects.toMatchObject({
+      code: "MONTHLY_BUDGET_EXHAUSTED",
+    });
     expect(mocks.fetch).not.toHaveBeenCalled();
   },
 );

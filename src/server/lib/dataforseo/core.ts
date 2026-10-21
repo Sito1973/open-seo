@@ -1,5 +1,8 @@
 import { AppError } from "@/server/lib/errors";
-import { getRequiredEnvValue } from "@/server/lib/runtime-env";
+import {
+  getDataforseoKey,
+  isDataforseoBacklinksOnly,
+} from "@/server/lib/runtime-env";
 import type { ErrorCode } from "@/shared/error-codes";
 // Type-only: erased at compile, so no runtime cycle with envelope.ts (which
 // imports DataforseoErrorClassifier from here the same way).
@@ -66,7 +69,25 @@ function createAuthenticatedFetch(
   maxServerErrorRetries = DATAFORSEO_MAX_RETRIES,
 ) {
   return async (url: RequestInfo, init?: RequestInit): Promise<Response> => {
-    const apiKey = await getRequiredEnvValue("DATAFORSEO_API_KEY");
+    const path = formatDataforseoRequestPath(url);
+    const api = path.startsWith("/v3/backlinks/") ? "backlinks" : "other";
+    // With DATAFORSEO_SCOPE=backlinks, every other API fails here as without
+    // a key, so nothing but backlinks can reach DataForSEO.
+    const apiKey = await getDataforseoKey(api);
+    if (!apiKey) {
+      throw new Error(
+        api === "other" && (await isDataforseoBacklinksOnly())
+          ? "DataForSEO is kept to backlinks on this server (DATAFORSEO_SCOPE=backlinks), and this feature has no stand-in provider set up. See docs/SELF_HOSTING_GOOGLE_APIS.md."
+          : "Missing required environment variable: DATAFORSEO_API_KEY",
+      );
+    }
+    // With the scope set, each backlinks request took one request from the
+    // monthly budget (backlinks-budget.ts) before it got here, so a retry
+    // would be a billed request the budget never counted.
+    const retries =
+      api === "backlinks" && (await isDataforseoBacklinksOnly())
+        ? 0
+        : maxServerErrorRetries;
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Basic ${apiKey}`);
     // Resolve the signal once so retries share the overall request timeout
@@ -92,7 +113,6 @@ function createAuthenticatedFetch(
           error instanceof Error &&
           (error.name === "TimeoutError" || error.name === "AbortError")
         ) {
-          const path = formatDataforseoRequestPath(url);
           const timeoutError = new AppError(
             "UPSTREAM_UNAVAILABLE",
             `DataForSEO request timed out on ${path}`,
@@ -106,7 +126,7 @@ function createAuthenticatedFetch(
       if (response.ok) return response;
 
       // Transient upstream 5xx on an idempotent read -> back off and retry.
-      if (response.status >= 500 && attempt < maxServerErrorRetries) {
+      if (response.status >= 500 && attempt < retries) {
         await new Promise((resolve) =>
           setTimeout(resolve, DATAFORSEO_RETRY_BACKOFF_MS * (attempt + 1)),
         );
@@ -114,7 +134,6 @@ function createAuthenticatedFetch(
       }
 
       const rawText = await response.text();
-      const path = formatDataforseoRequestPath(url);
       const classified = classify?.(response.status, rawText, path);
       if (classified) throw classified;
 

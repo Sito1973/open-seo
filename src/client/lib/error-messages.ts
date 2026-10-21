@@ -35,6 +35,8 @@ const STANDARD_MESSAGES: Record<ErrorCode, string> = {
   GOOGLE_ADS_ACCESS_PENDING:
     "Google Ads API access pending (Explorer level blocks Keyword Planner). Apply for Basic access on the Google Ads API page of your Google Cloud project.",
   RATE_LIMITED: "Too many requests. Please wait and try again.",
+  MONTHLY_BUDGET_EXHAUSTED:
+    "This server's monthly budget for this data provider is used up, so nothing was sent. It resets next month.",
   UPSTREAM_UNAVAILABLE:
     "The data provider is temporarily unavailable. Please retry in a moment.",
   CONFLICT: "This request conflicts with existing data.",
