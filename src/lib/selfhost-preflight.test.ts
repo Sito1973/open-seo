@@ -113,6 +113,18 @@ describe("seoDataProviders", () => {
         standIns: [expect.stringContaining("Places")],
       },
     ],
+    [
+      "a Google OAuth client serves your own sites and listings",
+      {
+        GOOGLE_CLIENT_ID: "id",
+        GOOGLE_CLIENT_SECRET: "secret",
+        BETTER_AUTH_SECRET: "x".repeat(32),
+      },
+      {
+        dataforseo: null,
+        standIns: [expect.stringContaining("Search Console")],
+      },
+    ],
     ["nothing set up", {}, { dataforseo: null, standIns: [] }],
   ])("%s", (_name, env, expected) => {
     expect(seoDataProviders(env)).toEqual(expected);

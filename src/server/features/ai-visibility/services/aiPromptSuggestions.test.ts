@@ -62,7 +62,10 @@ beforeEach(() => {
   listResearchKeywords.mockResolvedValue(["burgers", "tacos"]);
   searchGoogleCandidates.mockResolvedValue({
     locationName: null,
-    peopleAlsoAsk: ["Best burgers in town?", "Where to eat tacos?"],
+    peopleAlsoAsk: [
+      { question: "Best burgers in town?" },
+      { question: "Where to eat tacos?" },
+    ],
     relatedSearches: ["tacos near me", "WHERE to eat  tacos?"],
   });
 });

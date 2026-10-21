@@ -163,7 +163,7 @@ export function brightDataBudgetLine(usedThisMonth: number): string {
   return `Bright Data budget: ${usedThisMonth} of ${MONTHLY_BUDGET} SERP requests used this month (resets on the 1st, UTC).`;
 }
 
-export const BRIGHTDATA_RANK_CHECK_NOTE = `Rank checks on this server run on Bright Data's live Google SERP: each keyword and device sends one request per 10 results of depth, stopping at the page where the tracked domain appears, from this server's monthly budget of ${MONTHLY_BUDGET} requests. A scheduled check reuses the first page of the same search (keyword, market and device) fetched in this organization in the last ${FIRST_PAGE_REUSE_DAYS} days, by any tracker or SERP tool, and sends requests only for the pages after it; a manual check always fetches live.`;
+export const BRIGHTDATA_RANK_CHECK_NOTE = `Rank checks on this server run on Bright Data's live Google SERP: each keyword and device sends one request per 10 results of depth, stopping at the page where the tracked domain appears, from this server's monthly budget of ${MONTHLY_BUDGET} requests. A scheduled check reuses the first page of the same search (keyword, market and device) fetched in this organization in the last ${FIRST_PAGE_REUSE_DAYS} days, by any tracker or SERP tool, when it has organic results, and sends requests only for the pages after it; a manual check always fetches live.`;
 
 function hostOf(link: string | null | undefined): string | null {
   if (!link) return null;
@@ -361,13 +361,12 @@ async function fetchSerpPage(
 type ResumeAfter = { pages: number; organicCount: number };
 
 /**
- * Organic results to `depth`, one request per page of about 10. With
- * `targetDomain`, pages go one at a time and paging stops at the page where
- * that domain ranks; without it, nothing but an empty page ends paging early,
- * so the pages go out at once. Positions count organic results only, in
- * Google's order across pages, and results after an empty page are dropped.
- * The first page is saved to the SERP observation store as soon as it
- * arrives. With `resume`, paging starts after those pages and numbers
+ * Organic results to `depth`, one request per page of about 10. Pages go one
+ * at a time, and paging stops at an empty page (Google's results ended) or,
+ * with `targetDomain`, at the page where that domain ranks, so no page past
+ * either is bought. Positions count organic results only, in Google's order
+ * across pages. The first page is saved to the SERP observation store as soon
+ * as it arrives. With `resume`, paging starts after those pages and numbers
  * positions after their organic results.
  */
 async function fetchOrganicPages(
@@ -379,32 +378,24 @@ async function fetchOrganicPages(
     MAX_PAGES,
     Math.max(1, Math.ceil(input.depth / RESULTS_PER_PAGE)),
   );
-  const fetchPage = async (index: number) => {
+  const { targetDomain } = input;
+  const fetched: Array<{ page: SerpPage; usedThisMonth: number }> = [];
+  for (const index of range(resume.pages, pages)) {
     const result = await fetchSerpPage(config, {
       ...input,
       start: index * RESULTS_PER_PAGE,
     });
     if (index === 0) await recordFirstPage(input, result.page);
-    return result;
-  };
-  const indexes = range(resume.pages, pages);
-  const { targetDomain } = input;
-  let fetched: Array<{ page: SerpPage; usedThisMonth: number }> = [];
-  if (targetDomain) {
-    for (const index of indexes) {
-      const result = await fetchPage(index);
-      fetched.push(result);
-      if (
-        result.page.organic.length === 0 ||
+    fetched.push(result);
+    if (
+      result.page.organic.length === 0 ||
+      (targetDomain &&
         result.page.organic.some((item) =>
           linkMatchesDomain(item.link, targetDomain),
-        )
-      ) {
-        break;
-      }
+        ))
+    ) {
+      break;
     }
-  } else {
-    fetched = await Promise.all(indexes.map(fetchPage));
   }
 
   const organic: Array<{
@@ -417,7 +408,6 @@ async function fetchOrganicPages(
   const features = new Set<string>();
   for (const { page } of fetched) {
     for (const feature of serpFeatures(page)) features.add(feature);
-    if (page.organic.length === 0) break;
     const before = resume.organicCount + organic.length;
     organic.push(
       ...page.organic.map((item, offset) => ({
@@ -535,7 +525,9 @@ export async function checkRankOnBrightData(
     targetDomain: input.targetDomain,
     observation: { organizationId: input.organizationId, origin: "rank_check" },
   };
-  const stored = input.reuseFirstPage
+  // A saved page without organic results (a layout Bright Data did not
+  // parse) is not reused: it would read as "not ranking" for days.
+  const saved = input.reuseFirstPage
     ? await SerpObservationRepository.findLatest({
         ...input,
         since: new Date(
@@ -543,6 +535,7 @@ export async function checkRankOnBrightData(
         ).toISOString(),
       })
     : null;
+  const stored = saved && saved.organic.length > 0 ? saved : null;
 
   let organic: Array<{ position: number; url: string | null }>;
   let features: string[];
@@ -551,9 +544,7 @@ export async function checkRankOnBrightData(
       linkMatchesDomain(item.url, input.targetDomain),
     );
     const later =
-      !onFirstPage &&
-      stored.organic.length > 0 &&
-      input.depth > RESULTS_PER_PAGE
+      !onFirstPage && input.depth > RESULTS_PER_PAGE
         ? await fetchOrganicPages(config, request, {
             pages: 1,
             organicCount: stored.organic.length,

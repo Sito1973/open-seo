@@ -16,6 +16,7 @@ import { AppError } from "@/server/lib/errors";
 import { buildCacheKey, getCached, setCached } from "@/server/lib/r2-cache";
 import { usesGoogleFallbacks } from "@/server/lib/runtime-env";
 import type { ResearchTarget } from "@/shared/researchScope";
+import { safeHostname } from "@/shared/safe-url";
 
 /** A site's Search Console data is refreshed every 12 hours. */
 const SITE_TTL_SECONDS = 12 * 60 * 60;
@@ -241,7 +242,7 @@ function propertyCovers(siteUrl: string, hostname: string): boolean {
     const domain = siteUrl.slice("sc-domain:".length).toLowerCase();
     return hostname === domain || hostname.endsWith(`.${domain}`);
   }
-  return hostOf(siteUrl) === hostname;
+  return safeHostname(siteUrl) === hostname;
 }
 
 /** Same rules as the DataForSEO scope filters in researchScopeFilters.ts. */
@@ -265,14 +266,6 @@ function pageInScope(page: string, target: ResearchTarget): boolean {
       return path === target.path;
     case "subfolder":
       return path === target.path || path.startsWith(`${target.path}/`);
-  }
-}
-
-function hostOf(url: string): string | null {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return null;
   }
 }
 

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("cloudflare:workers", () => ({
+  waitUntil: (promise: Promise<unknown>) => promise,
   env: {
     R2: {
       get: async (key: string) => {
@@ -112,6 +113,8 @@ it("a city search on an unapproved Planner still lists Google's related searches
   mocks.serp.mockImplementation(async (_config, { keyword }) =>
     keyword === "hamburguesas"
       ? {
+          organic: [],
+          localPack: [],
           relatedSearches: [
             "hamburguesas pereira",
             "hamburguesas caseras",
@@ -119,10 +122,17 @@ it("a city search on an unapproved Planner still lists Google's related searches
             "hamburguesas cerca",
           ],
           peopleAlsoAsk: [
-            { question: "¿Cuál es la mejor hamburguesa de Pereira?" },
+            {
+              question: "¿Cuál es la mejor hamburguesa de Pereira?",
+              answer: null,
+              url: null,
+              domain: null,
+            },
           ],
         }
       : {
+          organic: [],
+          localPack: [],
           relatedSearches: ["hamburguesas pereira domicilio"],
           peopleAlsoAsk: [],
         },
@@ -151,9 +161,10 @@ it("a city search on an unapproved Planner still lists Google's related searches
   expect(result.notes).toEqual([
     expect.stringContaining("not approved Basic access"),
   ]);
-  // The seed's page and its first three related searches, each time: a
-  // result with notes is not cached, and no city volume is asked for.
-  expect(mocks.serp).toHaveBeenCalledTimes(8);
+  // A result with notes is not cached, but its Google pages are: the seed's
+  // page and its first three related searches are bought once. No city
+  // volume is asked for.
+  expect(mocks.serp).toHaveBeenCalledTimes(4);
   expect(mocks.adsSearchVolume).toHaveBeenCalledTimes(2);
   expect(mocks.upsertKeywordMetric).not.toHaveBeenCalled();
 });

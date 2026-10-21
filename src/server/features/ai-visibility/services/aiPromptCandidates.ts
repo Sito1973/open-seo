@@ -1,11 +1,7 @@
-import { waitUntil } from "cloudflare:workers";
-import { z } from "zod";
 import { GbpService } from "@/server/features/gbp/services/GbpService";
 import { GscService } from "@/server/features/gsc/services/GscService";
-import {
-  fetchBrightDataSerp,
-  getBrightDataSerp,
-} from "@/server/lib/brightDataSerp";
+import { searchGoogleCandidates } from "@/server/features/serp/services/googleCandidates";
+import { getBrightDataSerp } from "@/server/lib/brightDataSerp";
 import { fetchAdsSearchVolumeForKeywords } from "@/server/lib/dataforseo/keyword-metrics";
 import { AppError } from "@/server/lib/errors";
 import {
@@ -20,7 +16,6 @@ import {
   GscNotConnectedError,
   GscTokenError,
 } from "@/server/lib/gscErrors";
-import { buildCacheKey, getCached, setCached } from "@/server/lib/r2-cache";
 import type {
   AiPromptCandidateOrigin,
   AiPromptCandidateVolume,
@@ -30,9 +25,6 @@ import type {
 // without DataForSEO: Google's results page through Bright Data, Google
 // autocomplete, and the project's own Search Console and Business Profile.
 
-// The keyword's first Google page is one Bright Data request; a week is fresh
-// enough for People Also Ask and related searches.
-const SERP_TTL_SECONDS = 7 * 24 * 60 * 60;
 const SEARCH_CONSOLE_ROWS = 1_000;
 const BUSINESS_PROFILE_KEYWORDS = 500;
 
@@ -50,18 +42,6 @@ const SPANISH_PREFIXES = [
 // accented letter, so a word ends at a space or the end instead.
 const QUESTION_PATTERN =
   "^(¿\\s*)?(que|qué|cual|cuál|cuales|cuáles|donde|dónde|como|cómo|cuando|cuándo|cuanto|cuánto|cuantos|cuántos|quien|quién|por que|por qué|porque|mejor|mejores|recomienda|recomiendan|recomienden|what|where|which|how|who|why|best)(\\s|$)";
-
-const serpCandidatesSchema = z.object({
-  peopleAlsoAsk: z.array(
-    z.object({
-      question: z.string(),
-      answer: z.string().nullable(),
-      url: z.string().nullable(),
-      domain: z.string().nullable(),
-    }),
-  ),
-  relatedSearches: z.array(z.string()),
-});
 
 export type PromptCandidate = {
   text: string;
@@ -115,7 +95,8 @@ async function settle(
 /**
  * People Also Ask and related searches on the keyword's first Google page,
  * near the project's tracked city: one Bright Data request from the monthly
- * budget, saved to the organization's SERP store and cached a week.
+ * budget, saved to the organization's SERP store, through the cache every
+ * Google candidate search shares.
  */
 async function googlePage(input: {
   keyword: string;
@@ -129,34 +110,12 @@ async function googlePage(input: {
       "VALIDATION_ERROR",
       "Bright Data is not set up on this server (BRIGHTDATA_API_KEY and BRIGHTDATA_SERP_ZONE)",
     );
-  const cacheKey = await buildCacheKey("ai-visibility:prompt-research:google", {
-    organizationId: input.organizationId,
-    keyword: input.keyword,
-    ...input.market,
+  const page = await searchGoogleCandidates(config, {
+    query: input.keyword,
+    market: input.market,
     device: input.device,
+    organizationId: input.organizationId,
   });
-  let page = serpCandidatesSchema.safeParse(await getCached(cacheKey)).data;
-  if (!page) {
-    const serp = await fetchBrightDataSerp(config, {
-      keyword: input.keyword,
-      market: input.market,
-      device: input.device,
-      depth: 10,
-      observation: { organizationId: input.organizationId, origin: "research" },
-    });
-    page = {
-      peopleAlsoAsk: serp.peopleAlsoAsk,
-      relatedSearches: serp.relatedSearches,
-    };
-    waitUntil(
-      setCached(cacheKey, page, SERP_TTL_SECONDS).catch((error) => {
-        console.error(
-          "ai-visibility.prompt-research.cache-write-failed",
-          error,
-        );
-      }),
-    );
-  }
   return [
     ...page.peopleAlsoAsk.map(
       ({ question, ...answer }): PromptCandidate => ({

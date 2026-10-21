@@ -1,6 +1,6 @@
 import { sortBy, unique } from "remeda";
+import { searchGoogleCandidates } from "@/server/features/serp/services/googleCandidates";
 import {
-  fetchBrightDataSerp,
   getBrightDataSerp,
   type BrightDataSerp,
 } from "@/server/lib/brightDataSerp";
@@ -29,7 +29,9 @@ import {
 // Planner's monthly cache answers both.
 const PLANNER_IDEAS_LIMIT = 1_000;
 // The seed's first page, plus the first pages of its first three related
-// searches: up to 4 Bright Data requests per new seed.
+// searches: up to 4 Bright Data requests per new seed. The pages are cached
+// apart from the result, so a repeat whose result was not cached (it has
+// notes) sends none.
 const RELATED_EXPANSIONS = 3;
 
 type StandInResult = {
@@ -229,7 +231,8 @@ function expansionNote(error: unknown): string {
  * People also search for: the related searches and People Also Ask questions
  * on the seed's Google results page, and on the pages of its first three
  * related searches, from Bright Data (each first page is also saved to the
- * organization's SERP store), measured by the Planner.
+ * organization's SERP store and cached with every Google candidate search),
+ * measured by the Planner.
  */
 async function fetchSerpRelatedRows(
   input: ResolvedResearchKeywordsInput,
@@ -238,15 +241,13 @@ async function fetchSerpRelatedRows(
   { planner, organizationId, creditFeature }: StandInContext,
 ): Promise<StandInResult> {
   const fetchPage = (keyword: string) =>
-    fetchBrightDataSerp(brightData, {
-      keyword,
+    searchGoogleCandidates(brightData, {
+      query: keyword,
       market: {
         locationCode: input.locationCode,
         languageCode: input.languageCode,
       },
-      device: "desktop",
-      depth: 10,
-      observation: { organizationId, origin: "research" },
+      organizationId,
     });
   const first = await fetchPage(seedKeyword);
   const expansions = await Promise.allSettled(

@@ -33,7 +33,9 @@ from this guide that covers it, or has no source on this server:
 - MCP tool descriptions say which provider a call uses instead of credits,
   such as "each keyword sends one Bright Data request per 10 results of
   depth", or that the tool has no source on this server, so an assistant can
-  skip it. The tool list follows the keys set when the request arrives.
+  skip it. The descriptions follow the keys set when the request arrives; the
+  tools stay listed. Only Google Business Q&A is left out, since Google
+  retired it.
 
 ### Data sources page
 
@@ -58,11 +60,15 @@ requests. The meters read the same counters the budgets stop at.
 The same map drives the rest of the app:
 
 - Sidebar entries for sections with no source (needs setup or no source) are
-  dimmed, and opening one shows a single empty state that names what is
-  missing and links to the page, instead of a page whose every request fails.
-- Over MCP, the server instructions say that nothing bills credits and which
-  sections have no source, and `whoami` lists each section's source and state
-  and the budgets used this month.
+  dimmed. A section with no source at all, such as Prompt Explorer, opens on a
+  single empty state that links to the page, instead of a page whose every
+  request fails. A section that needs setup keeps its page under a banner that
+  names the missing key: rank trackers, past runs and collected AI answers are
+  saved, so they still show; only new data waits for the key.
+- Over MCP, the server instructions say that nothing bills credits, which
+  sections have no source and which need setup (their saved data stays
+  readable), and `whoami` lists each section's source and state and the
+  budgets used this month.
 
 Hosted OpenSEO and installs with DataForSEO for every feature show none of
 this: DataForSEO serves every section there.
@@ -540,9 +546,8 @@ Each request fetches one Google results page with about 10 organic results:
 - **Depth:** each further 10 results is one more request (`start=10`,
   `start=20`, …). A rank check stops at the page where the tracked domain
   appears, so a domain on page 1 costs one request whatever the tracker's
-  depth. Requests without a tracked domain (`get_serp_results`, the SERP
-  Analysis card) send all their pages at once, so a deeper request takes about
-  as long as one page; results after an empty page are dropped.
+  depth. Every request sends its pages one at a time and stops at an empty
+  page, where Google's results end, so no page past the last one is bought.
 
 A request takes 20 to 50 seconds. A rank check sends its keywords in batches
 of 10, both devices at once, so 20 keywords on both devices take a few minutes.
@@ -569,8 +574,10 @@ A scheduled rank check first looks for a saved first page of the same search
 is on it, the check sends no request; if not, it sends requests only for
 pages 2 onward. So when two of your sites track "hamburguesas pereira" on
 mobile in the same city and their weekly checks run within 3 days of each
-other, the second check reuses the first one's page. The check's date is the day it ran, even when its page 1 is up to 3
-days older. A manual check ("Check rankings" or `run_rank_tracker`) always
+other, the second check reuses the first one's page. A saved page without
+organic results (a page layout Bright Data could not read) is never reused.
+The check's date is the day it ran, even when its page 1 is up to 3 days
+older. A manual check ("Check rankings" or `run_rank_tracker`) always
 fetches live, and saves the page it gets.
 
 `find_serp_competitors` reads the latest saved first page of each keyword
@@ -736,8 +743,10 @@ first page also goes to the [saved first pages](#saved-first-pages).
 so repeating a call within that time sends no new request.
 `find_serp_competitors` keeps no results of its own: repeating it reads the
 first pages it saved, so it sends no new request for those keywords. The SERP
-Analysis card and the searches of project setup and prompt suggestions also
-keep their results for 12 hours.
+Analysis card keeps its results for 12 hours. The searches of project setup,
+prompt suggestions, Prompt Research and related keywords share one cache of
+Google's candidates per search (query, market and device) for 7 days, so the
+same page is bought once for all of them.
 
 ## Keyword difficulty estimates: Bright Data and Open PageRank
 
@@ -872,7 +881,8 @@ grouping options are hidden: Keyword Planner has neither.
   its first three related searches, measured by Keyword Planner. It needs
   [Bright Data](#bright-data-live-google-serp-for-rank-tracking) and sends up
   to 4 requests from its monthly budget per new seed, on desktop, without a
-  city. Each page is also saved as a [first page](#saved-first-pages).
+  city. Each page is also saved as a [first page](#saved-first-pages) and
+  cached for 7 days, so repeating the search sends no new request.
 
 For a city, the ideas stay national and Keyword Planner gives the city's
 volumes, as with the default source.
@@ -881,8 +891,8 @@ While Google has not approved Basic access, or before Google Ads is connected,
 the phrase match and related sources still list their keywords, without
 volume, CPC or competition, and a note above the table says why. Keyword
 Planner ideas need Basic access. A result with a note is not cached, so the
-same search runs again next time; Google's related searches then cost their
-Bright Data requests again.
+same search asks Keyword Planner again next time, but Google's pages and
+autocomplete come from their own caches and cost nothing again.
 
 Google autocomplete is not an official API, and Google may block a server that
 calls it too often. OpenSEO calls `suggestqueries.google.com` gently:
@@ -1120,7 +1130,10 @@ nothing.
 
 A domain that no connected property covers, such as a competitor's, shows no
 data and a note listing the connected sites: competitor domains still need
-DataForSEO. If Google rejects the saved Search Console grant, reconnect Search
+DataForSEO. With a Google OAuth client set (`GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET` and `BETTER_AUTH_SECRET`), the `/api/health` preflight
+lists Domain Overview and your own Business Profile listings among the
+stand-in providers in use. If Google rejects the saved Search Console grant, reconnect Search
 Console under the project's **Settings → Integrations**.
 
 ### Limits and caching

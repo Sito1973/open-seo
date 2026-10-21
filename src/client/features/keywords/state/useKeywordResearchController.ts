@@ -268,7 +268,9 @@ export function useKeywordResearchController(
     setShowSaveDialog: uiState.setShowSaveDialog,
   });
 
-  // The refetch is answered from the server's research cache.
+  // The refetch is answered from the server's research cache, or, for a
+  // result it did not cache (one with notes), from the cached Google pages
+  // and autocomplete, so it sends no Bright Data request.
   const difficulty = useEstimateDifficulty(input.projectId, [
     "keywordResearch",
     input.projectId,

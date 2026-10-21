@@ -26,7 +26,15 @@ export const googleSearchCandidatesSchema = z.object({
       reviewsCount: z.number().nullable(),
     }),
   ),
-  peopleAlsoAsk: z.array(z.string()),
+  /** Each question with Google's answer snippet and the page it cites. */
+  peopleAlsoAsk: z.array(
+    z.object({
+      question: z.string(),
+      answer: z.string().nullable(),
+      url: z.string().nullable(),
+      domain: z.string().nullable(),
+    }),
+  ),
   relatedSearches: z.array(z.string()),
 });
 

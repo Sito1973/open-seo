@@ -153,7 +153,14 @@ beforeEach(() => {
         reviewsCount: 120,
       },
     ],
-    peopleAlsoAsk: [{ question: "Where are the best burgers?" }],
+    peopleAlsoAsk: [
+      {
+        question: "Where are the best burgers?",
+        answer: null,
+        url: null,
+        domain: null,
+      },
+    ],
     relatedSearches: ["burgers near me", "far too long a related search here"],
   });
   listSections.mockResolvedValue([
@@ -351,7 +358,7 @@ describe("researchWebsite without DataForSEO or a model", () => {
             query: "burgers austin",
             locationName: tracker.locationName,
             localPack: [{ name: "Rival Burgers", domain: "rival.com" }],
-            peopleAlsoAsk: ["Where are the best burgers?"],
+            peopleAlsoAsk: [{ question: "Where are the best burgers?" }],
           },
         ],
       },

@@ -25,8 +25,7 @@ import { toolErrorMessage } from "@/server/mcp/tool-error-message";
 import { DIFFICULTY_ESTIMATE_LABEL } from "@/shared/keyword-difficulty";
 
 // OpenSEO's own keyword difficulty for self-hosted installs on Bright Data,
-// where DataForSEO's is unavailable. Registered only on the self-hosted MCP
-// transport.
+// where DataForSEO's is unavailable. Registered only where stand-ins apply.
 
 const inputSchema = {
   projectId: projectIdSchema,

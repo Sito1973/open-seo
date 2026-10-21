@@ -165,9 +165,14 @@ function standInProviders(env: EnvRecord): string[] {
       "the Maps rank grid, local SERP, local business search and place details (Google Places)",
     );
   }
-  if (get(env, "BRIGHTDATA_API_KEY") && get(env, "BRIGHTDATA_SERP_ZONE")) {
+  const authSecret = get(env, "BETTER_AUTH_SECRET") ?? "";
+  if (
+    get(env, "GOOGLE_CLIENT_ID") &&
+    get(env, "GOOGLE_CLIENT_SECRET") &&
+    authSecret.length >= MIN_BETTER_AUTH_SECRET_LENGTH
+  ) {
     replacements.push(
-      "rank tracking, get_serp_results and find_serp_competitors (Bright Data live Google SERP)",
+      "Domain Overview of your own sites and your own Business Profile listings, once Search Console and Business Profile are connected in a project (Google OAuth)",
     );
   }
   if (
@@ -184,9 +189,8 @@ function standInProviders(env: EnvRecord): string[] {
   }
   if (get(env, "BRIGHTDATA_API_KEY") && get(env, "BRIGHTDATA_SERP_ZONE")) {
     replacements.push(
+      "rank tracking, get_serp_results and find_serp_competitors (Bright Data live Google SERP)",
       "Google AI Overviews answers in AI visibility (Bright Data)",
-    );
-    replacements.push(
       get(env, "OPENPAGERANK_API_KEY")
         ? "keyword difficulty estimates from the local pack and Open PageRank"
         : "keyword difficulty estimates from the local pack (set OPENPAGERANK_API_KEY to add the top 10's authority)",

@@ -33,7 +33,7 @@ import {
 /**
  * Prompt ideas on a self-hosted server without an AI model: Google's People
  * Also Ask questions, then its related searches, for the topic near the
- * project's tracked city, from one Bright Data request (cached 12 hours).
+ * project's tracked city, from one Bright Data request (cached a week).
  * Without a topic it takes the first Prompt Research keyword that is not a
  * topic yet. They are raw candidates, so guidance says so and tells the
  * user's own AI agent how to finish them.
@@ -47,19 +47,24 @@ async function suggestFromGoogle(input: {
   organizationId: string;
 }) {
   const brightData = input.topic ? await getBrightDataSerp() : null;
-  const found =
+  // The tracker's city and device, as Prompt Research searches, so both
+  // read the same cached page.
+  const nearby =
     brightData && input.topic
+      ? await projectSearchTracker({ id: input.projectId, ...input.market })
+      : null;
+  const found =
+    brightData && nearby && input.topic
       ? await searchGoogleCandidates(brightData, {
           query: input.topic,
-          market: (
-            await projectSearchTracker({ id: input.projectId, ...input.market })
-          ).market,
+          market: nearby.market,
+          device: nearby.device,
           organizationId: input.organizationId,
         })
       : null;
   const seen = new Set(input.excluded.map(normalizeAiSuggestion));
   const prompts = [
-    ...(found?.peopleAlsoAsk ?? []),
+    ...(found?.peopleAlsoAsk ?? []).map((item) => item.question),
     ...(found?.relatedSearches ?? []),
   ]
     .filter((text) => {

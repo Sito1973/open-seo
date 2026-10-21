@@ -129,9 +129,9 @@ function BudgetsCard({ budgets }: { budgets: DataBudget[] }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          OpenSEO stops a provider at its budget, below its free tier, so this
-          server is never charged. A call past a budget fails until the budget
-          resets.
+          OpenSEO stops each provider at its monthly budget. Free-tier providers
+          stop below their free allowance; a paid one stops at the cap set for
+          it. A call past a budget fails until the budget resets.
         </p>
         <ul className="space-y-4">
           {budgets.map((budget) => (

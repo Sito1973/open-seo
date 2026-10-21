@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { chunk } from "remeda";
 import { db } from "@/db";
 import { runBatch } from "@/db/runBatch";
 import {
@@ -15,6 +16,10 @@ type ResultRow = Omit<
 >;
 
 export type SerpObservationOrigin = ObservationRow["origin"];
+
+// D1 caps bound parameters at 100 per statement; leave headroom for the
+// organization and market filters.
+const QUERY_CHUNK_SIZE = 80;
 
 /** Where a search ran: country, language and city (null for the country). */
 type SerpMarket = Pick<
@@ -78,19 +83,26 @@ async function record(
 async function readPages<Observation extends { id: string }>(
   observations: Observation[],
 ) {
-  if (observations.length === 0) return [];
-  const ids = observations.map((observation) => observation.id);
-  const [results, features] = await Promise.all([
-    db
-      .select()
-      .from(serpObservationResults)
-      .where(inArray(serpObservationResults.observationId, ids))
-      .orderBy(asc(serpObservationResults.position)),
-    db
-      .select()
-      .from(serpObservationFeatures)
-      .where(inArray(serpObservationFeatures.observationId, ids)),
-  ]);
+  const chunks = await Promise.all(
+    chunk(
+      observations.map((observation) => observation.id),
+      QUERY_CHUNK_SIZE,
+    ).map((ids) =>
+      Promise.all([
+        db
+          .select()
+          .from(serpObservationResults)
+          .where(inArray(serpObservationResults.observationId, ids))
+          .orderBy(asc(serpObservationResults.position)),
+        db
+          .select()
+          .from(serpObservationFeatures)
+          .where(inArray(serpObservationFeatures.observationId, ids)),
+      ]),
+    ),
+  );
+  const results = chunks.flatMap(([rows]) => rows);
+  const features = chunks.flatMap(([, rows]) => rows);
   return observations.map((observation) => {
     const rows = results.filter((row) => row.observationId === observation.id);
     return {
@@ -140,10 +152,12 @@ async function findLatestForKeywords(
   input: SerpMarket & { keywords: string[]; since: string },
 ) {
   const keywords = [...new Set(input.keywords.map(normalizeKeyword))];
-  const observations =
-    keywords.length === 0
-      ? []
-      : await db
+  // A keyword's observations all fall in one chunk, so the newest one per
+  // keyword is the first in its chunk's order.
+  const observations = (
+    await Promise.all(
+      chunk(keywords, QUERY_CHUNK_SIZE).map((slice) =>
+        db
           .select({
             id: serpObservations.id,
             keyword: serpObservations.keyword,
@@ -154,10 +168,13 @@ async function findLatestForKeywords(
           .where(
             and(
               inMarketSince(input, input.since),
-              inArray(serpObservations.keyword, keywords),
+              inArray(serpObservations.keyword, slice),
             ),
           )
-          .orderBy(desc(serpObservations.observedAt));
+          .orderBy(desc(serpObservations.observedAt)),
+      ),
+    )
+  ).flat();
   const latest = new Map<string, (typeof observations)[number]>();
   for (const observation of observations) {
     if (!latest.has(observation.keyword))

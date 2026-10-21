@@ -103,12 +103,19 @@ export function describeForStandIns(
  */
 export function standInInstructions(standIns: DataSourceProviders): string {
   const sections = resolveDataSections(standIns);
-  const none = sections.filter((section) => !hasDataSource(section.state));
+  const labels = (state: DataSection["state"]) =>
+    sections
+      .filter((section) => section.state === state)
+      .map((section) => section.label)
+      .join(", ");
+  const none = labels("unavailable");
+  const notSetUp = labels("needs_setup");
   const partial = sections.filter((section) => section.state === "partial");
   return [
     "This self-hosted OpenSEO server bills no credits: its research tools run on free Google APIs and free tiers (Bright Data, SerpApi, Google Places) under monthly budgets the server enforces, and a call past a budget fails with MONTHLY_BUDGET_EXHAUSTED. Each tool description names the provider a call uses, and whoami lists every section's source and the budgets left this month.",
-    none.length > 0
-      ? `No source on this server, so skip their tools: ${none.map((section) => section.label).join(", ")}.`
+    none ? `No source on this server, so skip their tools: ${none}.` : "",
+    notSetUp
+      ? `Not set up on this server, so their tools fail to fetch new data, while saved data (trackers, past runs) stays readable: ${notSetUp}.`
       : "",
     partial.length > 0
       ? `Only partly served: ${partial.map((section) => `${section.label} (${section.source})`).join("; ")}.`

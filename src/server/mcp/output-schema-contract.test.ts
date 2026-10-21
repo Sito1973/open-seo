@@ -64,44 +64,67 @@ function closedOutputPaths(schema: unknown, path: string): string[] {
   return failures;
 }
 
+const standIns = {
+  brightData: true,
+  places: true,
+  keywordPlanner: true,
+  serpApi: true,
+  openPageRank: true,
+  pageSpeed: true,
+  googleOAuth: true,
+  model: false,
+  ahrefs: true,
+  dataforseoBacklinks: true,
+};
+
 describe("published MCP output schemas", () => {
-  it("allows added fields in every registered tool, including nested objects", async () => {
-    const server = createOpenSeoMcpServer(
-      createWorkersOAuthMcpProps({
-        userId: "user_test",
-        userEmail: "test@example.com",
-        organizationId: "org_test",
-        baseUrl: "https://open-seo.test",
-        clientId: "client_test",
-        scopes: ["mcp"],
-      }),
-      // Includes the self-hosted-only tools so their schemas are checked too.
-      { selfHosted: true },
-    );
-    const client = new Client({ name: "output-schema-contract", version: "1" });
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair();
-    try {
-      await server.connect(serverTransport);
-      await client.connect(clientTransport);
-      const { tools } = await client.listTools();
-      expect(tools.length).toBeGreaterThan(0);
-      const failures = tools.flatMap((tool) => {
-        expect(
-          tool.outputSchema,
-          `${tool.name} must publish an output schema`,
-        ).toBeDefined();
-        return closedOutputPaths(tool.outputSchema, tool.name);
+  // Self-hosted, with and without stand-ins, so the tools only one of them
+  // lists are checked too.
+  it.each([
+    { label: "self-hosted", options: { selfHosted: true } },
+    { label: "with stand-ins", options: { selfHosted: true, standIns } },
+  ])(
+    "allows added fields in every registered tool ($label), including nested objects",
+    async ({ options }) => {
+      const server = createOpenSeoMcpServer(
+        createWorkersOAuthMcpProps({
+          userId: "user_test",
+          userEmail: "test@example.com",
+          organizationId: "org_test",
+          baseUrl: "https://open-seo.test",
+          clientId: "client_test",
+          scopes: ["mcp"],
+        }),
+        options,
+      );
+      const client = new Client({
+        name: "output-schema-contract",
+        version: "1",
       });
-      expect(
-        failures,
-        "Use z.looseObject() or .passthrough() for these MCP output objects; cached clients must accept added fields.",
-      ).toEqual([]);
-    } finally {
-      await client.close();
-      await server.close();
-    }
-  });
+      const [clientTransport, serverTransport] =
+        InMemoryTransport.createLinkedPair();
+      try {
+        await server.connect(serverTransport);
+        await client.connect(clientTransport);
+        const { tools } = await client.listTools();
+        expect(tools.length).toBeGreaterThan(0);
+        const failures = tools.flatMap((tool) => {
+          expect(
+            tool.outputSchema,
+            `${tool.name} must publish an output schema`,
+          ).toBeDefined();
+          return closedOutputPaths(tool.outputSchema, tool.name);
+        });
+        expect(
+          failures,
+          "Use z.looseObject() or .passthrough() for these MCP output objects; cached clients must accept added fields.",
+        ).toEqual([]);
+      } finally {
+        await client.close();
+        await server.close();
+      }
+    },
+  );
 
   it("finds constraints inside arrays, unions, and referenced definitions", () => {
     expect(

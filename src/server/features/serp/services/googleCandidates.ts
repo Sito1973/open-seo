@@ -12,9 +12,10 @@ import {
   type GoogleSearchCandidates,
 } from "@/types/schemas/googleCandidates";
 
-// A repeat within this window, such as asking for prompt ideas twice, sends
-// no request.
-const CACHE_TTL_SECONDS = 12 * 60 * 60;
+// A repeat within this window, such as asking for prompt ideas twice or
+// refetching a related keyword search, sends no request. A week is fresh
+// enough for competitors, People Also Ask and related searches.
+const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 type Market = {
   locationCode: number;
@@ -61,18 +62,28 @@ export async function projectSearchTracker(project: {
 /**
  * The first Google results page for one query from Bright Data (one request
  * from the server's monthly budget, saved to the organization's SERP store),
- * reduced to the candidates a person or their AI agent picks from.
+ * reduced to the candidates a person or their AI agent picks from. Every
+ * feature that reads Google's candidates goes through here, so they share
+ * one cache per organization, query, market and device.
  */
 export async function searchGoogleCandidates(
   config: BrightDataSerp,
-  input: { query: string; market: Market; organizationId: string },
+  input: {
+    query: string;
+    market: Market;
+    organizationId: string;
+    /** Desktop unless set, as DataForSEO searches. */
+    device?: "desktop" | "mobile";
+  },
 ): Promise<GoogleSearchCandidates> {
+  const device = input.device ?? "desktop";
   const cacheKey = await buildCacheKey("serp:candidates", {
     organizationId: input.organizationId,
     query: normalizeAiSuggestion(input.query),
     locationCode: input.market.locationCode,
     languageCode: input.market.languageCode,
     locationName: input.market.locationName ?? null,
+    device,
   });
   const cached = googleSearchCandidatesSchema.safeParse(
     await getCached(cacheKey),
@@ -82,7 +93,7 @@ export async function searchGoogleCandidates(
   const serp = await fetchBrightDataSerp(config, {
     keyword: input.query,
     market: input.market,
-    device: "desktop",
+    device,
     depth: 10,
     observation: { organizationId: input.organizationId, origin: "research" },
   });
@@ -102,7 +113,7 @@ export async function searchGoogleCandidates(
       rating: item.rating,
       reviewsCount: item.reviewsCount,
     })),
-    peopleAlsoAsk: serp.peopleAlsoAsk.map((item) => item.question),
+    peopleAlsoAsk: serp.peopleAlsoAsk,
     relatedSearches: serp.relatedSearches,
   };
   // waitUntil, not void: workerd cancels unregistered pending I/O once the

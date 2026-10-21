@@ -202,9 +202,11 @@ function registerOpenSeoTool<Input extends ToolSchema>(
 export function createOpenSeoMcpServer(
   authProps: McpProps,
   // standIns: set on a self-hosted install that runs stand-ins for
-  // DataForSEO (usesGoogleFallbacks). It hides the tools that have none, says
-  // in each description which provider a call uses instead of credits, and
-  // replaces the credit instructions with the server's data sources.
+  // DataForSEO (usesGoogleFallbacks). Each description then says which
+  // provider a call uses instead of credits, or that its section has no
+  // source here, and the server's data sources replace the credit
+  // instructions. Only Google Business Q&A, which Google retired, is left out;
+  // only the difficulty estimate, which needs no DataForSEO, is added.
   options: { selfHosted: boolean; standIns?: DataSourceProviders } = {
     selfHosted: false,
   },
@@ -323,8 +325,8 @@ export function createOpenSeoMcpServer(
   // Business Profile reads and, after the user approves a preview, edits the
   // owner's own listings with a scope only self-hosted installs grant, and
   // Core Web Vitals and place details run only on GOOGLE_PAGESPEED_API_KEY
-  // and GOOGLE_PLACES_API_KEY, and difficulty estimates only on Bright Data,
-  // which hosted never uses. Hosted never lists these.
+  // and GOOGLE_PLACES_API_KEY, which hosted never uses. Hosted never lists
+  // these.
   if (options.selfHosted) {
     register(listGoogleBusinessProfileLocationsTool);
     register(getGoogleBusinessProfileReviewsTool);
@@ -339,8 +341,10 @@ export function createOpenSeoMcpServer(
     register(updateGoogleBusinessProfileFoodMenuTool);
     register(getCoreWebVitalsTool);
     register(getPlaceDetailsTool);
-    register(estimateKeywordDifficultyTool);
   }
+  // Difficulty estimates stand in for DataForSEO's difficulty, so installs
+  // that use DataForSEO for every feature never list them.
+  if (options.standIns) register(estimateKeywordDifficultyTool);
 
   return server;
 }

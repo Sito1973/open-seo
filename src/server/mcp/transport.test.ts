@@ -1,6 +1,6 @@
 import type { CreateMcpHandlerOptions } from "agents/mcp/server";
 import { McpServer } from "@modelcontextprotocol/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createWorkersOAuthMcpProps,
   MCP_AUTH_CONTEXT_PROP,
@@ -153,8 +153,6 @@ function hostedProps(scopes: string[] = ["mcp"]) {
 
 describe("handleSelfHostedOpenSeoMcpRequest", () => {
   beforeEach(() => {
-    vi.stubEnv("DATAFORSEO_API_KEY", "");
-    vi.stubEnv("AUTH_MODE", "");
     selfHostedAuthMocks.resolveLocalNoAuthContext.mockResolvedValue({
       userId: "local-admin",
       userEmail: "admin@localhost",
@@ -165,10 +163,6 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
       userEmail: "person@example.com",
       organizationId: "delegated-cloudflare-user",
     });
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
   });
 
   it.each([
@@ -207,7 +201,7 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
       expect(response.headers.get("connection")).not.toBe("keep-alive");
       expect(resolver).toHaveBeenCalled();
       // Only the self-hosted transport registers the Business Profile tools,
-      // and without DataForSEO it hides the tools that have no stand-in.
+      // and it passes the server's provider snapshot to the MCP server.
       expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith(
         {
           [MCP_AUTH_CONTEXT_PROP]: {

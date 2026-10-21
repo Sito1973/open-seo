@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { safeHostname } from "@/shared/safe-url";
 
 // The sections of Bright Data's parsed Google page besides organic results and
 // the local pack, with the field names its parsed JSON documents. Each section
@@ -66,12 +67,7 @@ type SerpSectionsPage = z.infer<z.ZodObject<typeof serpSectionsShape>>;
 
 /** A result link's hostname without www, or null for a missing or bad link. */
 export function domainOf(link: string | null | undefined): string | null {
-  if (!link) return null;
-  try {
-    return new URL(link).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return null;
-  }
+  return safeHostname(link);
 }
 
 type AdItem = NonNullable<SerpSectionsPage["top_ads"]>[number];

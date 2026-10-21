@@ -100,6 +100,9 @@ declare namespace Cloudflare {
     // APIv3 key of a free Ahrefs account for the Backlinks tables' Domain
     // Rating column (Ahrefs' free endpoint). Unset: the column stays empty.
     AHREFS_API_KEY?: string;
+    // Open PageRank key for the authority half of keyword difficulty
+    // estimates. Unset: estimates use the local pack alone.
+    OPENPAGERANK_API_KEY?: string;
     AI_VISIBILITY_WORKFLOW: Workflow<
       (
         | { runId: string }

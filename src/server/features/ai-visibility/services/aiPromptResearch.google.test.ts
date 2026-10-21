@@ -5,7 +5,7 @@ vi.mock("cloudflare:workers", () => ({ waitUntil: vi.fn() }));
 
 const {
   createDataforseoClient,
-  fetchBrightDataSerp,
+  searchGoogleCandidates,
   getBrightDataSerp,
   fetchGoogleAutocomplete,
   getPerformance,
@@ -15,7 +15,7 @@ const {
   getTracker,
 } = vi.hoisted(() => ({
   createDataforseoClient: vi.fn(),
-  fetchBrightDataSerp: vi.fn(),
+  searchGoogleCandidates: vi.fn(),
   getBrightDataSerp: vi.fn(),
   fetchGoogleAutocomplete: vi.fn(),
   getPerformance: vi.fn(),
@@ -38,10 +38,7 @@ vi.mock("@/server/lib/r2-cache", () => ({
   getCached: async () => null,
   setCached: async () => undefined,
 }));
-vi.mock("@/server/lib/brightDataSerp", () => ({
-  fetchBrightDataSerp,
-  getBrightDataSerp,
-}));
+vi.mock("@/server/lib/brightDataSerp", () => ({ getBrightDataSerp }));
 vi.mock("@/server/lib/googleAutocomplete", () => ({ fetchGoogleAutocomplete }));
 vi.mock("@/server/lib/googleAdsKeywordPlanner", () => ({
   getKeywordPlannerClient: async () => null,
@@ -71,6 +68,7 @@ vi.mock("@/server/features/serp/services/googleCandidates", () => ({
     },
     device: "mobile",
   }),
+  searchGoogleCandidates,
 }));
 vi.mock("../repositories/AiVisibilityRepository", () => ({
   AiVisibilityRepository: { getLatestAnswer, getEvidence },
@@ -96,7 +94,7 @@ beforeEach(() => {
     ],
   });
   getBrightDataSerp.mockResolvedValue({ apiKey: "key", zone: "serp" });
-  fetchBrightDataSerp.mockResolvedValue({
+  searchGoogleCandidates.mockResolvedValue({
     peopleAlsoAsk: [
       {
         question: "¿Cuál es la mejor hamburguesa de Pereira?",
@@ -202,7 +200,7 @@ it("lists what the other sources found, with a note, when a source is not set up
 
   const result = await researchAiPrompts(input, customer);
 
-  expect(fetchBrightDataSerp).not.toHaveBeenCalled();
+  expect(searchGoogleCandidates).not.toHaveBeenCalled();
   expect(result.prompts.map((prompt) => prompt.text)).toEqual([
     "Hamburguesas a domicilio pereira",
     "¿Dónde comer hamburguesas en Pereira?",

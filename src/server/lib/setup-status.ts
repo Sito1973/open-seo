@@ -42,6 +42,7 @@ const CHECK_ENV_VARS = [
   "OPENROUTER_API_KEY",
   "CONTEXT_API_KEY",
   "AHREFS_API_KEY",
+  "OPENPAGERANK_API_KEY",
 ] as const;
 
 const LEVEL_TO_STATUS = {

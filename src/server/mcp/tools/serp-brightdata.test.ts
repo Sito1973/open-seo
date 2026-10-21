@@ -283,6 +283,30 @@ it("drops a section Bright Data reshapes and reports the AI Overview as not dete
   expect(textContent(result)).toContain("AI Overview: not detected.");
 });
 
+it("stops paging at the first empty page, so no page past Google's results is bought", async () => {
+  mocks.fetch.mockImplementation(async (_url, init) => {
+    const { url } = z
+      .object({ url: z.string() })
+      .parse(JSON.parse(typeof init?.body === "string" ? init.body : ""));
+    const later = new URL(url).searchParams.has("start");
+    return Response.json({
+      status_code: 200,
+      headers: {},
+      body: JSON.stringify({ organic: later ? [] : organic("https://a.com/") }),
+    });
+  });
+
+  const result = await getSerpResultsTool.handler(
+    { projectId: "project_1", queries: [{ keyword: "cafe" }], depth: 50 },
+    toolContext,
+  );
+
+  expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  expect(result.structuredContent).toMatchObject({
+    results: [{ ok: true, items: [{ rank: 1, domain: "a.com" }] }],
+  });
+});
+
 it("answers a repeat within 12 hours from the cache without a request", async () => {
   answerPages({ cafe: { organic: organic("https://a.com/") } });
   const args = { projectId: "project_1", queries: [{ keyword: "cafe" }] };

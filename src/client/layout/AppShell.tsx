@@ -9,10 +9,10 @@ import {
 } from "@/client/layout/AppShellParts";
 import { GscReEngagementModal } from "@/client/features/gsc/GscReEngagementModal";
 import {
+  DataSourceSetupBanner,
   NoDataSourceState,
   useDataSources,
 } from "@/client/features/help/dataSources";
-import { hasDataSource } from "@/shared/data-sources";
 import { Sidebar } from "@/client/components/Sidebar";
 import { BILLING_ROUTE } from "@/shared/billing";
 import { getSeoApiKeyStatus } from "@/serverFunctions/config";
@@ -105,9 +105,11 @@ export function AuthenticatedAppLayout({
     shouldCheckSeoApiKeyStatus,
   ]);
 
-  // A section this self-hosted server has no source for shows one shared
-  // empty state instead of a page whose every request would fail. The longest
-  // matching path wins, so Prompt Research is not taken for Prompt Tracking.
+  // A section with no stand-in at all shows one shared empty state instead of
+  // a page whose every request would fail. A section whose stand-in is not set
+  // up keeps its page, since its saved data needs no provider, under a setup
+  // banner. The longest matching path wins, so Prompt Research is not taken
+  // for Prompt Tracking.
   const matchRoute = useMatchRoute();
   const dataSources = useDataSources(ready);
   const currentSection = sortBy(
@@ -117,9 +119,9 @@ export function AuthenticatedAppLayout({
     [(section) => section.path.length, "desc"],
   ).find((section) => matchRoute({ to: section.path, fuzzy: true }));
   const sectionWithoutSource =
-    currentSection && !hasDataSource(currentSection.state)
-      ? currentSection
-      : null;
+    currentSection?.state === "unavailable" ? currentSection : null;
+  const sectionNeedingSetup =
+    currentSection?.state === "needs_setup" ? currentSection : null;
 
   const shouldShowSeoApiWarning =
     !seoApiKeyStatusError &&
@@ -140,6 +142,9 @@ export function AuthenticatedAppLayout({
           seoApiKeyStatusError={seoApiKeyStatusError}
         />
         {banner}
+        {sectionNeedingSetup ? (
+          <DataSourceSetupBanner section={sectionNeedingSetup} />
+        ) : null}
         <div className="min-h-0 flex-1 overflow-auto">
           {sectionWithoutSource ? (
             <NoDataSourceState section={sectionWithoutSource} />
