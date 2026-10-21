@@ -147,7 +147,10 @@ export function brightDataSourceNote(market: SerpMarket): string {
   return `Source: Bright Data live Google SERP from ${host} (exit country ${country.toUpperCase()}, language ${market.languageCode}${near}), about 10 organic results per request.`;
 }
 
-/** This month's Bright Data requests (UTC) against this server's cap. */
+/**
+ * This month's Bright Data requests (UTC) against this server's cap, which
+ * every feature on Bright Data shares.
+ */
 export async function getBrightDataBudget(): Promise<BrightDataBudget> {
   const usedThisMonth = await GooglePlacesUsageRepository.usedCalls({
     month: new Date().toISOString().slice(0, 7),
@@ -158,18 +161,6 @@ export async function getBrightDataBudget(): Promise<BrightDataBudget> {
 
 export function brightDataBudgetLine(usedThisMonth: number): string {
   return `Bright Data budget: ${usedThisMonth} of ${MONTHLY_BUDGET} SERP requests used this month (resets on the 1st, UTC).`;
-}
-
-/**
- * This server's monthly Bright Data budget, which every feature on Bright
- * Data shares, and the requests counted against it this month (UTC).
- */
-export async function brightDataBudgetUsage() {
-  const usedThisMonth = await GooglePlacesUsageRepository.usedCalls({
-    month: new Date().toISOString().slice(0, 7),
-    sku: "brightdata_serp",
-  });
-  return { usedThisMonth, monthlyBudget: MONTHLY_BUDGET };
 }
 
 export const BRIGHTDATA_RANK_CHECK_NOTE = `Rank checks on this server run on Bright Data's live Google SERP: each keyword and device sends one request per 10 results of depth, stopping at the page where the tracked domain appears, from this server's monthly budget of ${MONTHLY_BUDGET} requests. A scheduled check reuses the first page of the same search (keyword, market and device) fetched in this organization in the last ${FIRST_PAGE_REUSE_DAYS} days, by any tracker or SERP tool, and sends requests only for the pages after it; a manual check always fetches live.`;

@@ -2,10 +2,7 @@ import { unique } from "remeda";
 import { z } from "zod";
 import { GooglePlacesUsageRepository } from "@/server/features/google-places/repositories/GooglePlacesUsageRepository";
 import { buildCacheKey, getCached, setCached } from "@/server/lib/r2-cache";
-import {
-  getDataforseoKey,
-  isHostedServerAuthMode,
-} from "@/server/lib/runtime-env";
+import { usesGoogleFallbacks } from "@/server/lib/runtime-env";
 import { getIsoCountryCode } from "@/shared/keyword-locations";
 
 // Google's search suggestions, from the endpoint behind Firefox's search box:
@@ -120,7 +117,7 @@ export async function fetchGoogleAutocomplete(input: {
   languageCode: string;
   queries?: string[];
 }): Promise<{ suggestions: string[]; unavailable: string | null }> {
-  if ((await getDataforseoKey("other")) || (await isHostedServerAuthMode())) {
+  if (!(await usesGoogleFallbacks())) {
     return {
       suggestions: [],
       unavailable:

@@ -27,8 +27,7 @@ const {
 
 // Self-hosted, without DataForSEO for other features.
 vi.mock("@/server/lib/runtime-env", () => ({
-  getDataforseoKey: async () => null,
-  isHostedServerAuthMode: async () => false,
+  usesGoogleFallbacks: async () => true,
 }));
 vi.mock("@/server/lib/dataforseo", () => ({ createDataforseoClient }));
 vi.mock("@/server/features/ai-search/services/access", () => ({

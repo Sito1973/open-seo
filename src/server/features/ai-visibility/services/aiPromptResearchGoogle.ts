@@ -3,10 +3,6 @@ import type { BillingCustomerContext } from "@/server/billing/subscription";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
 import { projectSearchTracker } from "@/server/features/serp/services/googleCandidates";
 import { AppError } from "@/server/lib/errors";
-import {
-  getDataforseoKey,
-  isHostedServerAuthMode,
-} from "@/server/lib/runtime-env";
 import { normalizeAiSuggestion } from "@/shared/ai-prompt-suggestions";
 import type {
   AiPromptCandidateAnswer,
@@ -47,17 +43,6 @@ const VOLUME_TIERS: AiPromptCandidateVolume["source"][] = [
 
 const GUIDANCE =
   "This server has no DataForSEO question database and no AI model, so these are Google's raw candidates, not prompts people typed into an AI assistant: People Also Ask questions and related searches on the keyword's Google page, autocomplete, the site's Search Console questions and its Business Profile searches, plus tracked prompts about the keyword. volume is a labeled search signal (Business Profile impressions, Search Console impressions, or Keyword Planner monthly searches), never AI prompt volume. answer is a tracked prompt's last collected answer, or Google's People Also Ask answer. Rewrite the relevant untracked candidates as natural questions a customer would ask an AI assistant, in the tracker's language, merge duplicates, drop off-topic ones, show them to the user, and save the approved ones with save_ai_visibility_tracker under a topic.";
-
-/**
- * Whether Prompt Research lists Google's candidates: self-hosted without
- * DataForSEO for other features, as getGoogleFallbackKey rules for every
- * Google stand-in. Hosted and full-DataForSEO installs keep DataForSEO.
- */
-export async function promptResearchUsesGoogle(): Promise<boolean> {
-  return (
-    !(await getDataforseoKey("other")) && !(await isHostedServerAuthMode())
-  );
-}
 
 /** Lowercase words without accents, stopwords or a plural "s". */
 function contentWords(text: string): string[] {

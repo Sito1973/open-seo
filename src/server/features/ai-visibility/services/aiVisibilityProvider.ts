@@ -6,7 +6,7 @@ import {
 import { AiVisibilityError } from "./aiVisibilityErrors";
 import { activeAiPrompts, trackerEngines } from "./aiVisibilityConfiguration";
 import {
-  brightDataBudgetUsage,
+  getBrightDataBudget,
   getBrightDataSerp,
 } from "@/server/lib/brightDataSerp";
 import { getDataforseoKey } from "@/server/lib/runtime-env";
@@ -129,7 +129,7 @@ async function standInUsage(engine: AiStandInEngine) {
         usedThisMonth: await serpApiSearchesUsed(),
         monthlyBudget: SERPAPI_MONTHLY_BUDGET,
       }
-    : brightDataBudgetUsage();
+    : getBrightDataBudget();
 }
 
 /**
@@ -231,7 +231,7 @@ export async function requireSerpApiSearches(searches: number) {
  * answer. Nothing is collected or counted.
  */
 export async function requireBrightDataRequests(requests: number) {
-  const { usedThisMonth, monthlyBudget } = await brightDataBudgetUsage();
+  const { usedThisMonth, monthlyBudget } = await getBrightDataBudget();
   const remaining = Math.max(0, monthlyBudget - usedThisMonth);
   if (requests > remaining)
     throw new AiVisibilityError(
