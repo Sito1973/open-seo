@@ -2,7 +2,7 @@ import { and, eq, gt, like, lt } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { verification } from "@/db/schema";
-import type { GoogleLinkProvider } from "@/shared/google-link";
+import type { GoogleGrantProvider } from "@/shared/google-link";
 
 /**
  * Single-use OAuth state and PKCE for the Google data-grant flow
@@ -29,14 +29,14 @@ function bytesToBase64Url(bytes: Uint8Array) {
     .replaceAll("=", "");
 }
 
-function stateIdentifier(provider: GoogleLinkProvider, state: string) {
+function stateIdentifier(provider: GoogleGrantProvider, state: string) {
   return `${STATE_IDENTIFIER_PREFIX}${provider}:${state}`;
 }
 
 export async function getCodeVerifier(input: {
   state: string;
   clientSecret: string;
-  provider: GoogleLinkProvider;
+  provider: GoogleGrantProvider;
 }) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -65,7 +65,7 @@ export async function getCodeChallenge(verifier: string) {
 
 /** Persist a fresh state and return the nonce to send to Google. */
 export async function createState(input: {
-  provider: GoogleLinkProvider;
+  provider: GoogleGrantProvider;
   userId: string;
   callbackPath: string;
 }) {
@@ -100,7 +100,7 @@ export async function createState(input: {
  */
 export async function consumeState(input: {
   state: string | null;
-  provider: GoogleLinkProvider;
+  provider: GoogleGrantProvider;
 }) {
   if (!input.state) return null;
   const [row] = await db

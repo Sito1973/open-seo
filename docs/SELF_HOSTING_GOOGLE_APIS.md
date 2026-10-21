@@ -1,6 +1,8 @@
 # Free Google APIs for self-hosted installs
 
-Some OpenSEO features can run on free Google APIs, or on the free tier of
+Some OpenSEO features can run on free Google APIs, including your own
+[Google Ads account's Keyword Planner](#google-ads-keyword-planner-search-volume-and-keyword-ideas),
+or on the free tier of
 [Bright Data](#bright-data-live-google-serp-for-rank-tracking), when your
 self-hosted install has no DataForSEO key. Each one is opt-in: set its key and
 leave `DATAFORSEO_API_KEY` unset.
@@ -401,3 +403,138 @@ of the results page. `get_serp_results` keeps its rows for 12 hours, as
 it does with DataForSEO, so repeating a call within that time sends no new
 request. `find_serp_competitors` is not cached, so repeating it sends new
 requests.
+
+## Google Ads Keyword Planner: search volume and keyword ideas
+
+The search volumes DataForSEO sells for keyword research come from Google Ads'
+Keyword Planner. With the Google Ads variables below set and Google Ads
+connected, OpenSEO reads them from your own Google Ads account through the
+[Google Ads API](https://developers.google.com/google-ads/api/docs/keyword-planning/generate-keyword-ideas)
+instead, for free. It runs:
+
+- **`research_keywords`** and the app's keyword research page: keyword ideas
+  for each seed from Keyword Planner, sorted by volume, with average monthly
+  searches, the monthly trend and paid competition.
+- **`get_keyword_metrics`**, refreshing saved keywords and a rank tracker's
+  keyword metrics: volumes for a list of keywords, up to 700 per request.
+
+Keyword Planner has no keyword difficulty or search intent, so those columns
+stay empty, as they do for the countries DataForSEO serves from Google Ads
+data. CPC also stays empty: Google reports bids in the Ads account's currency,
+and OpenSEO shows CPC in US dollars. Google merges close variants such as
+"hamburguesa" and "hamburguesas", and each keyword you asked for gets the
+shared numbers; do not add them together.
+
+### Locations and language
+
+A country project sends its location code as the Google Ads geo target:
+DataForSEO's location codes are Google Ads geo target IDs (Colombia is 2170).
+For a city, county or region, pass Google's canonical name as `locationName`,
+for example `Pereira,Risaralda,Colombia` (geo target 1003665). OpenSEO looks
+the name up in Google Ads and rejects a name that is not a location in the
+project's country. Ideas then stay national and the volumes become local, as
+with DataForSEO. Without DataForSEO, `search_serp_locations` does not work, so
+take the name from Google's
+[geo targets table](https://developers.google.com/google-ads/api/data/geotargets).
+
+The project's language becomes a Google Ads language (Spanish is 1003). A
+language Google Ads does not offer is left out, which Google reads as every
+language.
+
+### Access level
+
+Google retired developer tokens on September 9, 2026. The Google Ads API access
+level now belongs to the Google Cloud project that owns the OAuth client in
+`GOOGLE_ADS_CLIENT_ID`, and you manage it on that project's
+[Google Ads API Overview](https://console.cloud.google.com/google/ads-apis/overview)
+page. OpenSEO sends no developer token.
+
+| Level    | Keyword Planner | Operations per day (production accounts) |
+| -------- | --------------- | ---------------------------------------- |
+| Explorer | Blocked         | 2,880                                    |
+| Basic    | Allowed         | 15,000                                   |
+
+Explorer is usually approved automatically but blocks Keyword Planner. Until
+Basic is approved, keyword research answers "Google Ads API access pending
+(Explorer level blocks Keyword Planner)" instead of failing with a generic
+error. Brand verification of the Cloud project comes first: an OAuth consent
+screen set to **Internal** has to be made **External** and **In production**,
+with its branding filled in. Then apply for Basic on the Overview page; Google
+may upgrade the project automatically after you apply.
+
+Google's Required Minimum Functionality rules for keyword planning tools apply
+only at Standard access. Keep the install for your own businesses: opening it
+to other advertisers changes how Google classifies the tool.
+
+### 1) Set up the Cloud project and OAuth client
+
+In the Google Cloud project that will hold the access level:
+
+1. Enable the
+   [Google Ads API](https://console.cloud.google.com/apis/library/googleads.googleapis.com).
+2. Complete the OAuth consent screen and brand verification as above.
+3. Under **APIs & Services → Credentials**, create an **OAuth client ID** of
+   type **Web application**, with this authorized redirect URI:
+   `https://<your-openseo-host>/api/google-ads/oauth/callback`.
+4. Apply for Basic access on the Google Ads API Overview page.
+
+You also need a Google Ads account. The Google account you connect must be
+able to open it, directly or through a manager account.
+
+### 2) Set the environment variables
+
+```bash
+GOOGLE_ADS_CLIENT_ID=your-oauth-client-id
+GOOGLE_ADS_CLIENT_SECRET=your-oauth-client-secret
+# The Ads account to read, digits only.
+GOOGLE_ADS_CUSTOMER_ID=1234567890
+# Only when you reach that account through a manager account.
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=0987654321
+```
+
+`BETTER_AUTH_SECRET` must be set as well: it encrypts the stored Google grant,
+as it does for Search Console. Recreate the container as in the PageSpeed
+Insights section. With DataForSEO unset, the `dataforseo` check in
+`/api/health` lists the Keyword Planner among the stand-in providers.
+
+### 3) Connect Google Ads
+
+Open any project's **Settings → Integrations** and use **Connect** on the
+**Google Ads Keyword Planner** card. Google asks for the `adwords` scope, the
+only scope the Google Ads API has. It allows changes to campaigns, but OpenSEO
+only calls Keyword Planner and a read-only location lookup with it and never
+changes anything in the account.
+
+The grant belongs to the OpenSEO user who connected it, and keyword research
+uses the grant of the user who runs it. **Disconnect** deletes the stored
+grant; you can also remove OpenSEO's access in your Google account's security
+settings. Hosted OpenSEO never offers this connection.
+
+### Limits and caching
+
+The Google Ads API does not bill API calls. Keyword Planner allows one request
+per second per Ads account, and OpenSEO spaces its requests at least a second
+apart, so a five-seed research call takes about five seconds. Each request is
+one operation of the daily quota:
+
+- a research seed sends one request;
+- a city or region adds one location lookup and one volume request;
+- `get_keyword_metrics` and refreshes send one request per 700 keywords.
+
+Keyword Planner updates its numbers once a month, so OpenSEO keeps each answer
+until the end of the calendar month (UTC) and repeats of the same request in
+that month send nothing to Google. When Google reports a quota error, the tool
+says so; try again later.
+
+### Accuracy
+
+Keyword Planner volumes are approximate monthly averages, rounded by Google.
+Local, long-tail and brand keywords often come back small and rounded, or with
+no volume at all. Some sources report coarser numbers for Ads accounts with
+little or no spend; Google does not document a threshold for the API.
+
+### What OpenSEO stores
+
+The Google grant, encrypted like the Search Console grant. Keyword metrics are
+stored in the project exactly as DataForSEO's are, so saved keywords show them.
+The cached Keyword Planner answers expire after the month.

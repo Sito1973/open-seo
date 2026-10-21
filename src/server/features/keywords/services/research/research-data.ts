@@ -5,6 +5,7 @@ import {
 import type { BillingCustomerContext } from "@/server/billing/subscription";
 import type { CreditFeature } from "@/shared/billing-credit-features";
 import { createDataforseoClient } from "@/server/lib/dataforseo";
+import type { AdsKeywordClient } from "@/server/lib/googleAdsKeywordPlanner";
 import {
   normalizeIntent,
   normalizeKeyword,
@@ -99,14 +100,16 @@ export function mapAdsKeywordItems(
   return rows;
 }
 
-/** Research rows for countries DataForSEO Labs doesn't support. */
+/**
+ * Research rows from Google Ads data: DataForSEO's Google Ads endpoints for
+ * countries Labs doesn't support, or the self-hosted Keyword Planner.
+ */
 export async function fetchGoogleAdsResearchRows(
   params: Omit<FetchResearchRowsParams, "source">,
-  billingCustomer: BillingCustomerContext,
+  ads: AdsKeywordClient,
 ): Promise<EnrichedKeyword[]> {
-  const dataforseo = createDataforseoClient(billingCustomer);
   return mapAdsKeywordItems(
-    await dataforseo.keywords.adsIdeas({
+    await ads.keywords.adsIdeas({
       keyword: params.seedKeyword,
       locationCode: params.locationCode,
       languageCode: params.languageCode,

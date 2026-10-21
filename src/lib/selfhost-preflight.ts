@@ -162,6 +162,15 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
         "rank tracking, get_serp_results and find_serp_competitors (Bright Data live Google SERP)",
       );
     }
+    if (
+      get(env, "GOOGLE_ADS_CLIENT_ID") &&
+      get(env, "GOOGLE_ADS_CLIENT_SECRET") &&
+      get(env, "GOOGLE_ADS_CUSTOMER_ID")
+    ) {
+      replacements.push(
+        "keyword volumes and ideas once Google Ads is connected in Settings → Integrations (Google Ads Keyword Planner)",
+      );
+    }
     const impact = replacements.length
       ? `stand-in providers cover ${replacements.join(", ")}; every other SEO data feature stays unavailable until it is set.`
       : "all SEO data features will be unavailable until it is.";

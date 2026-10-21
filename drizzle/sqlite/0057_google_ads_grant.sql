@@ -1,0 +1,2 @@
+DROP INDEX `account_google_grant_owner_idx`;--> statement-breakpoint
+CREATE UNIQUE INDEX `account_google_grant_owner_idx` ON `account` (`user_id`,`provider_id`,`account_id`) WHERE "account"."provider_id" in ('google-search-console', 'google-analytics', 'google-business-profile', 'google-ads');

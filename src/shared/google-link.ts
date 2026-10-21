@@ -1,9 +1,15 @@
 /**
  * Query param the Google OAuth callback appends (next to `error`) when it
  * bounces a failed connect back to the page that started it, so the client can
- * tell a Search Console, Analytics or Business Profile link failure apart from
- * any other `error` param. Its value is the provider key.
+ * tell a Search Console, Analytics, Business Profile or Google Ads link failure
+ * apart from any other `error` param. Its value is the provider key.
  */
 export const GOOGLE_LINK_ERROR_PARAM = "google_link_error";
 
 export type GoogleLinkProvider = "gsc" | "ga4" | "gbp";
+
+/**
+ * Every Google grant the OAuth flow links. Google Ads is a per-user grant with
+ * no project connection, so it stays out of the project connection cards.
+ */
+export type GoogleGrantProvider = GoogleLinkProvider | "ads";

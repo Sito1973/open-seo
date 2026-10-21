@@ -1,6 +1,7 @@
 import { queryClient } from "@/client/tanstack-db/queryClient";
 import { googleConnectionOptions } from "@/client/features/integrations/googleProviders";
 import { createFileRoute } from "@tanstack/react-router";
+import { GoogleAdsCard } from "@/client/features/integrations/GoogleAdsCard";
 import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
 import { CrawlerAccessSettings } from "@/client/features/settings/CrawlerAccessSettings";
 import { isHostedClientAuthMode } from "@/lib/auth-mode";
@@ -45,6 +46,14 @@ function ProjectIntegrationsRoute() {
       {isHostedClientAuthMode() ? null : (
         <section id="business-profile" className="scroll-mt-6">
           <GoogleConnectionCard provider="gbp" projectId={projectId} />
+        </section>
+      )}
+
+      {/* Self-hosted only: Keyword Planner errors send users here to
+          connect Google Ads. */}
+      {isHostedClientAuthMode() ? null : (
+        <section id="google-ads" className="scroll-mt-6">
+          <GoogleAdsCard />
         </section>
       )}
 

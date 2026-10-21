@@ -32,6 +32,7 @@ import postgres from "postgres";
 import { z } from "zod";
 import { GA4_OAUTH_PROVIDER_ID } from "../src/shared/ga4";
 import { GBP_OAUTH_PROVIDER_ID } from "../src/shared/gbp";
+import { GOOGLE_ADS_OAUTH_PROVIDER_ID } from "../src/shared/google-ads";
 import {
   GDPR_STORAGE_ERASURE_PATH,
   signGdprErasureRequest,
@@ -210,6 +211,7 @@ async function buildInventory(db: Db, user: UserRow) {
           GSC_OAUTH_PROVIDER_ID,
           GA4_OAUTH_PROVIDER_ID,
           GBP_OAUTH_PROVIDER_ID,
+          GOOGLE_ADS_OAUTH_PROVIDER_ID,
         ]),
       ),
     )
@@ -222,10 +224,12 @@ async function buildInventory(db: Db, user: UserRow) {
   ): value is
     | typeof GSC_OAUTH_PROVIDER_ID
     | typeof GA4_OAUTH_PROVIDER_ID
-    | typeof GBP_OAUTH_PROVIDER_ID =>
+    | typeof GBP_OAUTH_PROVIDER_ID
+    | typeof GOOGLE_ADS_OAUTH_PROVIDER_ID =>
     value === GSC_OAUTH_PROVIDER_ID ||
     value === GA4_OAUTH_PROVIDER_ID ||
-    value === GBP_OAUTH_PROVIDER_ID;
+    value === GBP_OAUTH_PROVIDER_ID ||
+    value === GOOGLE_ADS_OAUTH_PROVIDER_ID;
   const googleAccounts = googleAccountRows.flatMap((row) =>
     isGoogleProviderId(row.providerId)
       ? [{ providerId: row.providerId, accountId: row.accountId }]

@@ -1,13 +1,19 @@
 import { captureClientEvent } from "@/client/lib/posthog";
 import {
   GOOGLE_LINK_ERROR_PARAM,
-  type GoogleLinkProvider,
+  type GoogleGrantProvider,
 } from "@/shared/google-link";
 
 type CapturedLinkError = {
-  provider: GoogleLinkProvider;
+  provider: GoogleGrantProvider;
   code: string;
 };
+
+const PROVIDERS = new Set<string>(["gsc", "ga4", "gbp", "ads"]);
+
+function isGrantProvider(value: string | null): value is GoogleGrantProvider {
+  return value !== null && PROVIDERS.has(value);
+}
 
 /**
  * Read and scrub the error params synchronously at module init, before
@@ -22,9 +28,7 @@ function captureLinkErrorFromLocation(): CapturedLinkError | null {
   if (typeof window === "undefined") return null;
   const url = new URL(window.location.href);
   const provider = url.searchParams.get(GOOGLE_LINK_ERROR_PARAM);
-  if (provider !== "gsc" && provider !== "ga4" && provider !== "gbp") {
-    return null;
-  }
+  if (!isGrantProvider(provider)) return null;
   const code = url.searchParams.get("error") ?? "unknown";
   url.searchParams.delete(GOOGLE_LINK_ERROR_PARAM);
   url.searchParams.delete("error");
@@ -49,7 +53,7 @@ export function captureGoogleLinkError() {
 
 /** The captured link failure for this provider, if any survived the redirect. */
 export function getGoogleLinkError(
-  provider: GoogleLinkProvider,
+  provider: GoogleGrantProvider,
 ): { code: string } | null {
   captureGoogleLinkError();
   return captured?.provider === provider ? { code: captured.code } : null;

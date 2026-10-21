@@ -11,13 +11,18 @@ import { getPublicOrigin } from "@/server/mcp/public-origin";
 import { GA4_OAUTH_PROVIDER_ID, GA4_OAUTH_SCOPES } from "@/shared/ga4";
 import { GBP_OAUTH_PROVIDER_ID, GBP_OAUTH_SCOPES } from "@/shared/gbp";
 import {
+  GOOGLE_ADS_OAUTH_PROVIDER_ID,
+  GOOGLE_ADS_OAUTH_SCOPES,
+} from "@/shared/google-ads";
+import {
   GOOGLE_LINK_ERROR_PARAM,
-  type GoogleLinkProvider,
+  type GoogleGrantProvider,
 } from "@/shared/google-link";
 import { GSC_OAUTH_PROVIDER_ID, GSC_OAUTH_SCOPES } from "@/shared/gsc";
 import {
   getGoogleOAuthClientConfig,
   hasGoogleOAuthConfig,
+  type GoogleOAuthClient,
 } from "./oauth-config";
 import { getGoogleAccountId } from "./googleIdToken";
 import {
@@ -28,8 +33,8 @@ import {
 } from "./googleOAuthState";
 
 /**
- * Google data grants (Search Console, Analytics, Business Profile) are linked
- * here rather than through Better Auth's generic-oauth plugin. Better Auth
+ * Google data grants (Search Console, Analytics, Business Profile, Google Ads)
+ * are linked here rather than through Better Auth's generic-oauth plugin. Better Auth
  * treats every linked provider account as a login identity and refuses to link
  * one Google account to a second user, which blocked agencies and multi-member
  * orgs from each connecting the same client Google account. Grants live in the
@@ -47,11 +52,13 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const ACCESS_TOKEN_SKEW_MS = 5_000;
 
 export type GoogleOAuthIntegration = {
-  provider: GoogleLinkProvider;
+  provider: GoogleGrantProvider;
   providerId: string;
   displayName: string;
   callbackPath: `/${string}`;
   scopes: readonly string[];
+  /** Defaults to the GOOGLE_CLIENT_ID client. */
+  oauthClient?: GoogleOAuthClient;
 };
 
 export const GSC_INTEGRATION: GoogleOAuthIntegration = {
@@ -78,6 +85,22 @@ export const GBP_INTEGRATION: GoogleOAuthIntegration = {
   callbackPath: "/api/gbp/oauth/callback",
   scopes: GBP_OAUTH_SCOPES,
 };
+
+// Self-hosted only: the callback route and GoogleAdsService refuse hosted
+// mode. Its own OAuth client, because Google grants Keyword Planner access to
+// the Cloud project that owns the client.
+export const GOOGLE_ADS_INTEGRATION: GoogleOAuthIntegration = {
+  provider: "ads",
+  providerId: GOOGLE_ADS_OAUTH_PROVIDER_ID,
+  displayName: "Google Ads",
+  callbackPath: "/api/google-ads/oauth/callback",
+  scopes: GOOGLE_ADS_OAUTH_SCOPES,
+  oauthClient: "ads",
+};
+
+function oauthClientFor(providerId: string): GoogleOAuthClient {
+  return providerId === GOOGLE_ADS_OAUTH_PROVIDER_ID ? "ads" : "default";
+}
 
 const googleTokenResponseSchema = z.object({
   access_token: z.string().min(1),
@@ -162,7 +185,7 @@ async function upsertGrant(input: {
     })
     .onConflictDoUpdate({
       target: [account.userId, account.providerId, account.accountId],
-      targetWhere: sql`${account.providerId} in ('google-search-console', 'google-analytics', 'google-business-profile')`,
+      targetWhere: sql`${account.providerId} in ('google-search-console', 'google-analytics', 'google-business-profile', 'google-ads')`,
       set: {
         ...accountValues,
         // Google may omit the refresh token on a later consent. Keep the
@@ -190,11 +213,15 @@ export async function createGoogleAuthorizationUrl(input: {
   callbackURL: string;
   publicOrigin: string;
 }) {
-  const config = await getGoogleOAuthClientConfig();
+  const config = await getGoogleOAuthClientConfig(
+    input.integration.oauthClient,
+  );
   if (!config || !(await hasGoogleOAuthConfig(config))) {
+    const prefix =
+      input.integration.oauthClient === "ads" ? "GOOGLE_ADS" : "GOOGLE";
     throw new AppError(
       "AUTH_CONFIG_MISSING",
-      `${input.integration.displayName} is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and BETTER_AUTH_SECRET.`,
+      `${input.integration.displayName} is not configured. Set ${prefix}_CLIENT_ID, ${prefix}_CLIENT_SECRET, and BETTER_AUTH_SECRET.`,
     );
   }
   const state = await createState({
@@ -243,7 +270,9 @@ async function handleGoogleOAuthCallback(input: {
   userId: string;
   publicOrigin: string;
 }) {
-  const config = await getGoogleOAuthClientConfig();
+  const config = await getGoogleOAuthClientConfig(
+    input.integration.oauthClient,
+  );
   if (!config) {
     throw new AppError(
       "AUTH_CONFIG_MISSING",
@@ -357,7 +386,9 @@ export async function getGoogleAccessToken(input: {
       `The ${input.providerId} grant has expired and cannot be refreshed.`,
     );
   }
-  const config = await getGoogleOAuthClientConfig();
+  const config = await getGoogleOAuthClientConfig(
+    oauthClientFor(input.providerId),
+  );
   if (!config) {
     throw new AppError(
       "AUTH_CONFIG_MISSING",

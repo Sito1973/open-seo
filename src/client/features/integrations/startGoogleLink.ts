@@ -3,13 +3,15 @@ import { useSyncExternalStore } from "react";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { startGa4Link } from "@/serverFunctions/ga4";
 import { startGbpLink } from "@/serverFunctions/gbp";
+import { startGoogleAdsLink } from "@/serverFunctions/googleAds";
 import { startGscLink } from "@/serverFunctions/gsc";
-import type { GoogleLinkProvider } from "@/shared/google-link";
+import type { GoogleGrantProvider } from "@/shared/google-link";
 
-const startLink: Record<GoogleLinkProvider, typeof startGscLink> = {
+const startLink: Record<GoogleGrantProvider, typeof startGscLink> = {
   gsc: startGscLink,
   ga4: startGa4Link,
   gbp: startGbpLink,
+  ads: startGoogleAdsLink,
 };
 
 // One link flow at a time: a double-click, or a second Connect click while the
@@ -47,7 +49,7 @@ export function useGoogleLinkPending() {
  * callers keep their own analytics and dismissal behavior.
  */
 export async function startGoogleLink(
-  provider: GoogleLinkProvider,
+  provider: GoogleGrantProvider,
   callbackURL: string,
 ): Promise<boolean> {
   if (linkRedirectPending) return false;

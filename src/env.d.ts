@@ -77,6 +77,15 @@ declare namespace Cloudflare {
     // self-hosted installs without DATAFORSEO_API_KEY.
     BRIGHTDATA_API_KEY?: string;
     BRIGHTDATA_SERP_ZONE?: string;
+    // Google Ads API Keyword Planner for keyword volumes and ideas: its own
+    // OAuth client (the Cloud project that holds the API access level), the
+    // Ads account to read and, for an account reached through a manager, the
+    // manager's ID. Used only on self-hosted installs without
+    // DATAFORSEO_API_KEY.
+    GOOGLE_ADS_CLIENT_ID?: string;
+    GOOGLE_ADS_CLIENT_SECRET?: string;
+    GOOGLE_ADS_CUSTOMER_ID?: string;
+    GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
     AI_VISIBILITY_WORKFLOW: Workflow<
       (
         | { runId: string }

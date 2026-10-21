@@ -16,6 +16,8 @@ import {
 } from "@/server/lib/brightDataSerp";
 import { AppError } from "@/server/lib/errors";
 import { PLACES_MAX_ROWS, searchListings } from "@/server/lib/googlePlaces";
+import { getKeywordPlannerClient } from "@/server/lib/googleAdsKeywordPlanner";
+import { KEYWORD_PLANNER_SOURCE_NOTE } from "@/server/lib/keywordPlannerConfig";
 import { getGoogleFallbackKey } from "@/server/lib/runtime-env";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
@@ -1404,14 +1406,17 @@ export const getKeywordMetricsTool = {
     // Assert against the RESOLVED pair: an explicit language with an omitted
     // location must validate against the project's default location.
     assertLanguageForLocation(locationCode, languageCode);
-    const client = createDataforseoClient(context.billing);
-    const metrics = await fetchKeywordMetricsForList(client, {
-      keywords: args.keywords,
-      locationCode,
-      languageCode,
-      includeClickstreamData: args.includeClickstreamData ?? false,
-      creditFeature: "keyword_research",
-    });
+    const planner = await getKeywordPlannerClient(context.billing.userId);
+    const metrics = await fetchKeywordMetricsForList(
+      planner ?? createDataforseoClient(context.billing),
+      {
+        keywords: args.keywords,
+        locationCode,
+        languageCode,
+        includeClickstreamData: args.includeClickstreamData ?? false,
+        creditFeature: "keyword_research",
+      },
+    );
     const rows = sortKeywordMetricRows(
       metrics.map(toMcpKeywordMetricRow),
       args.sortBy ?? "search_volume",
@@ -1423,7 +1428,10 @@ export const getKeywordMetricsTool = {
         : row,
     );
 
-    const header = `Fetched metrics for ${rows.length} keywords. Columns: volume = monthly searches, KD = keyword difficulty (0-100), CPC in USD, competition = paid competition (0-1); "—" = unavailable.`;
+    const header = [
+      `Fetched metrics for ${rows.length} keywords. Columns: volume = monthly searches, KD = keyword difficulty (0-100), CPC in USD, competition = paid competition (0-1); "—" = unavailable.`,
+      ...(planner ? [KEYWORD_PLANNER_SOURCE_NOTE] : []),
+    ].join("\n");
     return mcpResponse({
       text:
         rows.length === 0

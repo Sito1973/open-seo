@@ -10,10 +10,15 @@ import type { MonthlySearch } from "@/types/keywords";
 
 type DataforseoClient = ReturnType<typeof createDataforseoClient>;
 
-// Narrowed to the two endpoints the helper uses, so tests can fake it cheaply.
-type KeywordMetricsClient = {
-  labs: Pick<DataforseoClient["labs"], "keywordOverview">;
+type AdsSearchVolumeClient = {
   keywords: Pick<DataforseoClient["keywords"], "adsSearchVolume">;
+};
+
+// Narrowed to the two endpoints the helper uses, so tests can fake it cheaply.
+// A client without Labs (the self-hosted Google Ads Keyword Planner) serves
+// every location from Google Ads data.
+type KeywordMetricsClient = AdsSearchVolumeClient & {
+  labs?: Pick<DataforseoClient["labs"], "keywordOverview">;
 };
 
 /**
@@ -21,8 +26,8 @@ type KeywordMetricsClient = {
  * fails the whole task, so rejected ones are skipped and get no Ads metrics.
  */
 export async function fetchAdsSearchVolumeForKeywords(
-  client: KeywordMetricsClient,
-  params: Parameters<KeywordMetricsClient["keywords"]["adsSearchVolume"]>[0],
+  client: AdsSearchVolumeClient,
+  params: Parameters<AdsSearchVolumeClient["keywords"]["adsSearchVolume"]>[0],
 ): Promise<AdsKeywordItem[]> {
   const keywords = params.keywords.filter(isAdsKeyword);
   return keywords.length > 0
@@ -109,8 +114,9 @@ function normalizeAdsKeyword(
 }
 
 // Hydrate a keyword list with fresh metrics: route by location (Labs vs Google
-// Ads), batch under the per-call cap, and drop items DataForSEO returns without
-// a keyword. `creditFeature` is required so spend is always attributed.
+// Ads, or Google Ads only for a client without Labs), batch under the per-call
+// cap, and drop items DataForSEO returns without a keyword. `creditFeature` is
+// required so spend is always attributed.
 //
 // `locationName` (canonical DataForSEO string, e.g. a city) scopes volume /
 // CPC / competition to that location via Google Ads — the only source that
@@ -130,14 +136,16 @@ export async function fetchKeywordMetricsForList(
     locationName?: string;
   },
 ): Promise<KeywordMetricRow[]> {
-  const useGoogleAds =
-    getKeywordDataProvider(params.locationCode) === "google_ads";
+  const labs =
+    getKeywordDataProvider(params.locationCode) === "labs"
+      ? client.labs
+      : undefined;
   const rows: KeywordMetricRow[] = [];
 
   for (let i = 0; i < params.keywords.length; i += KEYWORD_METRICS_BATCH_SIZE) {
     const keywords = params.keywords.slice(i, i + KEYWORD_METRICS_BATCH_SIZE);
 
-    if (useGoogleAds) {
+    if (!labs) {
       const items = await fetchAdsSearchVolumeForKeywords(client, {
         keywords,
         locationCode: params.locationCode,
@@ -174,7 +182,7 @@ export async function fetchKeywordMetricsForList(
           languageCode: params.languageCode,
           creditFeature: params.creditFeature,
         }),
-        client.labs.keywordOverview({
+        labs.keywordOverview({
           keywords,
           locationCode: params.locationCode,
           languageCode: params.languageCode,
@@ -184,7 +192,7 @@ export async function fetchKeywordMetricsForList(
       ]);
       rows.push(...mergeLocalAndNationalRows(keywords, adsItems, labsItems));
     } else {
-      const items = await client.labs.keywordOverview({
+      const items = await labs.keywordOverview({
         keywords,
         locationCode: params.locationCode,
         languageCode: params.languageCode,

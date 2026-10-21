@@ -11,6 +11,10 @@ import { withMcpProjectAuth } from "@/server/mcp/project-auth";
 import { resolveMarket } from "@/shared/keyword-locations";
 import { formatMcpTable, type McpTableColumn } from "@/server/mcp/table";
 import { assertLanguageForLocation } from "@/server/lib/market";
+import {
+  getKeywordPlannerConfig,
+  KEYWORD_PLANNER_SOURCE_NOTE,
+} from "@/server/lib/keywordPlannerConfig";
 import { toolErrorMessage } from "@/server/mcp/tool-error-message";
 import {
   AUTUMN_SEO_DATA_CREDITS_PER_USD,
@@ -188,6 +192,10 @@ export const researchKeywordsTool = {
 
     const okCount = results.filter((r) => r.ok).length;
     const failCount = results.length - okCount;
+    const sourceNote =
+      (await getKeywordPlannerConfig()) && okCount > 0
+        ? `\n${KEYWORD_PLANNER_SOURCE_NOTE}`
+        : "";
     const text =
       results
         .map((r) => {
@@ -204,7 +212,7 @@ export const researchKeywordsTool = {
           return `${header}\n${formatMcpTable(r.rows, RESEARCH_COLUMNS)}`;
         })
         .join("\n\n") +
-      `\n\nResearched ${okCount} of ${results.length} seeds${failCount > 0 ? ` (${failCount} failed)` : ""}. Columns: volume = monthly searches, KD = keyword difficulty (0-100), CPC in USD, competition = paid competition (0-1); "—" = unavailable. Google Ads close variants may share search volumes; do not add their volumes together.`;
+      `\n\nResearched ${okCount} of ${results.length} seeds${failCount > 0 ? ` (${failCount} failed)` : ""}. Columns: volume = monthly searches, KD = keyword difficulty (0-100), CPC in USD, competition = paid competition (0-1); "—" = unavailable. Google Ads close variants may share search volumes; do not add their volumes together.${sourceNote}`;
 
     return mcpResponse({
       text,

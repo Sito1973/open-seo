@@ -13,12 +13,13 @@ import {
   getGoogleLinkError,
   reportGoogleLinkErrorOnce,
 } from "./googleLinkError";
-import type { GoogleLinkProvider } from "@/shared/google-link";
+import type { GoogleGrantProvider } from "@/shared/google-link";
 
-const PROVIDER_LABELS: Record<GoogleLinkProvider, string> = {
+const PROVIDER_LABELS: Record<GoogleGrantProvider, string> = {
   gsc: "Search Console",
   ga4: "Google Analytics",
   gbp: "Business Profile",
+  ads: "Google Ads",
 };
 
 /**
@@ -33,7 +34,7 @@ export function GoogleLinkErrorAlert({
   provider,
   className,
 }: {
-  provider: GoogleLinkProvider;
+  provider: GoogleGrantProvider;
   className?: string;
 }) {
   const [error] = React.useState(() => getGoogleLinkError(provider));

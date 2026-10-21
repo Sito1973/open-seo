@@ -21,6 +21,8 @@ vi.mock(
 );
 vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: mocks.isHostedServerAuthMode,
+  // No Google Ads Keyword Planner: metrics come from DataForSEO.
+  getGoogleFallbackKey: async () => null,
 }));
 vi.mock("@/server/billing/subscription", () => ({
   customerHasPaidPlan: mocks.customerHasPaidPlan,

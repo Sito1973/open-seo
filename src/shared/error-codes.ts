@@ -18,6 +18,8 @@ const ERROR_CODES = [
   "AI_SEARCH_BILLING_ISSUE",
   "AI_VISIBILITY_ERROR",
   "DATAFORSEO_AUTH_FAILED",
+  "GOOGLE_ADS_NOT_CONNECTED",
+  "GOOGLE_ADS_ACCESS_PENDING",
   "RATE_LIMITED",
   "UPSTREAM_UNAVAILABLE",
   "CONFLICT",
@@ -43,6 +45,9 @@ const NON_REPORTABLE_ERROR_CODES = new Set<ErrorCode>([
   "AUDIT_PAGE_LIMIT_EXCEEDED",
   "AUDIT_ALREADY_RUNNING",
   "AUDIT_RENDERING_UNAVAILABLE",
+  // Self-hosted Keyword Planner setup states the owner acts on.
+  "GOOGLE_ADS_NOT_CONNECTED",
+  "GOOGLE_ADS_ACCESS_PENDING",
   // An external provider (DataForSEO) failing on its own side. Nothing in the
   // app to fix, and it drowned real exceptions. Note the error handlers only
   // log what they capture, so every throw site warns on its own line to keep

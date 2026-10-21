@@ -6,7 +6,7 @@ type Client = Parameters<typeof fetchKeywordMetricsForList>[0];
 
 // Minimal fake client exposing only the two endpoints the helper touches.
 function fakeClient(overrides: {
-  keywordOverview?: Client["labs"]["keywordOverview"];
+  keywordOverview?: NonNullable<Client["labs"]>["keywordOverview"];
   adsSearchVolume?: Client["keywords"]["adsSearchVolume"];
 }): Client {
   return {

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -71,9 +72,9 @@ beforeAll(async () => {
       sql.includes("CREATE UNIQUE INDEX"),
     ),
   );
-  // 0056 widens the grant index to the Business Profile provider.
+  // 0057 widens the grant index to Business Profile (0056) and Google Ads.
   await client.executeMultiple(
-    migrationStatements("drizzle/sqlite/0056_gbp_connections.sql", (sql) =>
+    migrationStatements("drizzle/sqlite/0057_google_ads_grant.sql", (sql) =>
       sql.includes("account_google_grant_owner_idx"),
     ),
   );
@@ -319,6 +320,60 @@ describe("Google OAuth grants", () => {
       {
         user_id: "user-1",
         provider_id: "google-business-profile",
+        account_id: "google-account-1",
+        access_token: "second",
+        refresh_token: "refresh-1",
+      },
+    ]);
+  });
+
+  it("links and refreshes a Google Ads grant on the Google Ads OAuth client", async () => {
+    mocks.getGoogleOAuthClientConfig.mockImplementation(async (oauthClient) =>
+      oauthClient === "ads"
+        ? { clientId: "ads-client-id", clientSecret: "ads-client-secret" }
+        : {
+            clientId: "google-client-id",
+            clientSecret: "google-client-secret",
+          },
+    );
+    const authorizeUrl = await authorizationUrl(oauth.GOOGLE_ADS_INTEGRATION);
+    mocks.fetch.mockResolvedValueOnce(
+      tokenResponse({
+        access_token: "first",
+        refresh_token: "refresh-1",
+        expires_in: 3600,
+        id_token: idToken,
+      }),
+    );
+    await callback(
+      oauth.GOOGLE_ADS_INTEGRATION,
+      authorizeUrl.searchParams.get("state")!,
+      { code: "code-1" },
+    );
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 2 * 3600 * 1_000);
+    mocks.fetch.mockResolvedValueOnce(
+      tokenResponse({ access_token: "second" }),
+    );
+
+    await expect(
+      oauth.getGoogleAccessToken({ userId, providerId: "google-ads" }),
+    ).resolves.toBe("second");
+    expect(authorizeUrl.searchParams.get("client_id")).toBe("ads-client-id");
+    expect(authorizeUrl.searchParams.get("redirect_uri")).toBe(
+      `${publicOrigin}/api/google-ads/oauth/callback`,
+    );
+    expect(mocks.getGoogleAccountId).toHaveBeenCalledWith(
+      idToken,
+      "ads-client-id",
+    );
+    const refresh = mocks.fetch.mock.calls[1][1]?.body;
+    if (!(refresh instanceof URLSearchParams)) throw new Error("form body");
+    expect(refresh.get("client_id")).toBe("ads-client-id");
+    expect(await grants()).toEqual([
+      {
+        user_id: "user-1",
+        provider_id: "google-ads",
         account_id: "google-account-1",
         access_token: "second",
         refresh_token: "refresh-1",

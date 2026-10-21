@@ -1,9 +1,8 @@
-import type { BillingCustomerContext } from "@/server/billing/subscription";
 import type { CreditFeature } from "@/shared/billing-credit-features";
-import { createDataforseoClient } from "@/server/lib/dataforseo";
 import { fetchAdsSearchVolumeForKeywords } from "@/server/lib/dataforseo/keyword-metrics";
 import { fetchSerpLocationsForCountry } from "@/server/lib/dataforseo/serp-locations";
 import { AppError } from "@/server/lib/errors";
+import type { AdsKeywordClient } from "@/server/lib/googleAdsKeywordPlanner";
 import {
   LOCATION_OPTIONS,
   formatLocationLabel,
@@ -52,14 +51,14 @@ export async function localizeResearchRows(
     languageCode: string;
     creditFeature?: CreditFeature;
   },
-  billingCustomer: BillingCustomerContext,
+  ads: AdsKeywordClient,
 ): Promise<EnrichedKeyword[]> {
   // Research results cap at 500 rows, under the endpoint's 1,000 keyword
   // limit, so one call covers them.
-  const items = await fetchAdsSearchVolumeForKeywords(
-    createDataforseoClient(billingCustomer),
-    { ...params, keywords: rows.map((row) => row.keyword) },
-  );
+  const items = await fetchAdsSearchVolumeForKeywords(ads, {
+    ...params,
+    keywords: rows.map((row) => row.keyword),
+  });
   const localByKeyword = new Map(
     mapAdsKeywordItems(items).map((local) => [local.keyword, local]),
   );

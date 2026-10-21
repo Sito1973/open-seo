@@ -1,10 +1,8 @@
 import { KeywordResearchRepository } from "@/server/features/keywords/repositories/KeywordResearchRepository";
 import { normalizeIntent } from "@/server/features/keywords/services/research/helpers";
-import {
-  createDataforseoClient,
-  fetchKeywordMetricsForList,
-} from "@/server/lib/dataforseo";
+import { fetchKeywordMetricsForList } from "@/server/lib/dataforseo";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
+import { getKeywordDataClient } from "@/server/lib/googleAdsKeywordPlanner";
 import type { RefreshSavedKeywordMetricsInput } from "@/types/schemas/keywords";
 
 // Cap concurrent D1 upserts per group. A project can accumulate thousands of
@@ -22,7 +20,7 @@ export async function refreshSavedKeywordMetrics(
 
   if (rows.length === 0) return { updated: 0 };
 
-  const client = createDataforseoClient(billingCustomer);
+  const client = await getKeywordDataClient(billingCustomer);
   let updated = 0;
 
   // Group by (locationCode, languageCode) so each provider call is homogeneous.

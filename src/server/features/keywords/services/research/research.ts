@@ -8,6 +8,11 @@ import {
   setCached,
 } from "@/server/lib/r2-cache";
 import { KeywordResearchRepository } from "@/server/features/keywords/repositories/KeywordResearchRepository";
+import { createDataforseoClient } from "@/server/lib/dataforseo";
+import {
+  getKeywordPlannerClient,
+  type AdsKeywordClient,
+} from "@/server/lib/googleAdsKeywordPlanner";
 import type { KeywordResearchRow } from "@/types/keywords";
 import type { ResolvedResearchKeywordsInput } from "@/types/schemas/keywords";
 import { z } from "zod";
@@ -170,7 +175,7 @@ async function fetchAutoRows(
 async function fetchGoogleAdsRows(
   input: ResolvedResearchKeywordsInput,
   seedKeyword: string,
-  billingCustomer: BillingCustomerContext,
+  ads: AdsKeywordClient,
   creditFeature?: CreditFeature,
 ): Promise<ResearchResult> {
   const rows = await fetchGoogleAdsResearchRows(
@@ -181,7 +186,7 @@ async function fetchGoogleAdsRows(
       resultLimit: input.resultLimit,
       creditFeature,
     },
-    billingCustomer,
+    ads,
   );
 
   return { rows, source: "google_ads", usedFallback: false };
@@ -211,8 +216,12 @@ async function buildResearchCacheKey(
   normalizedKeywords: string[],
   mode: KeywordMode,
   billingCustomer: BillingCustomerContext,
+  keywordPlanner: boolean,
 ): Promise<string> {
   return buildCacheKey("kw:research", {
+    // Only Keyword Planner keys carry the field, so DataForSEO keys keep their
+    // hash.
+    ...(keywordPlanner ? { source: "google_ads_keyword_planner" } : {}),
     cacheVersion: CACHE_VERSION,
     organizationId: billingCustomer.organizationId,
     projectId: input.projectId,
@@ -269,7 +278,13 @@ export async function research(
   }
 
   const seedKeyword = uniqueKeywords[0];
-  const provider = getKeywordDataProvider(input.locationCode);
+  // On a self-hosted install without DataForSEO, the Google Ads Keyword
+  // Planner serves every country the way DataForSEO's Google Ads endpoints
+  // serve the countries Labs lacks.
+  const planner = await getKeywordPlannerClient(billingCustomer.userId);
+  const provider = planner
+    ? "google_ads"
+    : getKeywordDataProvider(input.locationCode);
   // Labs source modes, clickstream, and synonym filtering don't exist for
   // Google-Ads-served countries; normalize them so equivalent requests share
   // one cache entry. Local volume replaces the clickstream volume, so a local
@@ -286,6 +301,7 @@ export async function research(
     uniqueKeywords,
     mode,
     billingCustomer,
+    planner !== null,
   );
 
   const cachedRaw = await getCached(cacheKey);
@@ -303,13 +319,14 @@ export async function research(
         effectiveInput,
         effectiveInput.locationName,
         billingCustomer,
+        planner,
         creditFeature,
       )
     : provider === "google_ads"
       ? await fetchGoogleAdsRows(
           effectiveInput,
           seedKeyword,
-          billingCustomer,
+          planner ?? createDataforseoClient(billingCustomer),
           creditFeature,
         )
       : mode === "auto"
@@ -344,9 +361,14 @@ async function researchLocal(
   input: ResolvedResearchKeywordsInput,
   locationName: string,
   billingCustomer: BillingCustomerContext,
+  planner: AdsKeywordClient | null,
   creditFeature?: CreditFeature,
 ): Promise<ResearchResult> {
-  await assertLocalResearchLocation(input.locationCode, locationName);
+  // The Keyword Planner looks the location up itself and rejects an unknown
+  // one; DataForSEO's location list needs a DataForSEO key.
+  if (!planner) {
+    await assertLocalResearchLocation(input.locationCode, locationName);
+  }
   const nationalInput = { ...input, locationName: undefined };
   const national = await research(
     nationalInput,
@@ -367,7 +389,7 @@ async function researchLocal(
         languageCode: input.languageCode,
         creditFeature,
       },
-      billingCustomer,
+      planner ?? createDataforseoClient(billingCustomer),
     ),
   };
 }

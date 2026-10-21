@@ -89,7 +89,7 @@ export const account = sqliteTable(
     uniqueIndex("account_google_grant_owner_idx")
       .on(table.userId, table.providerId, table.accountId)
       .where(
-        sql`${table.providerId} in ('google-search-console', 'google-analytics', 'google-business-profile')`,
+        sql`${table.providerId} in ('google-search-console', 'google-analytics', 'google-business-profile', 'google-ads')`,
       ),
   ],
 );

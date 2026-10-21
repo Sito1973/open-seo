@@ -4,6 +4,9 @@ const { startLink } = vi.hoisted(() => ({ startLink: vi.fn() }));
 vi.mock("@/serverFunctions/gsc", () => ({ startGscLink: startLink }));
 vi.mock("@/serverFunctions/ga4", () => ({ startGa4Link: startLink }));
 vi.mock("@/serverFunctions/gbp", () => ({ startGbpLink: startLink }));
+vi.mock("@/serverFunctions/googleAds", () => ({
+  startGoogleAdsLink: startLink,
+}));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 // Browser checks exercise React subscriptions; here read the real pending snapshot
 // to test network and navigation timing without a DOM.
