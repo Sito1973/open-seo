@@ -1,6 +1,17 @@
+/* eslint-disable max-lines -- one module per SERP provider (dataforseo/serp.ts precedent): page requests, paging, rank checks and the saved first pages they share */
+import { range } from "remeda";
 import { z } from "zod";
 import { GooglePlacesUsageRepository } from "@/server/features/google-places/repositories/GooglePlacesUsageRepository";
+import {
+  SerpObservationRepository,
+  type SerpObservationOrigin,
+} from "@/server/features/serp/repositories/SerpObservationRepository";
 import type { RankCheckResult } from "@/server/lib/dataforseo";
+import {
+  domainOf,
+  readSerpSections,
+  serpSectionsShape,
+} from "@/server/lib/brightDataSerpSections";
 import { AppError } from "@/server/lib/errors";
 import {
   getGoogleFallbackKey,
@@ -12,8 +23,9 @@ import { getIsoCountryCode } from "@/shared/keyword-locations";
 import type { BrightDataBudget } from "@/shared/rank-tracking";
 
 // Bright Data's SERP API: the live Google SERP behind rank tracking,
-// get_serp_results and find_serp_competitors on self-hosted installs without
-// DataForSEO. The URL is a fixed provider host, so no SSRF screening applies.
+// get_serp_results, find_serp_competitors and Google AI Overviews answers on
+// self-hosted installs without DataForSEO. The URL is a fixed provider host,
+// so no SSRF screening applies.
 const REQUEST_URL = "https://api.brightdata.com/request";
 // Bright Data takes 20-50 s per Google page.
 const REQUEST_TIMEOUT_MS = 90_000;
@@ -24,6 +36,11 @@ const MAX_PAGES = 10;
 // Hard-coded below the free tier's 5,000 requests a month so a self-hosted
 // install is never charged. There is deliberately no setting to raise it.
 const MONTHLY_BUDGET = 4500;
+
+// A scheduled rank check reuses a first page the organization fetched this
+// recently for the same search, so sites that track the same keyword do not
+// each pay for it.
+const FIRST_PAGE_REUSE_DAYS = 3;
 
 // Bright Data's docs say Google serves every country from google.com with gl
 // and hl. From a Colombian exit, though, google.com with gl=co failed with
@@ -81,6 +98,7 @@ const serpPageSchema = z.looseObject({
       }),
     )
     .default([]),
+  ...serpSectionsShape,
 });
 
 const serpPageCodec = jsonCodec(serpPageSchema);
@@ -94,6 +112,16 @@ type SerpMarket = {
 };
 
 type Device = "desktop" | "mobile";
+
+type SerpRequest = {
+  keyword: string;
+  market: SerpMarket;
+  device: Device;
+  depth: number;
+  targetDomain?: string;
+  /** Who the first page is saved for in the SERP observation store. */
+  observation: { organizationId: string; origin: SerpObservationOrigin };
+};
 
 export type BrightDataSerp = { apiKey: string; zone: string };
 
@@ -132,7 +160,19 @@ export function brightDataBudgetLine(usedThisMonth: number): string {
   return `Bright Data budget: ${usedThisMonth} of ${MONTHLY_BUDGET} SERP requests used this month (resets on the 1st, UTC).`;
 }
 
-export const BRIGHTDATA_RANK_CHECK_NOTE = `Rank checks on this server run on Bright Data's live Google SERP: each keyword and device sends one request per 10 results of depth, stopping at the page where the tracked domain appears, from this server's monthly budget of ${MONTHLY_BUDGET} requests.`;
+/**
+ * This server's monthly Bright Data budget, which every feature on Bright
+ * Data shares, and the requests counted against it this month (UTC).
+ */
+export async function brightDataBudgetUsage() {
+  const usedThisMonth = await GooglePlacesUsageRepository.usedCalls({
+    month: new Date().toISOString().slice(0, 7),
+    sku: "brightdata_serp",
+  });
+  return { usedThisMonth, monthlyBudget: MONTHLY_BUDGET };
+}
+
+export const BRIGHTDATA_RANK_CHECK_NOTE = `Rank checks on this server run on Bright Data's live Google SERP: each keyword and device sends one request per 10 results of depth, stopping at the page where the tracked domain appears, from this server's monthly budget of ${MONTHLY_BUDGET} requests. A scheduled check reuses the first page of the same search (keyword, market and device) fetched in this organization in the last ${FIRST_PAGE_REUSE_DAYS} days, by any tracker or SERP tool, and sends requests only for the pages after it; a manual check always fetches live.`;
 
 function hostOf(link: string | null | undefined): string | null {
   if (!link) return null;
@@ -150,14 +190,62 @@ function linkMatchesDomain(link: string | null | undefined, domain: string) {
   return host != null && (host === target || host.endsWith(`.${target}`));
 }
 
+/** Features in SERP_FEATURES order, each once, whatever order they came in. */
+function orderedFeatures(features: Iterable<string>): string[] {
+  const present = new Set(features);
+  return [...new Set(Object.values(SERP_FEATURES))].filter((feature) =>
+    present.has(feature),
+  );
+}
+
 function serpFeatures(page: SerpPage): string[] {
-  return Object.entries(SERP_FEATURES)
-    .filter(([section]) => {
-      const value: unknown = page[section];
-      if (Array.isArray(value)) return value.length > 0;
-      return typeof value === "object" && value !== null;
-    })
-    .map(([, feature]) => feature);
+  return orderedFeatures(
+    Object.entries(SERP_FEATURES)
+      .filter(([section]) => {
+        const value: unknown = page[section];
+        if (Array.isArray(value)) return value.length > 0;
+        return typeof value === "object" && value !== null;
+      })
+      .map(([, feature]) => feature),
+  );
+}
+
+/**
+ * Saves a first page in the organization's SERP observation store. The
+ * request is already paid for, so a failed write is logged, never thrown.
+ */
+async function recordFirstPage(input: SerpRequest, page: SerpPage) {
+  try {
+    await SerpObservationRepository.record({
+      ...input.observation,
+      keyword: input.keyword,
+      locationCode: input.market.locationCode,
+      languageCode: input.market.languageCode,
+      locationName: input.market.locationName,
+      device: input.device,
+      results: [
+        ...page.organic.map((item, index) => ({
+          section: "organic" as const,
+          position: index + 1,
+          domain: domainOf(item.link),
+          url: item.link ?? null,
+          title: item.title ?? null,
+        })),
+        ...page.snack_pack.map((item, index) => ({
+          section: "local_pack" as const,
+          position: index + 1,
+          domain: domainOf(item.link),
+          url: item.link ?? null,
+          title: item.name ?? null,
+          rating: item.rating ?? null,
+          reviewsCount: item.reviews_cnt ?? null,
+        })),
+      ],
+      features: serpFeatures(page),
+    });
+  } catch (error) {
+    console.error("[brightdata] saving the SERP observation failed:", error);
+  }
 }
 
 function httpError(status: number, detail: string): AppError {
@@ -278,26 +366,56 @@ async function fetchSerpPage(
   return { page: page.data, usedThisMonth };
 }
 
+/** Pages already fetched: paging resumes after them. */
+type ResumeAfter = { pages: number; organicCount: number };
+
 /**
- * The live Google SERP to `depth` results, one request per page of about 10.
- * With `targetDomain`, paging stops at the page where that domain ranks, so a
- * page-1 ranking costs one request. Positions count organic results only, in
- * Google's order across pages. The local pack comes from the first page.
+ * Organic results to `depth`, one request per page of about 10. With
+ * `targetDomain`, pages go one at a time and paging stops at the page where
+ * that domain ranks; without it, nothing but an empty page ends paging early,
+ * so the pages go out at once. Positions count organic results only, in
+ * Google's order across pages, and results after an empty page are dropped.
+ * The first page is saved to the SERP observation store as soon as it
+ * arrives. With `resume`, paging starts after those pages and numbers
+ * positions after their organic results.
  */
-export async function fetchBrightDataSerp(
+async function fetchOrganicPages(
   config: BrightDataSerp,
-  input: {
-    keyword: string;
-    market: SerpMarket;
-    device: Device;
-    depth: number;
-    targetDomain?: string;
-  },
+  input: SerpRequest,
+  resume: ResumeAfter = { pages: 0, organicCount: 0 },
 ) {
   const pages = Math.min(
     MAX_PAGES,
     Math.max(1, Math.ceil(input.depth / RESULTS_PER_PAGE)),
   );
+  const fetchPage = async (index: number) => {
+    const result = await fetchSerpPage(config, {
+      ...input,
+      start: index * RESULTS_PER_PAGE,
+    });
+    if (index === 0) await recordFirstPage(input, result.page);
+    return result;
+  };
+  const indexes = range(resume.pages, pages);
+  const { targetDomain } = input;
+  let fetched: Array<{ page: SerpPage; usedThisMonth: number }> = [];
+  if (targetDomain) {
+    for (const index of indexes) {
+      const result = await fetchPage(index);
+      fetched.push(result);
+      if (
+        result.page.organic.length === 0 ||
+        result.page.organic.some((item) =>
+          linkMatchesDomain(item.link, targetDomain),
+        )
+      ) {
+        break;
+      }
+    }
+  } else {
+    fetched = await Promise.all(indexes.map(fetchPage));
+  }
+
   const organic: Array<{
     position: number;
     title: string | null;
@@ -306,54 +424,103 @@ export async function fetchBrightDataSerp(
     description: string | null;
   }> = [];
   const features = new Set<string>();
-  let localPack: SerpPage["snack_pack"] = [];
-  let usedThisMonth = 0;
-
-  for (let index = 0; index < pages; index++) {
-    const result = await fetchSerpPage(config, {
-      ...input,
-      start: index * RESULTS_PER_PAGE,
-    });
-    usedThisMonth = result.usedThisMonth;
-    for (const feature of serpFeatures(result.page)) features.add(feature);
-    if (index === 0) localPack = result.page.snack_pack;
-    const before = organic.length;
+  for (const { page } of fetched) {
+    for (const feature of serpFeatures(page)) features.add(feature);
+    if (page.organic.length === 0) break;
+    const before = resume.organicCount + organic.length;
     organic.push(
-      ...result.page.organic.map((item, offset) => ({
+      ...page.organic.map((item, offset) => ({
         position: before + offset + 1,
         title: item.title ?? null,
         url: item.link ?? null,
-        domain: hostOf(item.link)?.replace(/^www\./, "") ?? null,
+        domain: domainOf(item.link),
         description: item.description ?? null,
       })),
     );
-    const { targetDomain } = input;
-    if (
-      result.page.organic.length === 0 ||
-      (targetDomain &&
-        result.page.organic.some((item) =>
-          linkMatchesDomain(item.link, targetDomain),
-        ))
-    ) {
-      break;
-    }
   }
 
+  const firstPage = resume.pages === 0 ? fetched[0]?.page : undefined;
   return {
     organic,
-    localPack: localPack.map((item, index) => ({
+    features: [...features],
+    firstPage: firstPage ?? { organic: [], snack_pack: [] },
+    usedThisMonth: Math.max(
+      0,
+      ...fetched.map((result) => result.usedThisMonth),
+    ),
+  };
+}
+
+/**
+ * The live Google SERP to `depth` results, one request per page of about 10.
+ * With `targetDomain`, paging stops at the page where that domain ranks, so a
+ * page-1 ranking costs one request. Positions count organic results only, in
+ * Google's order across pages. The local pack and the other sections (People
+ * Also Ask, ads, AI Overview...) come from the first page, which is also saved
+ * to the organization's SERP observation store. With `resume`, only the pages
+ * after those already fetched are requested, so the local pack and the other
+ * sections are empty.
+ */
+export async function fetchBrightDataSerp(
+  config: BrightDataSerp,
+  input: SerpRequest,
+  resume?: ResumeAfter,
+) {
+  const { organic, features, firstPage, usedThisMonth } =
+    await fetchOrganicPages(config, input, resume);
+  return {
+    organic,
+    localPack: firstPage.snack_pack.map((item, index) => ({
       position: index + 1,
       title: item.name ?? null,
       url: item.link ?? null,
       rating: item.rating ?? null,
       reviewsCount: item.reviews_cnt ?? null,
     })),
-    features: [...features],
+    ...readSerpSections(firstPage),
+    features,
     usedThisMonth,
   };
 }
 
-/** One rank check, in the shape DataForSEO rank checks produce. */
+/**
+ * The AI Overview section of the Google results page for one AI visibility
+ * prompt, as Bright Data parsed it: undefined when the page has none. One
+ * desktop request from the budget, as DataForSEO checks AI Overviews on
+ * desktop, and the page is saved to the SERP observation store like every
+ * first page. Bright Data does not wait for an AI Overview that Google loads
+ * after the page (see fetchSerpPage), so some are missed.
+ */
+export async function fetchBrightDataAiOverview(
+  config: BrightDataSerp,
+  input: {
+    prompt: string;
+    locationCode: number;
+    languageCode: string;
+    organizationId: string;
+  },
+): Promise<unknown> {
+  const request: SerpRequest = {
+    keyword: input.prompt,
+    market: input,
+    device: "desktop",
+    depth: RESULTS_PER_PAGE,
+    observation: {
+      organizationId: input.organizationId,
+      origin: "ai_visibility",
+    },
+  };
+  const { page } = await fetchSerpPage(config, { ...request, start: 0 });
+  await recordFirstPage(request, page);
+  return page.ai_overview;
+}
+
+/**
+ * One rank check, in the shape DataForSEO rank checks produce. With
+ * `reuseFirstPage`, a first page of the same search saved for the
+ * organization in the last few days stands in for page 1: a domain on it
+ * costs no request, and a deeper check pays only for the pages after it.
+ */
 export async function checkRankOnBrightData(
   config: BrightDataSerp,
   input: {
@@ -365,16 +532,52 @@ export async function checkRankOnBrightData(
     device: Device;
     targetDomain: string;
     depth: number;
+    organizationId: string;
+    reuseFirstPage: boolean;
   },
 ): Promise<RankCheckResult> {
-  const serp = await fetchBrightDataSerp(config, {
+  const request: SerpRequest = {
     keyword: input.keyword,
     market: input,
     device: input.device,
     depth: input.depth,
     targetDomain: input.targetDomain,
-  });
-  const match = serp.organic.find((item) =>
+    observation: { organizationId: input.organizationId, origin: "rank_check" },
+  };
+  const stored = input.reuseFirstPage
+    ? await SerpObservationRepository.findLatest({
+        ...input,
+        since: new Date(
+          Date.now() - FIRST_PAGE_REUSE_DAYS * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      })
+    : null;
+
+  let organic: Array<{ position: number; url: string | null }>;
+  let features: string[];
+  if (stored) {
+    const onFirstPage = stored.organic.some((item) =>
+      linkMatchesDomain(item.url, input.targetDomain),
+    );
+    const later =
+      !onFirstPage &&
+      stored.organic.length > 0 &&
+      input.depth > RESULTS_PER_PAGE
+        ? await fetchOrganicPages(config, request, {
+            pages: 1,
+            organicCount: stored.organic.length,
+          })
+        : null;
+    organic = [...stored.organic, ...(later?.organic ?? [])];
+    features = orderedFeatures([
+      ...stored.features,
+      ...(later?.features ?? []),
+    ]);
+  } else {
+    ({ organic, features } = await fetchOrganicPages(config, request));
+  }
+
+  const match = organic.find((item) =>
     linkMatchesDomain(item.url, input.targetDomain),
   );
   return {
@@ -382,6 +585,6 @@ export async function checkRankOnBrightData(
     keyword: input.keyword,
     position: match?.position ?? null,
     url: match?.url ?? null,
-    serpFeatures: serp.features,
+    serpFeatures: features,
   };
 }

@@ -18,6 +18,10 @@ const {
   listResearchKeywords: vi.fn(),
 }));
 
+// DataForSEO for every feature; Google's candidates have their own file.
+vi.mock("./aiPromptResearchGoogle", () => ({
+  promptResearchUsesGoogle: async () => false,
+}));
 vi.mock("@/server/lib/dataforseo", () => ({
   CHATGPT_LANGUAGE_CODE: "en",
   CHATGPT_LOCATION_CODE: 2840,

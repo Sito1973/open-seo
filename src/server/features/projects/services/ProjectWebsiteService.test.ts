@@ -171,6 +171,19 @@ describe("ProjectWebsiteService.save", () => {
     ).toBe(accepted.overview);
   });
 
+  it("saves picked keywords without topics, as setup without a model does", async () => {
+    await ProjectWebsiteService.save(
+      { ...accepted, suggestedTopics: [], suggestedKeywords: ["site audit"] },
+      customer,
+      "user",
+    );
+
+    expect(
+      (await client.execute("SELECT ai_research_keywords FROM projects"))
+        .rows[0]?.ai_research_keywords,
+    ).toBe("site audit");
+  });
+
   it.each(["before review", "during save"])(
     "preserves context saved %s, including the whole competitor list",
     async (timing) => {

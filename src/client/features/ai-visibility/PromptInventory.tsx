@@ -388,7 +388,7 @@ function EngineResult({
       : row.status === "pending"
         ? "Running"
         : row.answerStatus === "no_answer"
-          ? aiNoAnswerLabel(engine)
+          ? aiNoAnswerLabel(engine, row.error)
           : row.answerStatus !== "answered"
             ? "Answer unavailable"
             : own?.mentioned

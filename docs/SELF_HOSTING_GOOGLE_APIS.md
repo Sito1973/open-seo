@@ -439,14 +439,47 @@ It runs:
   organic position of the tracked domain or one of its subdomains, as with
   DataForSEO, and its SERP features (local pack, People Also Ask, ads, and so
   on) come from the same pages. Scheduled checks also run live: Bright Data has
-  no cheaper queue.
+  no cheaper queue, but they can reuse a first page OpenSEO already has (see
+  [Saved first pages](#saved-first-pages)).
 - **`get_serp_results`**: the organic results plus the local pack (name,
-  rating, review count and link). Depth defaults to 10 here.
-- **`find_serp_competitors`**: up to 10 keywords per call, from each keyword's
-  live top 10 organic results. Each domain gets its keyword count, average and
-  median position, and its position per keyword. Visibility and traffic
-  estimates need search volumes, which a live results page does not have, so
-  they are not returned, and only organic results are counted.
+  rating, review count and link). Depth defaults to 10 here. From the first
+  results page it also returns the featured snippet, People Also Ask (question,
+  answer and source), the AI Overview (its text and cited sources), the
+  knowledge panel, ads (top and bottom) and related searches, as rows typed
+  with DataForSEO's names (`featured_snippet`, `people_also_ask`,
+  `ai_overview`, `ai_overview_reference`, `knowledge_graph`, `paid`,
+  `related_searches`). These rows rank within their own section. If Bright
+  Data changes the shape of one section, that section is left out and the rest
+  of the page still comes back.
+- **`find_serp_competitors`**: competitors from each keyword's first results
+  page, the top 10 organic results and the local pack. A keyword with a
+  [saved first page](#saved-first-pages) from the last 14 days costs nothing,
+  so a call can cover all of a project's tracked keywords; the others are
+  searched live, at most 10 per call (repeat the call for the next 10). On
+  the project's own market it searches near the city of the project's rank
+  tracker, on mobile when that tracker checks mobile only. See
+  [Competitors and visibility](#competitors-and-visibility).
+- **The SERP Analysis card** in keyword research: the top 20 organic results
+  (two requests), and up to 50 when you page past them ("Load top 50").
+  Google pages by offset here, so loading more sends requests only for
+  pages 3 to 5 and adds them to the snapshot already cached for 12 hours.
+  Traffic estimates and backlink counts per result come from DataForSEO and
+  stay empty.
+- **Competitor search during project setup** (the AI visibility setup screen,
+  `research_project_website` and `complete_ai_research_setup`): one request
+  per search, top 10 plus the local pack, near the city of the project's rank
+  tracker when it has one. See
+  [Setup without an AI model](#setup-without-an-ai-model) for installs
+  without `OPENROUTER_API_KEY`.
+- **Google AI Overviews in AI visibility tracking**: one request per prompt
+  in each check, reading the AI Overview on that results page. See
+  [Google AI Overviews for AI visibility](#google-ai-overviews-for-ai-visibility).
+- **Keyword difficulty estimates**: from the first pages rank checks save, at
+  no cost, and on demand at most 300 requests a month. See
+  [Keyword difficulty estimates](#keyword-difficulty-estimates-bright-data-and-open-pagerank).
+- **"Google related searches and questions"** in keyword research, with the
+  Keyword Planner: up to 4 requests per new seed. See
+  [Keyword sources](#keyword-sources).
 
 Each response says where its results came from, for example "Bright Data live
 Google SERP from www.google.com.co (exit country CO, language es)". The rank
@@ -469,11 +502,15 @@ Each request fetches one Google results page with about 10 organic results:
   `Pereira,Risaralda,Colombia`. OpenSEO refuses any other name before it sends
   a request.
 - **Device:** mobile checks ask Bright Data for a mobile browser
-  (`brd_mobile=1`); `get_serp_results` and `find_serp_competitors` use desktop.
+  (`brd_mobile=1`); `get_serp_results` uses desktop, and
+  `find_serp_competitors` uses mobile only for a project whose rank tracker
+  checks mobile only.
 - **Depth:** each further 10 results is one more request (`start=10`,
   `start=20`, …). A rank check stops at the page where the tracked domain
   appears, so a domain on page 1 costs one request whatever the tracker's
-  depth.
+  depth. Requests without a tracked domain (`get_serp_results`, the SERP
+  Analysis card) send all their pages at once, so a deeper request takes about
+  as long as one page; results after an empty page are dropped.
 
 A request takes 20 to 50 seconds. A rank check sends its keywords in batches
 of 10, both devices at once, so 20 keywords on both devices take a few minutes.
@@ -481,13 +518,73 @@ of 10, both devices at once, so 20 keywords on both devices take a few minutes.
 OpenSEO does not ask for AI Overviews. Bright Data can request them
 (`brd_ai_overview`), but on the tested zone those requests failed with "No
 ready cookies". The `ai_overview` SERP feature appears only when Google shows
-one on a normal results page.
+one on a normal results page. Google loads some AI Overviews after the page,
+so `get_serp_results` reports a page without one as "not detected", not as
+proof that Google shows none for that query.
+
+### Saved first pages
+
+OpenSEO saves the first results page of every Bright Data request, from rank
+checks, `get_serp_results`, `find_serp_competitors`, the SERP Analysis card,
+project setup searches and Google AI Overviews checks: the keyword, market
+(country, language and city), device and time, the organic results and the
+local pack (position, domain, link, title, and the pack's rating and review
+count), and the page's SERP features. Later pages are not saved. The pages
+belong to the organization that asked for them and are deleted with it.
+
+A scheduled rank check first looks for a saved first page of the same search
+(same keyword, market and device) from the last 3 days. If the tracked domain
+is on it, the check sends no request; if not, it sends requests only for
+pages 2 onward. So when two of your sites track "hamburguesas pereira" on
+mobile in the same city and their weekly checks run within 3 days of each
+other, the second check reuses the first one's page. The check's date is the day it ran, even when its page 1 is up to 3
+days older. A manual check ("Check rankings" or `run_rank_tracker`) always
+fetches live, and saves the page it gets.
+
+`find_serp_competitors` reads the latest saved first page of each keyword
+from the last 14 days, in the same market and from either device, before it
+searches anything. Weekly rank checks keep every tracked keyword inside that
+window.
+
+`get_serp_results` does not answer from saved pages, because they keep only
+the organic results and the local pack, not People Also Ask, ads or the AI
+Overview. It keeps its own 12-hour cache. Rank checks never mix desktop and
+mobile pages: `get_serp_results` asks for desktop, so only a desktop tracker
+can reuse its pages, and `find_serp_competitors` asks for the device of the
+project's tracker.
+
+### Competitors and visibility
+
+`find_serp_competitors` lists every site on those first pages: organic results
+by domain, and local pack listings by their website. A listing that links to
+a social or delivery profile (Instagram, Facebook, Linktree, WhatsApp, Rappi),
+to Google, or to no site is listed by its business name instead. Each
+competitor gets its keyword count, its organic position per keyword (average
+and median) and its local pack position per keyword.
+
+Visibility and traffic are OpenSEO estimates, not Google data. They come from
+one click-through-rate curve by position (27.6% at #1 down to 2.4% at #10),
+40% lower on a page where an AI Overview was detected. A competitor with both
+an organic result and a local pack listing on a keyword gets the better of
+the two.
+
+- **Visibility**: the competitor's clicks across the keywords as a share of
+  what a #1 on every keyword would get, from 0 to 1.
+- **`etv`**: Keyword Planner monthly searches times that click-through rate,
+  summed over the keywords. It is empty without
+  [Keyword Planner](#google-ads-keyword-planner-search-volume-and-keyword-ideas)
+  volumes, including while Google has not granted Basic access.
+- **`estimated_paid_traffic_cost`**: `etv` times the Keyword Planner CPC,
+  empty while Keyword Planner returns no CPC.
+
+Sort by `visibility` (the default), `traffic_estimate`, `avg_position` or
+`keyword_count`. Paid results and featured snippets are not counted.
 
 ### Built-in monthly budget
 
-| What OpenSEO sends                                                       | Bright Data free tier | OpenSEO budget |
-| ------------------------------------------------------------------------ | --------------------- | -------------- |
-| One Google results page (a rank check, query or keyword sends 1 or more) | 5,000 per month       | 4,500          |
+| What OpenSEO sends                                                                                 | Bright Data free tier | OpenSEO budget |
+| -------------------------------------------------------------------------------------------------- | --------------------- | -------------- |
+| One Google results page (a rank check, query or keyword sends 1 or more; an AI Overviews answer 1) | 5,000 per month       | 4,500          |
 
 OpenSEO counts each request before sending it, and the budget resets on the
 1st of each month, UTC. When it runs out, the tool or rank check says so and
@@ -499,6 +596,11 @@ counter can run ahead of Bright Data's.
 For scale: four sites with 25 keywords each, checked weekly on both devices at
 depth 10, send about 870 requests a month when every domain ranks on page 1.
 A domain outside the top 10 costs one more request per 10 results of depth.
+Keywords that several sites track cost less, because scheduled checks reuse
+saved first pages. Google AI Overviews tracking adds one request per prompt
+per check: 40 prompts checked weekly send up to 200 a month.
+[Prompt Research](#prompt-research-without-dataforseo) sends at most one
+request per keyword a week.
 
 The Rank Tracking page prices checks in requests instead of dollars. Next to a
 tracker it shows how many requests one check sends, from the minimum when
@@ -526,6 +628,47 @@ MCP server. OpenSEO's 4,500 is its own count, not a reservation: other usage on
 the same account can use up the pool first, and OpenSEO's requests then fail
 while its counter still shows budget left. Use a Bright Data account that runs nothing
 else, or keep your other usage within the remaining 500 credits.
+
+### Google AI Overviews for AI visibility
+
+With Bright Data set and no DataForSEO for other features, AI visibility
+tracking offers **Google AI Overviews** as an engine, next to
+[Google AI Mode](#serpapi-google-ai-mode-for-ai-visibility) when SerpApi is
+set too. A new tracker starts on every engine the install collects. Run now
+and scheduled checks both collect live: Bright Data has no cheaper queue.
+
+- **Request:** the tracked prompt, exactly as saved, as a Google search from
+  the tracker's country in its language, on desktop, as DataForSEO checks AI
+  Overviews. There is no city: to ask about one, name it in the prompt. The
+  page is one request and is saved with the
+  [saved first pages](#saved-first-pages).
+- **Answer:** the AI Overview's text (its paragraphs and list items) and the
+  pages it cites, in Google's order. Brand mentions and citations are matched
+  as for the other engines. Citations have no placement, as with DataForSEO.
+- **No answer:** a page without an AI Overview counts as no answer, as with
+  DataForSEO. So does a page where Google showed an AI Overview but Bright
+  Data returned it without its text: the answer keeps the pages it cites and
+  a note saying why, shows as "Answer without text", and is left out of
+  visibility rates. Neither is ever counted as an answer that leaves your
+  brand out.
+- **Cost:** answers cost $0. Each one uses a request from the
+  [4,500-request budget](#built-in-monthly-budget-1), which rank tracking and
+  the SERP tools also use. Estimates show the requests a check uses, the most
+  the schedules can use in one month and the requests left this month.
+- **Before a check,** OpenSEO checks that every prompt fits the requests left
+  this month; otherwise the check does not start and says why. A scheduled
+  check shows the reason as the tracker's scheduling notice.
+- **Schedules** must fit in their busiest month (up to 31 daily, 5 weekly or
+  1 monthly check), together with every other enabled Google AI Overviews
+  tracker on the install: saving or enabling one that could need more than
+  4,500 requests in a month is refused. Rank tracking is not counted there,
+  so leave room for it: the estimate shows what the budget has left.
+
+OpenSEO does not ask Bright Data to wait for AI Overviews (`brd_ai_overview`,
+which failed on the tested zone, see above). Google loads some AI Overviews
+after the page, and those count as no answer, so the share of prompts with
+an AI Overview comes out lower than DataForSEO's, which waits for them.
+Compare AI Overviews results over several checks rather than single answers.
 
 ### 1) Create a SERP API zone
 
@@ -555,11 +698,100 @@ locations.
 ### What OpenSEO stores
 
 A rank check stores what a DataForSEO check stores: each keyword's position,
-ranking URL and the names of the SERP features on the page. It keeps no copy
-of the results page. `get_serp_results` keeps its rows for 12 hours, as
-it does with DataForSEO, so repeating a call within that time sends no new
-request. `find_serp_competitors` is not cached, so repeating it sends new
-requests.
+ranking URL and the names of the SERP features on the page. Every request's
+first page also goes to the [saved first pages](#saved-first-pages).
+`get_serp_results` keeps its rows for 12 hours, as it does with DataForSEO,
+so repeating a call within that time sends no new request.
+`find_serp_competitors` keeps no results of its own: repeating it reads the
+first pages it saved, so it sends no new request for those keywords. The SERP
+Analysis card and the searches of project setup and prompt suggestions also
+keep their results for 12 hours.
+
+## Keyword difficulty estimates: Bright Data and Open PageRank
+
+DataForSEO's keyword difficulty has no Google equivalent, and Keyword Planner
+has none. With [Bright Data](#bright-data-live-google-serp-for-rank-tracking)
+set and no DataForSEO for other features, OpenSEO estimates it (0-100) from a
+keyword's first Google results page. Estimates are labeled
+**OpenSEO estimate**: a dashed badge with that label on hover in the app, and
+`~N` with `keywordDifficultyEstimate` in the MCP tools. They are not
+DataForSEO data, and where DataForSEO has a difficulty for a keyword, its
+number is shown instead.
+
+### How it is worked out
+
+- **Local:** the local pack's median review count on a log scale: about 50
+  reviews give 25, 500 give 58 and 3,000 give 84. For a restaurant search,
+  how established the businesses in the pack are is most of the difficulty.
+- **Organic:** the [Open PageRank](https://keywordseverywhere.com/openpagerank/docs)
+  of the top 10 domains (0-10, times 10), averaged with OpenSEO's
+  click-through-rate curve as weights so the top results count most, minus 10
+  for each top-5 result on a social network, forum, directory or delivery
+  platform (Facebook, Instagram, TikTok, Tripadvisor, Restaurant Guru, Rappi,
+  Páginas Amarillas and similar), which a business's own page can pass. A
+  domain Open PageRank does not know counts as 0.
+- **Difficulty:** 0.6 × local + 0.4 × organic when the page has a local pack,
+  and organic alone when it has none. Without `OPENPAGERANK_API_KEY` the
+  organic part is not measured: a page with a local pack gets the local score,
+  and a page without one gets no estimate.
+
+### Where estimates come from
+
+- **Tracked keywords**, after each rank check, from the first pages the check
+  saved: no extra request. They show in the rank tracker's KD column and in
+  `get_rank_tracker`.
+- **Any other keyword**, on demand: select keywords in keyword research or
+  Saved Keywords and choose **Estimate difficulty**, or call the
+  `estimate_keyword_difficulty` MCP tool. A keyword with a
+  [saved first page](#saved-first-pages) from the last 14 days costs nothing;
+  at most 10 others per click or call are searched live, one Bright Data
+  request each, near the city of the project's rank tracker on its device. Up
+  to 50 keywords per click; repeat for the rest.
+
+Each estimate belongs to the project, for one keyword, country and language,
+and the latest one replaces the one before. It records the city and date of
+the page it came from. Estimates live apart from the provider's metrics, so a
+metrics refresh never erases them and saving keywords from research never
+stores an estimate as provider data. Keyword research, Saved Keywords
+(including its difficulty filter and sort), the rank tracker,
+`research_keywords`, `list_saved_keywords` and `get_rank_tracker` show them.
+CSV and Sheets exports keep the provider's difficulty only.
+
+### Budgets
+
+| What OpenSEO sends                                   | Free tier                | OpenSEO budget              |
+| ---------------------------------------------------- | ------------------------ | --------------------------- |
+| Live Google searches for on-demand estimates         | (Bright Data's 5,000)    | 300 a month, from the 4,500 |
+| Open PageRank lookups (each domain counted per call) | 30,000 domains per month | 25,000 domains a month      |
+
+Both reset on the 1st, UTC, and neither has a setting to raise it. Each
+domain's Open PageRank is kept 30 days, so the same sites cost nothing in
+later estimates. Past a budget, estimates from saved pages still work, and
+the organic part is left out until next month.
+
+### 1) Create an Open PageRank key (optional)
+
+1. Create a free key on
+   [Open PageRank](https://keywordseverywhere.com/openpagerank/docs).
+2. Set the server's public IPv4 address on the account page. From 1 November
+   2026 a free key answers only that address, so the server needs a fixed
+   IPv4 address. Without one, leave the key unset and estimates use the local
+   pack alone.
+3. Set the environment variable and recreate the container:
+
+```bash
+OPENPAGERANK_API_KEY=your-key
+```
+
+OpenSEO sends the key only in the `Authorization` header, and only the
+domains of the top 10 results. The `/api/health` preflight lists the estimates
+among the stand-in providers in use.
+
+### Accuracy
+
+An estimate reads one page of one city on one day, so it moves with Google's
+results. Compare estimates with each other, not with DataForSEO's difficulty,
+which weighs the backlinks of the ranking pages; no free source offers those.
 
 ## Google Ads Keyword Planner: search volume and keyword ideas
 
@@ -569,20 +801,74 @@ connected, OpenSEO reads them from your own Google Ads account through the
 [Google Ads API](https://developers.google.com/google-ads/api/docs/keyword-planning/generate-keyword-ideas)
 instead, for free. Every feature that reads keyword metrics runs on it:
 
-| Feature                                                                                   | What it reads                                                    | Before Basic access                                                                         |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Keyword research page and `research_keywords`                                             | Keyword ideas for each seed, sorted by volume                    | Your site's Search Console queries, [as below](#before-basic-access-search-console-queries) |
-| `get_keyword_metrics`                                                                     | Metrics for a list of keywords, up to 700 per request            | Fails with "Google Ads API access pending"                                                  |
-| **Saved Keywords → Update keyword stats**                                                 | Metrics for every saved keyword                                  | Fails with "Google Ads API access pending"                                                  |
-| Rank tracker volume and CPC, read when you add keywords and with **Update keyword stats** | Metrics for the tracker's keywords, for its city when it has one | Adding keywords works and leaves volume and CPC empty; Update keyword stats fails           |
+| Feature                                                                                   | What it reads                                                                                   | Before Basic access                                                                         |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Keyword research page and `research_keywords`                                             | Keyword ideas for each seed, sorted by volume                                                   | Your site's Search Console queries, [as below](#before-basic-access-search-console-queries) |
+| `get_keyword_metrics`                                                                     | Metrics for a list of keywords, up to 700 per request                                           | Fails with "Google Ads API access pending"                                                  |
+| **Saved Keywords → Update keyword stats**                                                 | Metrics for every saved keyword                                                                 | Fails with "Google Ads API access pending"                                                  |
+| Rank tracker volume and CPC, read when you add keywords and with **Update keyword stats** | Metrics for the tracker's keywords, for its city when it has one                                | Adding keywords works and leaves volume and CPC empty; Update keyword stats fails           |
+| `find_serp_competitors` on Bright Data                                                    | The volumes behind each competitor's estimated traffic, [as below](#competitors-and-visibility) | Estimated traffic stays empty                                                               |
+
+The app's keyword research page can also take phrase-match ideas from Google
+autocomplete and related searches from Google's results page (see
+[Keyword sources](#keyword-sources)).
 
 Each answer carries average monthly searches, the monthly trend, paid
 competition, [CPC in US dollars](#cpc-in-us-dollars) and, for Spanish keywords,
 [OpenSEO's own search intent](#search-intent-for-spanish-keywords). Keyword
 Planner has no keyword difficulty, so that column stays empty, as it does for
-the countries DataForSEO serves from Google Ads data. Google merges close
+the countries DataForSEO serves from Google Ads data, except for OpenSEO's own
+[difficulty estimates](#keyword-difficulty-estimates-bright-data-and-open-pagerank)
+when Bright Data is set. Google merges close
 variants such as "hamburguesa" and "hamburguesas", and each keyword you asked
 for gets the shared numbers; do not add them together.
+
+### Keyword sources
+
+In the app's keyword research, **Options → Keyword source** offers three
+sources on the Keyword Planner, for every country. The clickstream and keyword
+grouping options are hidden: Keyword Planner has neither.
+
+- **Keyword Planner ideas** (the default, and what `research_keywords` uses):
+  Keyword Planner's ideas for the seed.
+- **Phrase match + Google autocomplete**: the Keyword Planner ideas that
+  contain every word of the seed, plus Google's autocomplete suggestions that
+  do (accents ignored, and "hamburguesa" also matches "hamburguesas"). Keyword
+  Planner then measures the new suggestions in one request.
+- **Google related searches and questions**: the related searches and People
+  Also Ask questions on the seed's Google results page, and on the pages of
+  its first three related searches, measured by Keyword Planner. It needs
+  [Bright Data](#bright-data-live-google-serp-for-rank-tracking) and sends up
+  to 4 requests from its monthly budget per new seed, on desktop, without a
+  city. Each page is also saved as a [first page](#saved-first-pages).
+
+For a city, the ideas stay national and Keyword Planner gives the city's
+volumes, as with the default source.
+
+While Google has not approved Basic access, or before Google Ads is connected,
+the phrase match and related sources still list their keywords, without
+volume, CPC or competition, and a note above the table says why. Keyword
+Planner ideas need Basic access. A result with a note is not cached, so the
+same search runs again next time; Google's related searches then cost their
+Bright Data requests again.
+
+Google autocomplete is not an official API, and Google may block a server that
+calls it too often. OpenSEO calls `suggestqueries.google.com` gently:
+
+- about 40 lookups for a new seed: the seed, the seed followed by each letter
+  from a to z, and, in Spanish, a few words around it ("mejor", "donde", "en",
+  "cerca", "domicilio"...);
+- one lookup a second, so a new seed takes about 40 seconds;
+- each answer cached for 30 days, so a repeated seed sends nothing;
+- at most 2,000 lookups a month, counted like the other budgets and shared
+  with [Prompt Research](#prompt-research-without-dataforseo);
+- when Google refuses a lookup (HTTP 429 or 403, or its captcha page), every
+  lookup pauses for 24 hours, and the note says until when.
+
+Lookups use Google's interface language for the project (`es-419` for Spanish
+outside Spain) and its country (`gl=co` for Colombia), without a city. They
+come from your server's IP address and do not use your Google accounts. There
+is no setting to raise the budget or turn the pause off.
 
 ### Locations and language
 
@@ -742,7 +1028,9 @@ one operation of the daily quota:
 
 - a research seed sends one request;
 - a city or region adds one location lookup and one volume request;
-- `get_keyword_metrics` and refreshes send one request per 700 keywords.
+- `get_keyword_metrics` and refreshes send one request per 700 keywords;
+- the phrase match and related sources add one volume request for their new
+  keywords.
 
 Reading the account's currency for CPC is one more request, once a month.
 Keyword Planner updates its numbers once a month, so OpenSEO keeps each answer
@@ -823,12 +1111,13 @@ visibility tracking collects Google AI Mode answers through
 SerpApi is a paid service, not a Google API, but its free plan includes 250
 searches a month, at most 50 an hour, and OpenSEO stays under both.
 
-Without DataForSEO, Google AI Mode is the only engine a tracker can use:
-ChatGPT, Gemini, Google AI Overviews, Claude and Perplexity answers need
-DataForSEO. Tracking settings offer only Google AI Mode, and a new tracker
-starts on it. A tracker saved earlier with other engines does not run, and its
-scheduling notice says why, until you switch it to Google AI Mode. With
-`DATAFORSEO_API_KEY` set, Google AI Mode is not offered.
+Without DataForSEO, a tracker can use Google AI Mode, and Google AI Overviews
+when [Bright Data](#google-ai-overviews-for-ai-visibility) is set too:
+ChatGPT, Gemini, Claude and Perplexity answers need DataForSEO. Tracking
+settings offer only those engines, and a new tracker starts on them. A
+tracker saved earlier with other engines does not run, and its scheduling
+notice says why, until you switch it. With `DATAFORSEO_API_KEY` set for every
+feature, Google AI Mode is not offered.
 
 Run now and scheduled checks both work. Each prompt is one SerpApi search, and
 an answer takes about 8 seconds. SerpApi has no cheaper queue, so scheduled
@@ -920,9 +1209,10 @@ stand-in providers.
 
 ### 3) Switch tracking to Google AI Mode
 
-Open **Prompt Tracking → Tracking settings** and select **Google AI Mode**,
-the only engine offered. Review the estimate, which shows the searches, then
-save and use **Run now** for a first answer.
+Open **Prompt Tracking → Tracking settings** and select **Google AI Mode**
+(and **Google AI Overviews** with Bright Data), the only engines offered.
+Review the estimate, which shows the searches and requests, then save and use
+**Run now** for a first answer.
 
 ### Accuracy
 
@@ -997,3 +1287,94 @@ clients can read the same sessions with
 
 Nothing new: Brand Lookup reads the answers prompt tracking already stored,
 and the Google Analytics report stays in the app's cache for a day.
+
+## Setup without an AI model
+
+OpenSEO drafts three things with a language model through OpenRouter: the
+project setup research (business overview, verified competitors, five topics
+with five prompts each, and Prompt Research keywords), and the prompts behind
+**Generate** in Prompt Tracking. On a Docker install without
+`OPENROUTER_API_KEY`, these return the raw material instead of drafts, so you,
+or your own assistant connected over [MCP](https://openseo.so/docs/mcp), write
+them. Hosted OpenSEO always drafts them.
+
+**Project setup** (the AI visibility setup screen, `research_project_website`
+and `complete_ai_research_setup`) returns:
+
+- the pages it read from your website, with the overview prefilled from your
+  homepage's text when none is saved;
+- with [Bright Data](#bright-data-live-google-serp-for-rank-tracking), live
+  Google results for the first two keywords the project tracks in Rank
+  Tracking, near the tracker's city: organic results, the local pack, People
+  Also Ask and related searches. Keywords that contain the project's name or
+  domain are skipped, because they find the business itself. Each search is
+  one Bright Data request;
+- Prompt Research keyword candidates: your tracked keywords and Google's
+  related searches.
+
+The setup screen explains this, lets you rewrite the overview, add
+competitors from Google's results with one click, and edit the keyword list.
+It then saves the keywords without topics, so no prompts are tracked until you
+add some. Setup always stops at this review, even when the overview and
+competitors are already saved. Over MCP, the result carries `withoutModel`
+with the same material and step-by-step guidance; the assistant drafts the
+overview, competitors, topics and prompts, shows them to you, and saves them
+with `save_project_website_setup`.
+
+**Generate** in Prompt Tracking (and `generate_ai_visibility_prompts`)
+returns Google's People Also Ask questions, then its related searches, for the
+topic near the project's tracked city, from one Bright Data request, minus
+prompts you already track. Without a topic, it uses the first Prompt Research
+keyword that is not a topic yet. Edit them into questions a customer would ask
+an AI assistant before saving. Without Bright Data, it returns no suggestions
+and says so.
+
+## Prompt Research without DataForSEO
+
+Prompt Research normally reads DataForSEO's database of questions with
+ChatGPT's answers, which has no free replacement. On a self-hosted install
+without DataForSEO for other features, the Prompt Research page and
+`research_ai_visibility_prompts` list Google's own candidates for the keyword
+instead, in the tracker's country and language:
+
+- People Also Ask questions, with Google's short answer and its source link,
+  and related searches, from the keyword's first Google results page near the
+  project's tracked city. That page is one request from the
+  [Bright Data](#bright-data-live-google-serp-for-rank-tracking) budget,
+  cached for 7 days and saved as a [first page](#saved-first-pages).
+- Google autocomplete for the keyword's question forms: in Spanish, "donde
+  comer", "cual es el mejor", "que" and "recomienden" before it, and "en" and
+  the tracked city after it. That is five lookups, cached for 30 days and
+  counted in the [autocomplete budget](#keyword-sources).
+- Your site's questions in Search Console over the last 3 months: queries that
+  start with qué, cuál, dónde, cómo, cuándo, cuánto, quién, por qué, mejor,
+  recomienden or their English equivalents, with their impressions. This
+  needs Search Console connected to the project.
+- What people searched on Google before your Business Profile listing showed,
+  over the last 3 complete months, with impressions. This needs Google
+  Business Profile connected to the project. An account with several listings
+  uses the one whose website is the project's domain.
+- The prompts you already track under the keyword's topic, or that contain
+  the keyword, with their last collected answer.
+
+Autocomplete suggestions, Search Console questions and Business Profile
+searches are kept only when they contain every word of the keyword. Accents
+are ignored, a plural matches its singular, and the tracked city may be left
+out. Candidates with the same words merge into one row.
+
+Each row says where Google showed it and carries a labeled search signal. Rows
+are ranked by Business Profile impressions first, then Search Console
+impressions, then Keyword Planner monthly searches (once Google approves
+[Basic access](#access-level)), then rows with none. None of these counts how
+often people ask an AI assistant; no source offers that figure.
+
+No AI model is involved. On the page, a note explains this and lists the
+sources that are missing and why. **Track prompts** lets you reword each
+candidate as a customer would ask an AI assistant before you save it. Over
+[MCP](https://openseo.so/docs/mcp), the result carries `withoutModel.guidance`,
+so your own assistant rewrites the candidates, shows them to you and saves
+them with `save_ai_visibility_tracker`.
+
+A source that is not set up, or that does not answer, leaves a note instead of
+failing the research. Hosted OpenSEO and installs with DataForSEO for every
+feature keep DataForSEO's ChatGPT research.

@@ -33,6 +33,8 @@ const AI_ENGINE_NOTES: Record<AiEngine, string> = {
   claude: LIVE_NOTE,
   perplexity: LIVE_NOTE,
 };
+const BRIGHT_DATA_AI_OVERVIEW_NOTE =
+  "The AI Overview on one desktop Google results page, through Bright Data on this server: free, one request per answer from the monthly Bright Data budget that rank tracking also uses. Bright Data does not wait for an AI Overview that Google loads after the page, so some are missed. A page without an AI Overview, or with one but without its text, is a no-answer result, not a missing brand.";
 
 export async function getTracker(input: {
   projectId: string;
@@ -60,7 +62,10 @@ export async function getTracker(input: {
     label: AI_ENGINE_LABELS[engine],
     unsupportedLocationCodes: [...AI_UNSUPPORTED_LOCATIONS[engine]],
     maxPromptLength: 2000,
-    note: AI_ENGINE_NOTES[engine],
+    note:
+      provider?.name === "standin" && engine === "google_ai_overview"
+        ? BRIGHT_DATA_AI_OVERVIEW_NOTE
+        : AI_ENGINE_NOTES[engine],
     modelApi: aiEngineUsesModelApi(engine),
   }));
   const providerConfigured = !!provider;

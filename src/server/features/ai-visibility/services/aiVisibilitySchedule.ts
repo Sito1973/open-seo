@@ -40,7 +40,7 @@ export async function setSchedule(
   if (!provider)
     throw new AiVisibilityError(
       "PROVIDER_NOT_CONFIGURED",
-      "Configure DataForSEO (or, self-hosted, SerpApi for Google AI Mode) before enabling collection. Setup remains available.",
+      "Configure DataForSEO (or, self-hosted, SerpApi for Google AI Mode or Bright Data for Google AI Overviews) before enabling collection. Setup remains available.",
     );
   requireAiEngines(trackerEngines(tracker), provider);
   const scheduleInterval = input.scheduleInterval ?? tracker.scheduleInterval;

@@ -18,7 +18,7 @@ import {
 } from "@/client/features/keywords/components";
 import { SortableHeader } from "@/client/components/table/SortableHeader";
 import { HelpLabel } from "@/client/components/HelpLabel";
-import { ScoreBadge } from "@/client/components/table/ScoreBadge";
+import { DifficultyBadge } from "@/client/components/table/ScoreBadge";
 import { formatNumber } from "@/client/features/keywords/utils";
 import type { KeywordResearchDisplayRow } from "@/client/features/keywords/groupSharedVolumeRows";
 import type { KeywordResearchRow } from "@/types/keywords";
@@ -191,7 +191,7 @@ export function KeywordResearchTable({
             align="right"
           />
         ),
-        cell: ({ getValue }) => <ScoreBadge value={getValue()} />,
+        cell: ({ row }) => <DifficultyBadge row={row.original} />,
         meta: { headerClassName: "text-right", cellClassName: "text-right" },
       }),
       keywordColumnHelper.accessor("intent", {

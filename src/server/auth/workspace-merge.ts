@@ -12,6 +12,7 @@ import {
   organization,
   organizationActivationState,
   projects,
+  serpObservations,
   userOnboardingAnswers,
 } from "@/db/schema";
 import { SHARED_WORKSPACE_ORGANIZATION_ID } from "./delegated-organization";
@@ -142,6 +143,10 @@ async function mergeLegacyWorkspaces() {
       .update(gbpConnections)
       .set(repointToShared)
       .where(inArray(gbpConnections.organizationId, legacyIds)),
+    tx
+      .update(serpObservations)
+      .set(repointToShared)
+      .where(inArray(serpObservations.organizationId, legacyIds)),
     ...(activationRows.length > 0
       ? [
           tx

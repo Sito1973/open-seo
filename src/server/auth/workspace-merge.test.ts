@@ -86,6 +86,10 @@ beforeAll(async () => {
       project_id TEXT NOT NULL,
       organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE
     );
+    CREATE TABLE serp_observations (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE
+    );
   `);
 
   ({ WorkspaceMergeService } = await import("./workspace-merge"));
@@ -104,6 +108,7 @@ beforeEach(async () => {
     DELETE FROM gsc_connections;
     DELETE FROM ga4_connections;
     DELETE FROM gbp_connections;
+    DELETE FROM serp_observations;
     DELETE FROM organization;
   `);
 });
@@ -130,6 +135,8 @@ async function seedLegacyWorkspaces() {
     INSERT INTO gsc_connections
       (id, project_id, organization_id, site_url, connected_by_user_id) VALUES
       ('gsc1', 'p1-acme', 'delegated-u1', 'sc-domain:acme.com', 'u1');
+    INSERT INTO serp_observations (id, organization_id) VALUES
+      ('serp1', 'delegated-u2');
   `);
 }
 
@@ -189,6 +196,9 @@ describe("WorkspaceMergeService", () => {
     expect(await rows("SELECT organization_id FROM gsc_connections")).toEqual([
       expect.objectContaining({ organization_id: "shared-workspace" }),
     ]);
+    expect(await rows("SELECT organization_id FROM serp_observations")).toEqual(
+      [expect.objectContaining({ organization_id: "shared-workspace" })],
+    );
     expect(
       await rows("SELECT organization_id FROM user_onboarding_answers"),
     ).toEqual([

@@ -8,6 +8,11 @@ import {
   type PostedAiTrackingTask,
 } from "@/server/lib/dataforseo";
 import { resolveLatestLlmModelName } from "@/server/lib/dataforseo/llm-models";
+import {
+  fetchBrightDataAiOverview,
+  getBrightDataSerp,
+  type BrightDataSerp,
+} from "@/server/lib/brightDataSerp";
 import { AppError } from "@/server/lib/errors";
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import { fetchSerpApiAiMode, getSerpApiKey } from "@/server/lib/serpApiAiMode";
@@ -24,6 +29,7 @@ import {
   type ParsedAiAnswer,
 } from "../providers/dataforseoEvidence";
 import { parseSerpApiAiModeAnswer } from "../providers/serpApiEvidence";
+import { parseBrightDataAiOverview } from "../providers/brightDataEvidence";
 import { aiBrands } from "./aiVisibilityConfiguration";
 import { aiCostForAnswers } from "./aiVisibilityCost";
 import { matchAiBrand } from "./aiVisibilityMatching";
@@ -56,12 +62,30 @@ interface AiRunMarket {
 const LIVE_ANSWERS_PER_STEP = 6;
 
 /**
+ * Who collects an engine's answer. Google AI Mode always comes from SerpApi,
+ * and Google AI Overviews from Bright Data when it stands in for DataForSEO
+ * (self-hosted, without DataForSEO for other features); the rest from
+ * DataForSEO.
+ */
+type AiAnswerSource = "dataforseo" | "serpapi" | "brightdata";
+function answerSource(
+  engine: AiEngine,
+  brightData: BrightDataSerp | null,
+): AiAnswerSource {
+  if (engine === "google_ai_mode") return "serpapi";
+  return engine === "google_ai_overview" && brightData
+    ? "brightdata"
+    : "dataforseo";
+}
+
+/**
  * Marks the run running and groups its answers into batches. Manual and
  * baseline runs collect live answers so the user sees results sooner.
- * Scheduled runs use the cheaper standard queue, except Google AI Mode:
- * SerpApi has no queue, so its answers are always live. Claude and Perplexity
- * have no LLM Scraper, so every run asks their model API (`modelBatches`).
- * Hosted runs first check that credits cover the whole check, like rank checks.
+ * Scheduled runs use the cheaper standard queue, except answers from SerpApi
+ * or Bright Data, which have no queue, so theirs are always live. Claude and
+ * Perplexity have no LLM Scraper, so every run asks their model API
+ * (`modelBatches`). Hosted runs first check that credits cover the whole
+ * check, like rank checks.
  */
 export async function prepareAiRun(
   runId: string,
@@ -78,9 +102,12 @@ export async function prepareAiRun(
   const pending = (await repo.getObservations([runId])).filter(
     (row) => row.status === "pending",
   );
+  const brightData = await getBrightDataSerp();
   const live =
     run.trigger !== "scheduled" ||
-    pending.some((row) => row.engine === "google_ai_mode");
+    pending.some(
+      (row) => answerSource(row.engine, brightData) !== "dataforseo",
+    );
   if (await isHostedServerAuthMode()) {
     const required = aiCostForAnswers(
       pending.map((row) => row.engine),
@@ -171,9 +198,10 @@ export async function postAiBatch(
 
 /**
  * Collects one batch of live answers and saves each one: Google AI Mode from
- * SerpApi, which reserves each search from its monthly budget, and the other
- * engines through the metered DataForSEO client, which bills them. Answers
- * that fail now are not retried.
+ * SerpApi and Google AI Overviews from Bright Data when it stands in, each
+ * reserving every request from its monthly budget, and the other engines
+ * through the metered DataForSEO client, which bills them. Answers that fail
+ * now are not retried.
  */
 export async function collectAiLiveBatch(
   runId: string,
@@ -183,10 +211,12 @@ export async function collectAiLiveBatch(
 ) {
   const brands = await runBrands(runId);
   if (!brands) return;
+  const brightData = await getBrightDataSerp();
+  const sources = tasks.map((task) => answerSource(task.engine, brightData));
   let settled: PromiseSettledResult<AiTrackingAnswer>[];
   try {
-    settled = tasks.every((task) => task.engine === "google_ai_mode")
-      ? await askSerpApi(market, tasks)
+    settled = sources.every((source) => source !== "dataforseo")
+      ? await askStandIns(customer.organizationId, market, tasks, brightData)
       : await createDataforseoClient(customer).aiSearch.trackingLiveBatch(
           tasks.map((task) => ({ engine: task.engine, task, ...market })),
         );
@@ -208,7 +238,7 @@ export async function collectAiLiveBatch(
     // one failed write must not drop the rest. finalizeAiRun fails the
     // answer that stays pending.
     try {
-      await saveAiOutcome(runId, tasks[index], result, brands);
+      await saveAiOutcome(runId, tasks[index], result, brands, sources[index]);
     } catch (error) {
       console.error(
         `[ai-visibility] ${runId} could not save answer ${tasks[index].tag}:`,
@@ -218,25 +248,42 @@ export async function collectAiLiveBatch(
   }
 }
 
-/** Google AI Mode answers from SerpApi, all at once like a live batch. */
-async function askSerpApi(
+/**
+ * Google AI Mode answers from SerpApi and Google AI Overviews from Bright
+ * Data, all at once like a live batch. Bright Data's pages are saved for the
+ * organization's SERP observation store.
+ */
+async function askStandIns(
+  organizationId: string,
   market: AiRunMarket,
   tasks: AiLiveTask[],
+  brightData: BrightDataSerp | null,
 ): Promise<PromiseSettledResult<AiTrackingAnswer>[]> {
-  const apiKey = await getSerpApiKey();
-  if (!apiKey)
-    throw new AppError(
-      "AUTH_CONFIG_MISSING",
-      "SERPAPI_API_KEY is no longer configured, or DataForSEO now is.",
-    );
+  const serpApiKey = await getSerpApiKey();
   return Promise.allSettled(
-    tasks.map(async (task) => ({
-      status: "completed" as const,
-      result: await fetchSerpApiAiMode(apiKey, {
-        prompt: task.prompt,
-        ...market,
-      }),
-    })),
+    tasks.map(async (task) => {
+      if (task.engine === "google_ai_overview" && brightData)
+        return {
+          status: "completed" as const,
+          result: await fetchBrightDataAiOverview(brightData, {
+            prompt: task.prompt,
+            ...market,
+            organizationId,
+          }),
+        };
+      if (!serpApiKey)
+        throw new AppError(
+          "AUTH_CONFIG_MISSING",
+          "SERPAPI_API_KEY is no longer configured, or DataForSEO now is.",
+        );
+      return {
+        status: "completed" as const,
+        result: await fetchSerpApiAiMode(serpApiKey, {
+          prompt: task.prompt,
+          ...market,
+        }),
+      };
+    }),
   );
 }
 
@@ -317,7 +364,7 @@ export async function collectAiRound(
         stillPending.push(task);
         continue;
       }
-      await saveAiOutcome(runId, task, outcome.value, brands);
+      await saveAiOutcome(runId, task, outcome.value, brands, "dataforseo");
     }
   }
   return stillPending;
@@ -337,19 +384,22 @@ async function saveAiOutcome(
   task: { tag: string; engine: AiEngine },
   outcome: AiTrackingAnswer,
   brands: AiBrand[],
+  source: AiAnswerSource,
 ) {
   if (outcome.status === "failed") {
     await repo.failPendingObservations(runId, outcome.message, [task.tag]);
     return;
   }
-  const serpApi = task.engine === "google_ai_mode";
-  const answer = serpApi
-    ? parseSerpApiAiModeAnswer(outcome.result)
-    : parseDataforseoAnswer(outcome.result, task.engine);
+  const answer =
+    source === "serpapi"
+      ? parseSerpApiAiModeAnswer(outcome.result)
+      : source === "brightdata"
+        ? parseBrightDataAiOverview(outcome.result)
+        : parseDataforseoAnswer(outcome.result, task.engine);
   if (!answer) {
     await repo.failPendingObservations(
       runId,
-      `${serpApi ? "SerpApi" : "DataForSEO"} returned an answer we could not read.`,
+      `${source === "serpapi" ? "SerpApi" : "DataForSEO"} returned an answer we could not read.`,
       [task.tag],
     );
     return;
@@ -369,7 +419,7 @@ async function saveAiAnswer(
       status: "completed",
       collectedAt: answer.collectedAt ?? new Date().toISOString(),
       answerMarkdown: answer.answerMarkdown,
-      error: null,
+      error: answer.note ?? null,
     },
     sources: answer.citations.map((citation) => ({
       id: crypto.randomUUID(),

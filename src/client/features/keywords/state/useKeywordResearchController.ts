@@ -5,6 +5,9 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import { getKeywordResearchSources } from "@/serverFunctions/keywords";
 import {
   useKeywordControlsForm,
   type KeywordControlsValues,
@@ -14,6 +17,7 @@ import { usePreferredKeywordGrouping } from "@/client/features/keywords/hooks/us
 import { useLocalKeywordFilters } from "@/client/features/keywords/hooks/useLocalKeywordFilters";
 import { useKeywordResearchData } from "@/client/features/keywords/hooks/useKeywordResearchData";
 import { useKeywordSerpAnalysis } from "@/client/features/keywords/hooks/useKeywordSerpAnalysis";
+import { useEstimateDifficulty } from "@/client/features/keywords/hooks/useEstimateDifficulty";
 import { captureClientEvent } from "@/client/lib/posthog";
 import { useSearchHistory } from "@/client/hooks/useSearchHistory";
 import {
@@ -93,6 +97,7 @@ export function useKeywordResearchController(
     serpLoading,
     serpLoadingMore,
     canLoadMoreSerp,
+    serpMaxDepth,
     deepFetchFailed,
     retrySerp,
     serpError,
@@ -157,6 +162,15 @@ export function useKeywordResearchController(
     setSerpPage(0);
   }, [setSerpKeyword, setSerpPage, uiState]);
 
+  // Self-hosted stand-ins for DataForSEO's keyword sources; hosted never asks.
+  const researchSources = useQuery({
+    queryKey: ["keywordResearchSources"],
+    queryFn: () => getKeywordResearchSources(),
+    enabled: !isHostedClientAuthMode(),
+    staleTime: Infinity,
+  }).data;
+  const keywordPlanner = researchSources?.keywordPlanner === true;
+
   const onFormSubmit = input.onFormSubmit;
   const controlsForm = useKeywordControlsForm(
     {
@@ -165,7 +179,12 @@ export function useKeywordResearchController(
     },
     (value) => {
       setPreferredLocationCode(value.locationCode);
-      onFormSubmit({ ...value, groupKeywords: preferredGroupKeywords });
+      // The Keyword Planner has no clickstream data or keyword grouping.
+      onFormSubmit({
+        ...value,
+        clickstream: value.clickstream && !keywordPlanner,
+        groupKeywords: preferredGroupKeywords && !keywordPlanner,
+      });
     },
   );
 
@@ -249,6 +268,12 @@ export function useKeywordResearchController(
     setShowSaveDialog: uiState.setShowSaveDialog,
   });
 
+  // The refetch is answered from the server's research cache.
+  const difficulty = useEstimateDifficulty(input.projectId, [
+    "keywordResearch",
+    input.projectId,
+  ]);
+
   const handleRowClick = (row: KeywordResearchRow) => {
     captureClientEvent("keyword_research:serp_open");
     uiState.setSelectedKeyword(row);
@@ -256,9 +281,17 @@ export function useKeywordResearchController(
     setSerpPage(0);
   };
 
+  const researchData = researchQuery.data;
   return {
     preferredGroupKeywords,
     setPreferredGroupKeywords,
+    keywordPlanner,
+    relatedSearchesAvailable: researchSources?.relatedSearches === true,
+    // What a stand-in source could not provide for this result, and why.
+    researchNotes:
+      hasSearched && researchData && "notes" in researchData
+        ? (researchData.notes ?? [])
+        : [],
     activeFilterCount,
     activeSerpKeyword,
     confirmSave,
@@ -293,6 +326,7 @@ export function useKeywordResearchController(
     selectedRows,
     selectedKeywordRows,
     canLoadMoreSerp,
+    serpMaxDepth,
     deepFetchFailed,
     serpError,
     serpRetrying,
@@ -312,5 +346,14 @@ export function useKeywordResearchController(
     sortField: input.sortField,
     toggleSort,
     SERP_PAGE_SIZE,
+    canEstimateDifficulty: difficulty.available,
+    estimatingDifficulty: difficulty.pending,
+    estimateSelectedDifficulty: () =>
+      difficulty.estimate(
+        selectedKeywordRows.map((row) => ({
+          keyword: row.keyword,
+          locationCode,
+        })),
+      ),
   };
 }

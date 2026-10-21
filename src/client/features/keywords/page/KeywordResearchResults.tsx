@@ -1,4 +1,4 @@
-import { FileDown, Save, Sheet } from "lucide-react";
+import { FileDown, Gauge, Info, Save, Sheet } from "lucide-react";
 import {
   lastTwelveMonths,
   MONTH_SHORT_LABELS,
@@ -87,7 +87,12 @@ function MobileTabs({ controller }: Props) {
 }
 
 function KeywordPanel({ controller }: Props) {
-  const { mobileTab, searchedKeyword, showApproximateMatchNotice } = controller;
+  const {
+    mobileTab,
+    researchNotes,
+    searchedKeyword,
+    showApproximateMatchNotice,
+  } = controller;
   const fromSearchConsole = controller.rows.some(
     (row) => row.gscImpressions !== undefined,
   );
@@ -113,6 +118,16 @@ function KeywordPanel({ controller }: Props) {
             site&apos;s Search Console queries from the last 28 days that
             contain the keyword. GSC impressions count how often your site
             appeared for each one; they are not search volume.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {researchNotes.length > 0 ? (
+        <Alert variant="info" role="status">
+          <Info />
+          <AlertDescription>
+            {researchNotes.map((note) => (
+              <p key={note}>{note}</p>
+            ))}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -158,6 +173,15 @@ function TableCard({ controller }: Props) {
             >
               Save<span className="hidden md:inline"> Keywords</span>
             </TableBulkActionButton>
+            {controller.canEstimateDifficulty ? (
+              <TableBulkActionButton
+                icon={<Gauge className="size-3.5" />}
+                onClick={controller.estimateSelectedDifficulty}
+                disabled={controller.estimatingDifficulty}
+              >
+                Estimate<span className="hidden md:inline"> difficulty</span>
+              </TableBulkActionButton>
+            ) : null}
             <TableBulkExportMenu
               actions={[
                 {
@@ -308,6 +332,7 @@ function SerpPanel({ controller }: Props) {
         loading={controller.serpLoading}
         loadingMore={controller.serpLoadingMore}
         canLoadMore={controller.canLoadMoreSerp}
+        maxDepth={controller.serpMaxDepth}
         error={controller.serpError}
         onRetry={controller.retrySerp}
         retrying={controller.serpRetrying}

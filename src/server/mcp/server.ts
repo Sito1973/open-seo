@@ -43,6 +43,7 @@ import { searchSerpLocationsTool } from "@/server/mcp/tools/search-serp-location
 import { getSerpResultsTool } from "@/server/mcp/tools/get-serp-results";
 import { getCoreWebVitalsTool } from "@/server/mcp/tools/core-web-vitals";
 import { getPlaceDetailsTool } from "@/server/mcp/tools/place-details";
+import { estimateKeywordDifficultyTool } from "@/server/mcp/tools/estimate-keyword-difficulty";
 import {
   createGoogleBusinessProfilePostTool,
   replyToGoogleBusinessProfileReviewTool,
@@ -316,8 +317,8 @@ export function createOpenSeoMcpServer(
   // Business Profile reads and, after the user approves a preview, edits the
   // owner's own listings with a scope only self-hosted installs grant, and
   // Core Web Vitals and place details run only on GOOGLE_PAGESPEED_API_KEY
-  // and GOOGLE_PLACES_API_KEY, which hosted never uses. Hosted never lists
-  // these.
+  // and GOOGLE_PLACES_API_KEY, and difficulty estimates only on Bright Data,
+  // which hosted never uses. Hosted never lists these.
   if (options.selfHosted) {
     register(listGoogleBusinessProfileLocationsTool);
     register(getGoogleBusinessProfileReviewsTool);
@@ -332,6 +333,7 @@ export function createOpenSeoMcpServer(
     register(updateGoogleBusinessProfileFoodMenuTool);
     register(getCoreWebVitalsTool);
     register(getPlaceDetailsTool);
+    register(estimateKeywordDifficultyTool);
   }
 
   return server;

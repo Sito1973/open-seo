@@ -9,12 +9,19 @@ import {
 } from "@/server/billing/subscription";
 import { billResearchSpend } from "@/server/billing/researchSpend";
 import { requireOpenRouterCostUsd } from "@/server/lib/chatAgent";
-import { buildChatAgentModel } from "@/server/lib/openrouter";
+import {
+  buildChatAgentModel,
+  getResearchModelKey,
+} from "@/server/lib/openrouter";
 import {
   getOptionalEnvValue,
-  getRequiredEnvValue,
   isHostedServerAuthMode,
 } from "@/server/lib/runtime-env";
+import { getBrightDataSerp } from "@/server/lib/brightDataSerp";
+import {
+  projectSearchTracker,
+  searchGoogleCandidates,
+} from "@/server/features/serp/services/googleCandidates";
 import { AppError } from "@/server/lib/errors";
 import { z } from "zod";
 import { normalizeAiSuggestion } from "@/shared/ai-prompt-suggestions";
@@ -23,10 +30,70 @@ import {
   type GenerateAiPromptsInput,
 } from "@/types/schemas/aiPromptSuggestions";
 
+/**
+ * Prompt ideas on a self-hosted server without an AI model: Google's People
+ * Also Ask questions, then its related searches, for the topic near the
+ * project's tracked city, from one Bright Data request (cached 12 hours).
+ * Without a topic it takes the first Prompt Research keyword that is not a
+ * topic yet. They are raw candidates, so guidance says so and tells the
+ * user's own AI agent how to finish them.
+ */
+async function suggestFromGoogle(input: {
+  projectId: string;
+  topic: string | undefined;
+  market: { locationCode: number; languageCode: string };
+  excluded: string[];
+  room: number;
+  organizationId: string;
+}) {
+  const brightData = input.topic ? await getBrightDataSerp() : null;
+  const found =
+    brightData && input.topic
+      ? await searchGoogleCandidates(brightData, {
+          query: input.topic,
+          market: (
+            await projectSearchTracker({ id: input.projectId, ...input.market })
+          ).market,
+          organizationId: input.organizationId,
+        })
+      : null;
+  const seen = new Set(input.excluded.map(normalizeAiSuggestion));
+  const prompts = [
+    ...(found?.peopleAlsoAsk ?? []),
+    ...(found?.relatedSearches ?? []),
+  ]
+    .filter((text) => {
+      const normalized = normalizeAiSuggestion(text);
+      if (!normalized || seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    })
+    .slice(0, Math.min(5, input.room));
+  const save = `save them with save_ai_visibility_tracker${input.topic ? ` under topic "${input.topic}"` : ""}`;
+  let reason = "Pass a topic to get Google's questions about it.";
+  if (input.topic && !brightData)
+    reason =
+      "It has no Bright Data SERP to read Google's questions from either.";
+  else if (input.topic)
+    reason = `Google showed no new questions for "${input.topic}".`;
+  const near = found?.locationName ? ` near ${found.locationName}` : "";
+  const guidance = [
+    "This server has no AI model (OPENROUTER_API_KEY is not set).",
+    prompts.length
+      ? `These are Google's People Also Ask questions and related searches for "${input.topic}"${near}, not prompts a model wrote. Rewrite the relevant ones as questions a customer would ask an AI assistant, in the project's language, drop the rest, and ${save}.`
+      : `${reason} Write five prompts a customer would ask an AI assistant, in the project's language, and ${save}.`,
+  ].join(" ");
+  return { topic: input.topic ?? "", prompts, withoutModel: { guidance } };
+}
+
 export async function generateAiPrompts(
   input: GenerateAiPromptsInput,
   customer: BillingCustomerContext,
-) {
+): Promise<{
+  topic: string;
+  prompts: string[];
+  withoutModel?: { guidance: string };
+}> {
   const project = await ProjectRepository.getProjectForOrganization(
     input.projectId,
     customer.organizationId,
@@ -69,12 +136,32 @@ export async function generateAiPrompts(
       "INSUFFICIENT_CREDITS",
       "You need usage credits to generate prompts.",
     );
+  const modelKey = await getResearchModelKey();
+  if (!modelKey) {
+    const researchTopic = (
+      await repo.listResearchKeywords(input.projectId)
+    ).find((keyword) => !sameTopic(keyword));
+    return suggestFromGoogle({
+      projectId: input.projectId,
+      topic: topicName ?? researchTopic,
+      market: {
+        locationCode: input.locationCode,
+        languageCode: input.languageCode,
+      },
+      excluded: [
+        ...(config?.prompts.map((prompt) => prompt.text) ?? []),
+        ...input.excludePrompts,
+      ],
+      room: 100 - unarchived.length,
+      organizationId: customer.organizationId,
+    });
+  }
   const outputSchema = topicName
     ? suggestedAiTopicSchema.extend({ name: z.string().trim().min(1).max(120) })
     : suggestedAiTopicSchema;
   const result = await generateText({
     model: buildChatAgentModel(
-      await getRequiredEnvValue("OPENROUTER_API_KEY"),
+      modelKey,
       await getOptionalEnvValue("OPENROUTER_MODEL"),
       "low",
     ),

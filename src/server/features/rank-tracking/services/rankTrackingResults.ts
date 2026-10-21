@@ -1,5 +1,7 @@
 import { RankTrackingRepository } from "@/server/features/rank-tracking/repositories/RankTrackingRepository";
 import { toRankTrackingTimestamp } from "@/server/features/rank-tracking/rankTrackingTimestamps";
+import { normalizeKeyword } from "@/server/features/keywords/services/research/helpers";
+import { storedDifficultyEstimates } from "@/server/features/serp/services/difficultyEstimate";
 import { AppError } from "@/server/lib/errors";
 import type { ComparePeriod } from "@/types/schemas/rank-tracking-search";
 import type {
@@ -61,6 +63,16 @@ export async function getLatestResults(
     throw new AppError("INTERNAL_ERROR", "Rank tracking config not found");
   }
 
+  // OpenSEO's estimates for keywords the provider has no difficulty for.
+  const estimates = await storedDifficultyEstimates({
+    projectId,
+    locationCode: config.locationCode,
+    languageCode: config.languageCode,
+    keywords: activeKeywords
+      .filter((keyword) => keyword.keywordDifficulty == null)
+      .map((keyword) => keyword.keyword),
+  });
+
   const previousPositions = new Map<string, number | null>();
   for (const snap of comparisonSnapshots) {
     previousPositions.set(
@@ -96,24 +108,28 @@ export async function getLatestResults(
 
   // Build result rows
   const rows = new Map<string, RankTrackingRow>(
-    activeKeywords.map((keyword) => [
-      keyword.id,
-      {
-        trackingKeywordId: keyword.id,
-        keyword: keyword.keyword,
-        matchCase: keyword.matchCase,
-        pinned: keyword.pinnedAt !== null,
-        searchVolume: keyword.searchVolume,
-        keywordDifficulty: keyword.keywordDifficulty,
-        cpc: keyword.cpc,
-        desktop: createEmptyDeviceResult(
-          previousPositions.get(`${keyword.id}:desktop`) ?? null,
-        ),
-        mobile: createEmptyDeviceResult(
-          previousPositions.get(`${keyword.id}:mobile`) ?? null,
-        ),
-      },
-    ]),
+    activeKeywords.map((keyword) => {
+      const estimate = estimates.get(normalizeKeyword(keyword.keyword));
+      return [
+        keyword.id,
+        {
+          trackingKeywordId: keyword.id,
+          keyword: keyword.keyword,
+          matchCase: keyword.matchCase,
+          pinned: keyword.pinnedAt !== null,
+          searchVolume: keyword.searchVolume,
+          keywordDifficulty: keyword.keywordDifficulty,
+          ...(estimate == null ? {} : { keywordDifficultyEstimate: estimate }),
+          cpc: keyword.cpc,
+          desktop: createEmptyDeviceResult(
+            previousPositions.get(`${keyword.id}:desktop`) ?? null,
+          ),
+          mobile: createEmptyDeviceResult(
+            previousPositions.get(`${keyword.id}:mobile`) ?? null,
+          ),
+        },
+      ];
+    }),
   );
 
   // Freshness comes from the newest snapshot regardless of which run wrote

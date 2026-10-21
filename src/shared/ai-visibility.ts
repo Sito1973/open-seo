@@ -117,11 +117,72 @@ export interface AiResearchedPrompt {
   ownDomainCited: boolean;
   brandMentioned: boolean;
   tracked: boolean;
+  /** Google candidates only: where Google showed this text. */
+  origins?: AiPromptCandidateOrigin[];
+  /** Google candidates only: a labeled search demand signal, never AI prompt volume. */
+  volume?: AiPromptCandidateVolume | null;
+  /** Google candidates only: the tracked prompt's last answer, else Google's People Also Ask answer. */
+  answer?: AiPromptCandidateAnswer | null;
 }
+/**
+ * On a self-hosted server without DataForSEO, Prompt Research lists Google's
+ * own candidates instead of DataForSEO's ChatGPT question database.
+ */
+export type AiPromptCandidateOrigin =
+  | "tracked"
+  | "people_also_ask"
+  | "related_search"
+  | "autocomplete"
+  | "search_console"
+  | "business_profile";
+export const AI_PROMPT_CANDIDATE_ORIGIN_LABELS: Record<
+  AiPromptCandidateOrigin,
+  string
+> = {
+  tracked: "Tracked",
+  people_also_ask: "People Also Ask",
+  related_search: "Related search",
+  autocomplete: "Autocomplete",
+  search_console: "Search Console",
+  business_profile: "Business Profile",
+};
+export interface AiPromptCandidateVolume {
+  /**
+   * business_profile: Business Profile search impressions, last 3 complete
+   * months. search_console: the site's Search Console impressions, last 3
+   * months. keyword_planner: Keyword Planner average monthly searches.
+   */
+  source: "business_profile" | "search_console" | "keyword_planner";
+  value: number;
+  /** Business Profile reports only "fewer than value" for small counts. */
+  below: boolean;
+}
+export const AI_PROMPT_CANDIDATE_VOLUME_LABELS: Record<
+  AiPromptCandidateVolume["source"],
+  string
+> = {
+  business_profile: "Business Profile impressions, last 3 months",
+  search_console: "Search Console impressions, last 3 months",
+  keyword_planner: "Keyword Planner searches a month",
+};
+export type AiPromptCandidateAnswer =
+  | {
+      kind: "last_answer";
+      engine: AiEngine;
+      collectedAt: string | null;
+      /** Plain text, shortened. */
+      text: string;
+    }
+  | { kind: "people_also_ask"; text: string };
 export interface AiPromptResearchResult {
   keyword: string;
   /** Most common questions first. */
   prompts: AiResearchedPrompt[];
+  /**
+   * Set when the prompts are Google's raw candidates: guidance says how to
+   * rewrite them, notes why a source is missing.
+   */
+  withoutModel?: { guidance: string; notes: string[] };
 }
 export interface AiCostEstimate {
   promptCount: number;
@@ -140,22 +201,31 @@ export interface AiCostEstimate {
   warnings: string[];
   /** Self-hosted Google AI Mode through SerpApi: free, but searches are limited. */
   searchBudget: AiSearchBudget | null;
+  /**
+   * Self-hosted Google AI Overviews through Bright Data: free, but each answer
+   * uses a request from the Bright Data budget that rank tracking also uses.
+   */
+  brightDataBudget: AiRequestBudget | null;
 }
-export interface AiSearchBudget {
-  /** SerpApi searches one check uses: one per Google AI Mode answer. */
+/** A stand-in provider's free requests for one engine's answers. */
+export interface AiRequestBudget {
+  /** Requests one check uses: one per answer of the engine. */
   perCheck: number;
   /**
    * perCheck times the most checks the schedule can run in one month, plus
-   * the same for every other enabled Google AI Mode tracker on this server.
+   * the same for every other enabled tracker of the engine on this server.
    */
   perMonth: number;
-  /** This server's monthly SerpApi budget, below the free plan's searches. */
+  /** This server's monthly budget, below the provider's free requests. */
   monthlyBudget: number;
-  /** The free plan's searches an hour: the most one check can use. */
-  hourlyLimit: number;
   usedThisMonth: number;
   /** Budget left this month (UTC). */
   remaining: number;
+}
+/** SerpApi's searches for Google AI Mode answers. */
+export interface AiSearchBudget extends AiRequestBudget {
+  /** The free plan's searches an hour: the most one check can use. */
+  hourlyLimit: number;
 }
 export interface AiBrandResult {
   name: string;
@@ -353,8 +423,16 @@ export function aiObservationStatusLabel(status: AiObservationStatus): string {
   return status === "pending" ? "In progress" : status;
 }
 
-/** An empty Google result means Google showed no AI answer. */
-export function aiNoAnswerLabel(engine: AiEngine): string {
+/**
+ * An empty Google result means Google showed no AI answer. A no-answer result
+ * with the provider's note (an AI Overview Bright Data returned without its
+ * text) had an answer whose text was not captured.
+ */
+export function aiNoAnswerLabel(
+  engine: AiEngine,
+  note?: string | null,
+): string {
+  if (note) return "Answer without text";
   if (engine === "google_ai_overview") return "No AI Overview shown";
   if (engine === "google_ai_mode") return "No AI Mode answer shown";
   return "No substantive answer";

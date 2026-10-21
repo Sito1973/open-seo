@@ -206,7 +206,7 @@ function mapSavedKeywordRows(
     ReturnType<typeof KeywordResearchRepository.listSavedKeywordsByProject>
   >["rows"],
 ): SavedKeywordRow[] {
-  return rows.map(({ row, metric, tags }) => ({
+  return rows.map(({ row, metric, difficultyEstimate, tags }) => ({
     id: row.id,
     projectId: row.projectId,
     keyword: row.keyword,
@@ -217,6 +217,9 @@ function mapSavedKeywordRows(
     cpc: metric?.cpc ?? null,
     competition: metric?.competition ?? null,
     keywordDifficulty: metric?.keywordDifficulty ?? null,
+    ...(difficultyEstimate == null
+      ? {}
+      : { keywordDifficultyEstimate: difficultyEstimate }),
     intent: metric?.intent ?? null,
     monthlySearches: parseMonthlySearches(metric?.monthlySearches ?? null),
     fetchedAt: metric?.fetchedAt ?? null,

@@ -2,7 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { getPublicOrigin } from "@/server/mcp/public-origin";
 import { AiVisibilityService } from "@/server/features/ai-visibility/services/AiVisibilityService";
-import { requireProjectContext } from "@/serverFunctions/middleware";
+import {
+  requireAuthenticatedContext,
+  requireProjectContext,
+} from "@/serverFunctions/middleware";
 import { generateAiPromptsSchema } from "@/types/schemas/aiPromptSuggestions";
 import { researchAiPromptsSchema } from "@/types/schemas/aiPromptResearch";
 import {
@@ -38,6 +41,11 @@ export const researchAiVisibilityPrompts = createServerFn({ method: "POST" })
       context,
     ),
   );
+
+/** Whether Prompt Research lists Google's candidates instead of DataForSEO's. */
+export const getAiPromptResearchSource = createServerFn({ method: "GET" })
+  .middleware(requireAuthenticatedContext)
+  .handler(() => AiVisibilityService.getResearchSource());
 
 export const getAiResearchSetup = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)

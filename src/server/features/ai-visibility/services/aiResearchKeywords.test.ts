@@ -124,6 +124,26 @@ describe("runAiResearchSetup", () => {
       review: { competitors: [{ domain: "ahrefs.com" }] },
     });
   });
+
+  it("returns raw candidates for review without a model, even with context saved", async () => {
+    listCompetitors.mockResolvedValue([{ domain: "ahrefs.com" }]);
+    const candidates = {
+      name: "OpenSEO",
+      domain: "openseo.so",
+      overview: "SEO tools.",
+      competitors: [],
+      preserveCompetitors: true,
+      suggestedTopics: [],
+      suggestedKeywords: ["rank tracker"],
+      withoutModel: { guidance: "Finish setup yourself." },
+    };
+    research.mockResolvedValueOnce(candidates);
+
+    // Nothing was drafted, so nothing is saved without someone reviewing it.
+    await expect(
+      runAiResearchSetup({ projectId: "project" }, customer),
+    ).resolves.toEqual({ review: candidates });
+  });
 });
 
 describe("getAiResearchSetup", () => {

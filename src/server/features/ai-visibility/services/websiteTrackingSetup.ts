@@ -46,11 +46,10 @@ export async function prepareWebsiteTracking(
       return { text, topic: topic.name };
     });
   });
-  // A SerpApi-only server collects Google AI Mode only.
+  // A stand-in server collects Google AI Mode and AI Overviews only.
+  const provider = await aiCollectionProvider();
   const engines: AiEngine[] =
-    (await aiCollectionProvider()) === "serpapi"
-      ? ["google_ai_mode"]
-      : ["chatgpt"];
+    provider?.name === "standin" ? provider.engines : ["chatgpt"];
   return projectAiConfiguration({
     previous: null,
     projectId: input.projectId,

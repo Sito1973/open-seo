@@ -67,18 +67,21 @@ function AnswerEvidence({ answer }: { answer: AiAnswer }) {
     <div>
       {answer.observation.answerStatus === "no_answer" && (
         <p className="border-b px-5 py-3 text-sm text-warning border-border">
-          {aiNoAnswerLabel(answer.observation.engine)}. This collection is
-          excluded from visibility rates.
+          {/* The provider's reason, when it gave one, replaces the label. */}
+          {answer.observation.error ??
+            `${aiNoAnswerLabel(answer.observation.engine)}.`}{" "}
+          This collection is excluded from visibility rates.
         </p>
       )}
-      {answer.observation.error && (
-        <p
-          role="alert"
-          className="border-b bg-destructive/5 px-5 py-3 text-sm text-destructive border-border"
-        >
-          {answer.observation.error}
-        </p>
-      )}
+      {answer.observation.error &&
+        answer.observation.answerStatus !== "no_answer" && (
+          <p
+            role="alert"
+            className="border-b bg-destructive/5 px-5 py-3 text-sm text-destructive border-border"
+          >
+            {answer.observation.error}
+          </p>
+        )}
       {answer.truncated && (
         <p className="border-b px-5 py-3 text-xs text-warning border-border">
           This response was truncated. The retained evidence may be incomplete.

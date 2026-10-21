@@ -1,6 +1,7 @@
 import { sort } from "remeda";
 import { LOCATIONS } from "@/client/features/keywords/locations";
 import { devicesLabel } from "@/shared/rank-tracking";
+import { shownDifficulty } from "@/shared/keyword-difficulty";
 import type {
   RankTrackingConfig,
   RankTrackingRow,
@@ -174,7 +175,7 @@ export function applyFilters(
 
     if (
       !matchesMetricRangeFilter(
-        row.keywordDifficulty,
+        shownDifficulty(row),
         filters.minKd,
         filters.maxKd,
       )

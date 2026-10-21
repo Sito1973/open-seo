@@ -111,6 +111,14 @@ export function TrackerSetupReview({
           <AiSearchBudgetNote
             budget={review.estimate.searchBudget}
             mode="schedule"
+            provider="serpapi"
+          />
+        )}
+        {review.estimate.brightDataBudget && (
+          <AiSearchBudgetNote
+            budget={review.estimate.brightDataBudget}
+            mode="schedule"
+            provider="brightdata"
           />
         )}
       </div>

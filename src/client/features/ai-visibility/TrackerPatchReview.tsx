@@ -26,6 +26,7 @@ export function TrackerPatchReview({
   patch,
   children,
   canSave = true,
+  showPrompts = true,
   onClose,
   onSaved,
 }: {
@@ -36,6 +37,8 @@ export function TrackerPatchReview({
   children?: ReactNode;
   /** False while those fields are incomplete. */
   canSave?: boolean;
+  /** False when the children already show the prompts, as editable fields. */
+  showPrompts?: boolean;
   onClose: () => void;
   onSaved: (state: AiTrackerState) => void;
 }) {
@@ -79,15 +82,16 @@ export function TrackerPatchReview({
           </Button>
         </DialogHeader>
         {children}
-        {patch.prompts?.map((prompt) => (
-          <p
-            key={prompt.id ?? prompt.text}
-            className="rounded-lg bg-muted/60 p-3 text-sm whitespace-pre-wrap"
-            data-ph-mask
-          >
-            {prompt.text}
-          </p>
-        ))}
+        {showPrompts &&
+          patch.prompts?.map((prompt) => (
+            <p
+              key={prompt.id ?? prompt.text}
+              className="rounded-lg bg-muted/60 p-3 text-sm whitespace-pre-wrap"
+              data-ph-mask
+            >
+              {prompt.text}
+            </p>
+          ))}
         {needsEstimate && estimate.isPending ? (
           <AiLoading />
         ) : estimate.isError ? (

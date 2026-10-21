@@ -76,9 +76,11 @@ export async function saveWebsiteSetup(
     ),
     ...(tracking ? writeConfiguration(tx, tracking) : []),
     // Keyword writes fill an empty field; existing research stays intact.
-    ...(input.suggestedTopics?.length
+    // Setup without a model saves keywords picked from Google's candidates,
+    // with no topics.
+    ...(input.suggestedTopics?.length || input.suggestedKeywords?.length
       ? writeResearchKeywords(tx, input.projectId, [
-          ...input.suggestedTopics.map((topic) => topic.name),
+          ...(input.suggestedTopics ?? []).map((topic) => topic.name),
           ...(input.suggestedKeywords ?? []),
         ])
       : []),

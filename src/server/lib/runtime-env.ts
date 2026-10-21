@@ -82,7 +82,8 @@ export async function usesGoogleFallbacks(): Promise<boolean> {
 /**
  * A key for a provider of Google data that stands in for DataForSEO: a free
  * Google API, the Google Ads Keyword Planner, Bright Data's live Google SERP,
- * or SerpApi's Google AI Mode. Null unless usesGoogleFallbacks().
+ * SerpApi's Google AI Mode, or Open PageRank's domain authority for keyword
+ * difficulty estimates. Null unless usesGoogleFallbacks().
  */
 export async function getGoogleFallbackKey(
   name:
@@ -90,7 +91,8 @@ export async function getGoogleFallbackKey(
     | "GOOGLE_PLACES_API_KEY"
     | "GOOGLE_ADS_CUSTOMER_ID"
     | "BRIGHTDATA_API_KEY"
-    | "SERPAPI_API_KEY",
+    | "SERPAPI_API_KEY"
+    | "OPENPAGERANK_API_KEY",
 ): Promise<string | null> {
   if (!(await usesGoogleFallbacks())) return null;
   return (await getOptionalEnvValue(name)) ?? null;

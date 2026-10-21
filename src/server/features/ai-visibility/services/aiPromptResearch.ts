@@ -20,6 +20,10 @@ import type { ResearchAiPromptsInput } from "@/types/schemas/aiPromptResearch";
 import { aiPromptIsBranded, ownedAiDomain } from "./aiVisibilityMatching";
 import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepository";
 import { getTracker } from "./aiVisibilityState";
+import {
+  promptResearchUsesGoogle,
+  researchAiPromptsFromGoogle,
+} from "./aiPromptResearchGoogle";
 
 /** The provider refreshes prompt data monthly; one paid call per day is enough. */
 const RESEARCH_TTL_SECONDS = 24 * 60 * 60;
@@ -98,6 +102,8 @@ export async function researchAiPrompts(
 ): Promise<AiPromptResearchResult> {
   await assertPaidAiSearchPlan(customer.organizationId, "Prompt Research");
   const state = await getTracker({ projectId: input.projectId });
+  if (await promptResearchUsesGoogle())
+    return researchAiPromptsFromGoogle(input, customer, state);
   const keyword = normalizeAiSuggestion(input.keyword);
   // DataForSEO has ChatGPT prompt data only in US English.
   const loaded = await loadPrompts(

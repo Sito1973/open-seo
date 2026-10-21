@@ -26,6 +26,11 @@ import {
   locationCodeSchema,
   projectIdSchema,
 } from "@/server/mcp/schemas";
+import {
+  DIFFICULTY_ESTIMATE_NOTE,
+  difficultyCell,
+  isEstimatedDifficulty,
+} from "@/shared/keyword-difficulty";
 
 const LOCAL_VOLUME_CREDITS = Math.ceil(
   applyBillingMarkupUsd(LOCAL_VOLUME_COST_USD) *
@@ -80,6 +85,7 @@ type ResearchRow = {
   keyword: string;
   searchVolume: number | null;
   keywordDifficulty: number | null;
+  keywordDifficultyEstimate?: number | null;
   cpc: number | null;
   competition: number | null;
   intent: string;
@@ -94,6 +100,9 @@ function toResearchRow(row: EnrichedKeyword): ResearchRow {
     keyword: row.keyword,
     searchVolume: row.searchVolume,
     keywordDifficulty: row.keywordDifficulty,
+    ...(row.keywordDifficultyEstimate == null
+      ? {}
+      : { keywordDifficultyEstimate: row.keywordDifficultyEstimate }),
     cpc: row.cpc,
     competition: row.competition,
     intent: row.intent,
@@ -109,7 +118,7 @@ function toResearchRow(row: EnrichedKeyword): ResearchRow {
 const RESEARCH_COLUMNS: McpTableColumn<ResearchRow>[] = [
   { header: "keyword", value: (row) => row.keyword },
   { header: "volume", value: (row) => row.searchVolume },
-  { header: "KD", value: (row) => row.keywordDifficulty },
+  { header: "KD", value: difficultyCell },
   { header: "CPC", value: (row) => row.cpc },
   { header: "competition", value: (row) => row.competition },
   { header: "intent", value: (row) => row.intent },
@@ -221,6 +230,11 @@ export const researchKeywordsTool = {
       (results.some((r) => r.ok && r.source === "search_console")
         ? `\n${SEARCH_CONSOLE_NOTE}`
         : "");
+    const estimateNote = results.some(
+      (result) => result.ok && result.rows.some(isEstimatedDifficulty),
+    )
+      ? `\n${DIFFICULTY_ESTIMATE_NOTE}`
+      : "";
     const text =
       results
         .map((r) => {
@@ -242,7 +256,7 @@ export const researchKeywordsTool = {
           )}`;
         })
         .join("\n\n") +
-      `\n\nResearched ${okCount} of ${results.length} seeds${failCount > 0 ? ` (${failCount} failed)` : ""}. Columns: volume = monthly searches, KD = keyword difficulty (0-100), CPC in USD, competition = paid competition (0-1); "—" = unavailable. Google Ads close variants may share search volumes; do not add their volumes together.${sourceNote}`;
+      `\n\nResearched ${okCount} of ${results.length} seeds${failCount > 0 ? ` (${failCount} failed)` : ""}. Columns: volume = monthly searches, KD = keyword difficulty (0-100), CPC in USD, competition = paid competition (0-1); "—" = unavailable. Google Ads close variants may share search volumes; do not add their volumes together.${sourceNote}${estimateNote}`;
 
     return mcpResponse({
       text,

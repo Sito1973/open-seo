@@ -168,9 +168,15 @@ export async function runAiResearchSetup(
     projectId: input.projectId,
   });
   // Only newly researched basics/competitors need review. Existing context
-  // stays authoritative; a topics-only result can be saved directly.
+  // stays authoritative; a topics-only result can be saved directly. Without
+  // a model there are only raw candidates, so someone always reviews them.
   const missing = missingContext(sections, competitors);
-  if (missing.missingOverview || missing.missingCompetitors) return { review };
+  if (
+    missing.missingOverview ||
+    missing.missingCompetitors ||
+    review.withoutModel
+  )
+    return { review };
   const topics = review.suggestedTopics;
   // Like website setup, the first three topics seed tracking only when the
   // project has none yet.

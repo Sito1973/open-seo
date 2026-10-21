@@ -91,6 +91,18 @@ export const aiCostOutput = z.looseObject({
     .describe(
       "Self-hosted Google AI Mode through SerpApi only: the free searches one check uses (at most hourlyLimit) and the schedule's busiest month uses together with the server's other AI Mode trackers, against this server's shared monthly budget. Null otherwise.",
     ),
+  brightDataBudget: z
+    .looseObject({
+      perCheck: count,
+      perMonth: count,
+      monthlyBudget: count,
+      usedThisMonth: count,
+      remaining: count,
+    })
+    .nullable()
+    .describe(
+      "Self-hosted Google AI Overviews through Bright Data only: the free requests one check uses and the schedule's busiest month uses together with the server's other AI Overviews trackers, against this server's monthly Bright Data budget, which rank tracking and SERP tools also use. Null otherwise.",
+    ),
 });
 const observation = z.looseObject({
   id: text,
@@ -114,7 +126,9 @@ const observation = z.looseObject({
   answerStatus: z.enum(["answered", "no_answer"]).nullable(),
   citationCount: count,
   collectedAt: nullableText,
-  error: nullableText,
+  error: nullableText.describe(
+    "Why a failed collection failed. On a no_answer collection, why it has no answer when the provider said, such as a Google AI Overview that Bright Data returned without its text; it still counts as no answer, not as a missing brand.",
+  ),
 });
 export const aiResultsOutput = z.looseObject({
   runId: nullableText,
@@ -295,6 +309,52 @@ export const aiPromptResearchOutput = z.looseObject({
       ownDomainCited: flag,
       brandMentioned: flag,
       tracked: flag,
+      origins: z
+        .array(
+          z.enum([
+            "tracked",
+            "people_also_ask",
+            "related_search",
+            "autocomplete",
+            "search_console",
+            "business_profile",
+          ]),
+        )
+        .optional()
+        .describe("Google candidates only: where Google showed this text."),
+      volume: z
+        .looseObject({
+          source: z.enum([
+            "business_profile",
+            "search_console",
+            "keyword_planner",
+          ]),
+          value: count,
+          below: flag.describe("Business Profile reports fewer than value."),
+        })
+        .nullable()
+        .optional()
+        .describe(
+          "Google candidates only: Business Profile search impressions (last 3 complete months), the site's Search Console impressions (last 3 months), or Keyword Planner average monthly searches. Never AI prompt volume.",
+        ),
+      answer: z
+        .looseObject({
+          kind: z.enum(["last_answer", "people_also_ask"]),
+          engine: engine.optional(),
+          collectedAt: nullableText.optional(),
+          text,
+        })
+        .nullable()
+        .optional()
+        .describe(
+          "Google candidates only: a tracked prompt's last collected answer (shortened), else Google's People Also Ask answer, which is not an AI answer.",
+        ),
     }),
   ),
+  withoutModel: z
+    .looseObject({ guidance: text, notes: z.array(text) })
+    .optional()
+    .describe(
+      "Set when prompts are Google's raw candidates: guidance says how to rewrite them; notes say which sources are missing and why.",
+    ),
 });

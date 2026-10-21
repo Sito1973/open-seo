@@ -1,6 +1,5 @@
 /* eslint-disable max-lines */
-import { mean, median, sort } from "remeda";
-import { getDomain } from "tldts";
+import { sort } from "remeda";
 import { z } from "zod";
 import {
   createDataforseoClient,
@@ -10,11 +9,16 @@ import {
 import {
   brightDataBudgetLine,
   brightDataSourceNote,
-  fetchBrightDataSerp,
   getBrightDataSerp,
   type BrightDataSerp,
 } from "@/server/lib/brightDataSerp";
 import { AppError } from "@/server/lib/errors";
+import { projectSearchTracker } from "@/server/features/serp/services/googleCandidates";
+import {
+  findSerpCompetitors,
+  MAX_LIVE_KEYWORDS,
+  SAVED_PAGE_MAX_AGE_DAYS,
+} from "@/server/features/serp/services/serpCompetitors";
 import { PLACES_MAX_ROWS, searchListings } from "@/server/lib/googlePlaces";
 import { getKeywordPlannerClient } from "@/server/lib/googleAdsKeywordPlanner";
 import { KEYWORD_PLANNER_SOURCE_NOTE } from "@/server/lib/keywordPlannerConfig";
@@ -23,6 +27,7 @@ import {
   getGoogleFallbackKey,
   usesGoogleFallbacks,
 } from "@/server/lib/runtime-env";
+import { ctrAt } from "@/shared/ctr-curve";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
 import {
@@ -1221,33 +1226,74 @@ export const getGoogleBusinessQuestionsTool = {
   ),
 };
 
-// On Bright Data each keyword is one live SERP request from the monthly
-// budget, so a call compares at most this many keywords.
-const BRIGHTDATA_MAX_COMPETITOR_KEYWORDS = 10;
+type StoredSerpCompetitor = Awaited<
+  ReturnType<typeof findSerpCompetitors>
+>["competitors"][number];
+
+const STORED_SERP_COMPETITOR_COLUMNS: McpTableColumn<StoredSerpCompetitor>[] = [
+  { header: "competitor", value: (row) => row.domain ?? row.name },
+  { header: "keywords", value: (row) => row.keywords_count },
+  { header: "avg pos", value: (row) => row.avg_position },
+  { header: "local pack pos", value: (row) => row.local_pack_avg_position },
+  { header: "visibility", value: (row) => row.visibility },
+  { header: "etv", value: (row) => row.etv },
+];
+
+function percent(share: number) {
+  return `${Math.round(share * 1000) / 10}%`;
+}
+
+function byVisibility(a: StoredSerpCompetitor, b: StoredSerpCompetitor) {
+  return b.visibility - a.visibility || b.keywords_count - a.keywords_count;
+}
+
+function sortStoredCompetitors(
+  rows: StoredSerpCompetitor[],
+  sortBy: FindSerpCompetitorsArgs["sortBy"] = "visibility",
+) {
+  return sort(rows, (a, b) => {
+    switch (sortBy) {
+      case "avg_position":
+        // Competitors only in the local pack have no organic position: last.
+        return (
+          (a.avg_position ?? Infinity) - (b.avg_position ?? Infinity) ||
+          byVisibility(a, b)
+        );
+      case "keyword_count":
+        return b.keywords_count - a.keywords_count || byVisibility(a, b);
+      case "traffic_estimate":
+        return (b.etv ?? -1) - (a.etv ?? -1) || byVisibility(a, b);
+      default:
+        return byVisibility(a, b);
+    }
+  });
+}
 
 /**
- * Self-hosted without DataForSEO: competitors counted from each keyword's live
- * top 10 organic results on Bright Data. Visibility and traffic estimates need
- * search volumes, which a live SERP lacks, so rows carry positions only.
+ * Self-hosted without DataForSEO: competitors from each keyword's first Google
+ * page, organic results and local pack, read from the organization's saved
+ * pages when a recent one exists and otherwise searched live on Bright Data.
+ * On the project's own market the search runs near its rank tracker's city
+ * and on its device, so the tool reads the tracker's saved pages and its live
+ * pages serve the tracker's next scheduled check.
  */
 async function findBrightDataSerpCompetitors(
   config: BrightDataSerp,
   args: FindSerpCompetitorsArgs,
   context: {
     baseUrl: string;
-    project: { locationCode: number; languageCode: string };
+    billing: { organizationId: string; userId: string };
+    project: { id: string; locationCode: number; languageCode: string };
   },
 ) {
-  if (args.keywords.length > BRIGHTDATA_MAX_COMPETITOR_KEYWORDS) {
+  const resultTypes = args.resultTypes ?? ["organic", "local_pack"];
+  const sections = resultTypes.filter(
+    (type) => type === "organic" || type === "local_pack",
+  );
+  if (sections.length === 0) {
     throw new AppError(
       "VALIDATION_ERROR",
-      `On this server each keyword is one live Bright Data SERP request, so pass at most ${BRIGHTDATA_MAX_COMPETITOR_KEYWORDS} keywords per call.`,
-    );
-  }
-  if (args.resultTypes && !args.resultTypes.includes("organic")) {
-    throw new AppError(
-      "VALIDATION_ERROR",
-      "On this server competitors come from live organic results only: include organic in resultTypes, or omit resultTypes.",
+      "On this server competitors come from organic results and the local pack only: include organic or local_pack in resultTypes, or omit resultTypes.",
     );
   }
   // A live Google SERP serves any market, so the project's market stands
@@ -1258,86 +1304,78 @@ async function findBrightDataSerpCompetitors(
     args.languageCode == null
       ? { locationCode: DEFAULT_LOCATION_CODE, languageCode: "en" }
       : resolveMarket(args, context.project);
-  const settled = await Promise.allSettled(
-    args.keywords.map((keyword) =>
-      fetchBrightDataSerp(config, {
-        keyword,
-        market,
-        device: "desktop",
-        depth: 10,
-      }),
-    ),
-  );
-  const firstFailure = settled.find((outcome) => outcome.status === "rejected");
-  if (
-    firstFailure &&
-    settled.every((outcome) => outcome.status === "rejected")
-  ) {
-    throw firstFailure.reason;
-  }
-
-  // domain -> keyword -> that domain's best organic position for it.
-  const positions = new Map<string, Map<string, number>>();
-  const failures: string[] = [];
-  let usedThisMonth = 0;
-  settled.forEach((outcome, index) => {
-    const keyword = args.keywords[index];
-    if (outcome.status === "rejected") {
-      failures.push(`"${keyword}": ${toolErrorMessage(outcome.reason)}`);
-      return;
-    }
-    usedThisMonth = Math.max(usedThisMonth, outcome.value.usedThisMonth);
-    for (const item of outcome.value.organic) {
-      if (!item.domain) continue;
-      const domain = args.includeSubdomains
-        ? (getDomain(item.domain) ?? item.domain)
-        : item.domain;
-      const byKeyword = positions.get(domain) ?? new Map<string, number>();
-      byKeyword.set(
-        keyword,
-        Math.min(byKeyword.get(keyword) ?? Infinity, item.position),
-      );
-      positions.set(domain, byKeyword);
-    }
+  const nearby =
+    market.locationCode === context.project.locationCode &&
+    market.languageCode === context.project.languageCode
+      ? await projectSearchTracker(context.project)
+      : null;
+  const searchMarket = nearby?.market ?? market;
+  const device = nearby?.device ?? "desktop";
+  const found = await findSerpCompetitors(config, {
+    organizationId: context.billing.organizationId,
+    userId: context.billing.userId,
+    keywords: args.keywords,
+    market: searchMarket,
+    device,
+    sections,
+    includeSubdomains: args.includeSubdomains ?? false,
   });
 
   const excluded = args.excludeDomains ?? [];
-  const rows = sort(
-    [...positions]
-      .filter(([domain]) => !excluded.some((d) => hostMatchesDomain(domain, d)))
-      .map(([domain, byKeyword]) => {
-        const ranks = [...byKeyword.values()];
-        return {
-          domain,
-          keywords_count: ranks.length,
-          avg_position: Math.round((mean(ranks) ?? 0) * 10) / 10,
-          median_position: median(ranks) ?? 0,
-          keywords_positions: Object.fromEntries(byKeyword),
-        };
-      }),
-    (a, b) =>
-      args.sortBy === "avg_position"
-        ? a.avg_position - b.avg_position
-        : b.keywords_count - a.keywords_count ||
-          a.avg_position - b.avg_position,
+  const rows = sortStoredCompetitors(
+    found.competitors.filter(
+      ({ domain }) =>
+        domain == null ||
+        !excluded.some((target) => hostMatchesDomain(domain, target)),
+    ),
+    args.sortBy,
   );
   const offset = args.offset ?? 0;
   const competitors = rows.slice(offset, offset + (args.limit ?? 50));
 
-  const checked = args.keywords.length - failures.length;
+  const saved = found.pages.filter((page) => page.source === "saved");
+  const live = found.pages.length - saved.length;
+  const savedDates = sort(
+    saved.map((page) => page.observed_at.slice(0, 10)),
+    (a, b) => a.localeCompare(b),
+  );
+  const total =
+    found.pages.length + found.failed.length + found.notChecked.length;
   const lines = [
-    `Found ${rows.length} domains in the live top 10 organic results of ${checked} of ${args.keywords.length} keywords.`,
+    `Found ${rows.length} competitors on the first Google page (organic top 10 and local pack) of ${found.pages.length} of ${total} keywords: ${saved.length} from pages saved in this organization${savedDates.length > 0 ? ` (observed ${savedDates[0]} to ${savedDates.at(-1)}, no request)` : ""}, ${live} searched live now.`,
   ];
   if (competitors.length > 0) {
-    lines.push(formatMcpTable(competitors, SERP_COMPETITOR_COLUMNS));
+    lines.push(formatMcpTable(competitors, STORED_SERP_COMPETITOR_COLUMNS));
   }
-  if (failures.length > 0) {
-    lines.push(`Not checked: ${failures.join("; ")}`);
+  if (found.failed.length > 0) {
+    lines.push(
+      `Not checked: ${found.failed.map(({ keyword, reason }) => `"${keyword}": ${toolErrorMessage(reason)}`).join("; ")}`,
+    );
+  }
+  if (found.notChecked.length > 0) {
+    lines.push(
+      `Not checked, past this call's ${MAX_LIVE_KEYWORDS} live searches: ${found.notChecked.join(", ")}. Repeat the same call to search the next ${MAX_LIVE_KEYWORDS}: the pages searched now are saved and answer for free.`,
+    );
+  }
+  const ignoredTypes = resultTypes.filter(
+    (type) => type !== "organic" && type !== "local_pack",
+  );
+  if (ignoredTypes.length > 0) {
+    lines.push(
+      `Ignored resultTypes: ${ignoredTypes.join(", ")}. Saved pages keep organic results and the local pack only.`,
+    );
   }
   lines.push(
-    `Sorted by ${args.sortBy === "avg_position" ? "average position" : "keyword count, then average position"}. Positions count organic results only; visibility and traffic estimates need search volumes, which a live SERP lacks.`,
-    brightDataSourceNote(market),
-    brightDataBudgetLine(usedThisMonth),
+    `Visibility is an OpenSEO estimate, not Google data: the clicks a competitor's best position would get on each keyword, as a share of a #1 on every keyword, from one CTR curve (${percent(ctrAt(1, { aiOverview: false }))} at #1, ${percent(ctrAt(10, { aiOverview: false }))} at #10, less when the page shows an AI Overview). With both an organic result and a local pack listing, the better one counts. avg pos counts organic results; local pack pos is the listing's place in the pack.`,
+    found.volumesUnavailable == null
+      ? "etv = Keyword Planner monthly searches x that CTR; estimated_paid_traffic_cost = etv x CPC, null without a Keyword Planner CPC."
+      : `etv and estimated_paid_traffic_cost need Keyword Planner volumes, unavailable here: ${found.volumesUnavailable}`,
+    "A local pack listing that links to a social or delivery profile (Instagram, Facebook, Linktree, WhatsApp, Rappi), Google, or no site is listed by name.",
+    `Saved pages count from the last ${SAVED_PAGE_MAX_AGE_DAYS} days, on either device; live searches run on ${device}.`,
+    brightDataSourceNote(searchMarket),
+    found.usedThisMonth == null
+      ? "No Bright Data request was sent."
+      : brightDataBudgetLine(found.usedThisMonth),
   );
   return mcpResponse({
     text: lines.join("\n"),
@@ -1346,7 +1384,22 @@ async function findBrightDataSerpCompetitors(
       args.projectId,
       `/p/${args.projectId}/domain`,
     ),
-    structuredContent: { competitors, provider: "brightdata" },
+    structuredContent: {
+      competitors,
+      keywords: [
+        ...found.pages,
+        ...found.failed.map(({ keyword, reason }) => ({
+          keyword,
+          source: "failed" as const,
+          error: toolErrorMessage(reason),
+        })),
+        ...found.notChecked.map((keyword) => ({
+          keyword,
+          source: "not_checked" as const,
+        })),
+      ],
+      provider: "brightdata",
+    },
   });
 }
 

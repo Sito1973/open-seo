@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   failRunIfActive: vi.fn(),
   captureServerEvent: vi.fn(),
   isHostedServerAuthMode: vi.fn(),
+  estimateKeywordDifficulty: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -39,6 +40,9 @@ vi.mock("@/server/workflows/rankCheckPaths", () => ({
 }));
 vi.mock("@/server/lib/brightDataSerp", () => ({
   getBrightDataSerp: mocks.getBrightDataSerp,
+}));
+vi.mock("@/server/features/serp/services/difficultyEstimate", () => ({
+  estimateKeywordDifficulty: mocks.estimateKeywordDifficulty,
 }));
 vi.mock("@/server/workflows/pgStep", () => ({
   pgStep: (
@@ -207,5 +211,27 @@ describe("rank check on Bright Data", () => {
       expect.anything(),
       expect.objectContaining({ brightData }),
     );
+  });
+
+  it("estimates difficulty from the pages the check saved, and a failed estimate leaves the run completed", async () => {
+    mocks.getSnapshotsForRun.mockResolvedValue(
+      keywords(2).map((keyword) => ({ trackingKeywordId: keyword.id })),
+    );
+    mocks.estimateKeywordDifficulty.mockRejectedValue(new Error("db down"));
+
+    await runWorkflow({});
+
+    expect(mocks.estimateKeywordDifficulty).toHaveBeenCalledWith(
+      brightData,
+      expect.objectContaining({
+        keywords: ["keyword 0", "keyword 1"],
+        maxLive: 0,
+      }),
+    );
+    expect(mocks.updateRun).toHaveBeenCalledWith(
+      "run_1",
+      expect.objectContaining({ status: "completed" }),
+    );
+    expect(mocks.failRunIfActive).not.toHaveBeenCalled();
   });
 });

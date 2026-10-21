@@ -186,7 +186,8 @@ export function TrackingCostReview({
               estimate.isFetching ||
               start.isPending ||
               cost.observations === 0 ||
-              aiSearchBudgetExceeded(cost.searchBudget, mode)
+              aiSearchBudgetExceeded(cost.searchBudget, mode) ||
+              aiSearchBudgetExceeded(cost.brightDataBudget, mode)
             }
             onClick={() => start.mutate()}
           >
@@ -239,7 +240,18 @@ export function TrackingCostReview({
               </FieldDescription>
             </Field>
             {cost.searchBudget && (
-              <AiSearchBudgetNote budget={cost.searchBudget} mode={mode} />
+              <AiSearchBudgetNote
+                budget={cost.searchBudget}
+                mode={mode}
+                provider="serpapi"
+              />
+            )}
+            {cost.brightDataBudget && (
+              <AiSearchBudgetNote
+                budget={cost.brightDataBudget}
+                mode={mode}
+                provider="brightdata"
+              />
             )}
             {start.error && <AiQueryError error={start.error} />}
           </>

@@ -43,7 +43,11 @@ export const GSC_MAX_ROW_LIMIT = 1000;
 const GSC_DATA_LAG_DAYS = 3;
 
 export type GscDimension = (typeof GSC_DIMENSIONS)[number];
-type GscFilterOperator = (typeof GSC_FILTER_OPERATORS)[number];
+// Server-side callers may also match a regex (RE2), which the MCP tool does
+// not offer.
+type GscFilterOperator =
+  | (typeof GSC_FILTER_OPERATORS)[number]
+  | "includingRegex";
 export type GscSearchType = (typeof GSC_SEARCH_TYPES)[number];
 export type GscDateRange = (typeof GSC_DATE_RANGES)[number];
 

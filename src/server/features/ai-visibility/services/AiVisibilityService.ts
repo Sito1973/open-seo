@@ -12,6 +12,7 @@ import {
 import { exportAiData } from "./aiVisibilityExport";
 import { loadAiTrend } from "./aiVisibilityTrend";
 import { listAiResearchKeywords, researchAiPrompts } from "./aiPromptResearch";
+import { promptResearchUsesGoogle } from "./aiPromptResearchGoogle";
 import type { GenerateAiPromptsInput } from "@/types/schemas/aiPromptSuggestions";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
 export const AiVisibilityService = {
@@ -33,6 +34,10 @@ export const AiVisibilityService = {
       options,
     ),
   researchPrompts: researchAiPrompts,
+  /** Whether Prompt Research lists Google's candidates on this server. */
+  getResearchSource: async () => ({
+    fromGoogle: await promptResearchUsesGoogle(),
+  }),
   listResearchKeywords: listAiResearchKeywords,
   getTracker,
   saveTracker,

@@ -176,6 +176,15 @@ export const refreshSavedKeywordMetricsSchema = z.object({
   projectId: z.string().min(1),
 });
 
+// At most MAX_LIVE_ESTIMATES (10) of these are searched live per call; the
+// rest answer from saved pages or come back as not checked.
+export const estimateKeywordDifficultySchema = z.object({
+  projectId: z.string().min(1),
+  keywords: z.array(z.string().trim().min(1).max(200)).min(1).max(50),
+  locationCode: z.number().int().positive().optional(),
+  languageCode: z.string().min(2).max(8).optional(),
+});
+
 export type ResearchKeywordsInput = z.infer<typeof researchKeywordsSchema>;
 export type SaveKeywordsInput = z.infer<typeof saveKeywordsSchema>;
 type ResolvedMarket = { locationCode: number; languageCode: string };
