@@ -3,7 +3,8 @@ import { z } from "zod";
 import { getCoreWebVitalsTool } from "./core-web-vitals";
 import { makeToolContext, textContent } from "./tool-test-support";
 
-// A self-hosted install with GOOGLE_PAGESPEED_API_KEY and no DataForSEO key.
+// A self-hosted install with GOOGLE_PAGESPEED_API_KEY. CrUX has no DataForSEO
+// version, so the tool also runs next to a DataForSEO key.
 
 const mocks = vi.hoisted(() => ({
   getProjectForOrganization: vi.fn(),
@@ -26,7 +27,7 @@ const period = (day: number) => ({
 const requestBodySchema = z.looseObject({ origin: z.string() });
 
 beforeEach(() => {
-  vi.stubEnv("DATAFORSEO_API_KEY", "");
+  vi.stubEnv("DATAFORSEO_API_KEY", "dataforseo-key");
   vi.stubEnv("AUTH_MODE", "");
   vi.stubEnv("GOOGLE_PAGESPEED_API_KEY", "psi-key");
   vi.stubGlobal("fetch", mocks.fetch);
@@ -163,7 +164,6 @@ it("returns weekly history with weeks CrUX lacks as null, not 0", async () => {
   const result = await getCoreWebVitalsTool.handler(
     {
       projectId: "project_1",
-      targets: ["https://www.bandidos.co"],
       device: "all",
       historyWeeks: 2,
     },

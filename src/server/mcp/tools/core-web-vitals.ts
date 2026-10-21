@@ -7,7 +7,10 @@ import {
   fetchCruxRecord,
 } from "@/server/lib/chromeUxReport";
 import { AppError } from "@/server/lib/errors";
-import { getGoogleFallbackKey } from "@/server/lib/runtime-env";
+import {
+  getOptionalEnvValue,
+  isHostedServerAuthMode,
+} from "@/server/lib/runtime-env";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
 import {
@@ -20,14 +23,15 @@ import { formatMcpTable } from "@/server/mcp/table";
 import { parseResearchTarget } from "@/shared/researchScope";
 
 // Real-user Core Web Vitals from the Chrome UX Report. Registered only on the
-// self-hosted MCP transport, and it runs on the same key gate as the PageSpeed
-// Insights Lighthouse checks.
+// self-hosted MCP transport. It reuses GOOGLE_PAGESPEED_API_KEY, but unlike the
+// Lighthouse checks it also runs next to DATAFORSEO_API_KEY: DataForSEO has no
+// CrUX data for it to stand in for, and the CrUX API is free.
 
 const SOURCE_NOTE =
   "Source: Chrome UX Report (CrUX) by Google. Real Chrome users worldwide (no country filter); Chrome on iOS is not counted.";
 
 const NOT_CONFIGURED =
-  "Real-user Core Web Vitals need GOOGLE_PAGESPEED_API_KEY, with the Chrome UX Report API enabled on the key, on a self-hosted install without DATAFORSEO_API_KEY. See docs/SELF_HOSTING_GOOGLE_APIS.md.";
+  "Real-user Core Web Vitals need GOOGLE_PAGESPEED_API_KEY, with the Chrome UX Report API enabled on the key, on a self-hosted install. See docs/SELF_HOSTING_GOOGLE_APIS.md.";
 
 const FORM_FACTORS = {
   phone: "PHONE",
@@ -216,7 +220,9 @@ export const getCoreWebVitalsTool = {
     },
   },
   handler: withMcpProjectAuth(async (args: Args, context) => {
-    const apiKey = await getGoogleFallbackKey("GOOGLE_PAGESPEED_API_KEY");
+    const apiKey = (await isHostedServerAuthMode())
+      ? null
+      : await getOptionalEnvValue("GOOGLE_PAGESPEED_API_KEY");
     if (!apiKey) throw new AppError("AUTH_CONFIG_MISSING", NOT_CONFIGURED);
 
     const level = args.level ?? "origin";

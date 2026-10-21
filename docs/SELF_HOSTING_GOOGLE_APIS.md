@@ -5,7 +5,10 @@ has no DataForSEO key. Each one is opt-in: set its key and leave
 `DATAFORSEO_API_KEY` unset.
 
 When `DATAFORSEO_API_KEY` is set, OpenSEO keeps using DataForSEO and ignores
-these keys. Features that have no Google replacement still need DataForSEO.
+these keys, except for the
+[Chrome UX Report tool](#chrome-ux-report-real-user-core-web-vitals): DataForSEO
+has no real-user field data, so that tool runs on the PageSpeed Insights key
+either way. Features that have no Google replacement still need DataForSEO.
 
 These keys work on Docker self-hosting, including platforms that run the Docker
 image for you. The Cloudflare deploy requires a DataForSEO key, so it always
@@ -71,8 +74,8 @@ audit marks that one check as failed and carries on.
 
 ## Chrome UX Report: real-user Core Web Vitals
 
-The PageSpeed Insights key also runs the `get_core_web_vitals` MCP tool. It
-reads real-user field data from the
+The PageSpeed Insights key also runs the `get_core_web_vitals` MCP tool, with or
+without `DATAFORSEO_API_KEY`. It reads real-user field data from the
 [Chrome UX Report (CrUX) API](https://developer.chrome.com/docs/crux/api) and
 the [CrUX History API](https://developer.chrome.com/docs/crux/history-api). It
 works for any public site, so you can compare your sites with your competitors'.
