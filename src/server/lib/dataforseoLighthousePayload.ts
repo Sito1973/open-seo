@@ -1,12 +1,10 @@
 import { z } from "zod";
 import {
-  buildStoredLighthouseIssues,
-  buildStoredLighthouseMetrics,
+  buildStoredLighthousePayload,
   type RawLighthouseAudit,
   type RawLighthouseCategory,
-  scoreToPercent,
   type StoredLighthousePayload,
-  storedLighthousePayloadSchema,
+  summarizeZodIssues,
 } from "@/server/lib/lighthouseStoredPayload";
 
 export const requestCategories = [
@@ -45,24 +43,14 @@ const dataforseoLighthouseResponseSchema = z.object({
   tasks: z.array(dataforseoTaskSchema).optional(),
 });
 
-function summarizeZodIssues(error: z.ZodError, maxIssues = 3): string {
-  return error.issues
-    .slice(0, maxIssues)
-    .map((issue) => {
-      const path = issue.path.length > 0 ? issue.path.join(".") : "<root>";
-      return `${path}: ${issue.message}`;
-    })
-    .join("; ");
-}
-
 export function parseDataforseoLighthousePayload(
   payload: unknown,
   input: { url: string; strategy: LighthouseStrategy },
 ): StoredLighthousePayload {
   // Only the envelope scalars are validated up front. The report is reduced
-  // straight into the compact stored payload, which is then validated in full
-  // below — the same fields the old whole-report schema checked, at kilobyte
-  // size instead of multi-megabyte.
+  // straight into the compact stored payload, which buildStoredLighthousePayload
+  // then validates in full — the same fields the old whole-report schema
+  // checked, at kilobyte size instead of multi-megabyte.
   const parsed = dataforseoLighthouseResponseSchema.safeParse(payload);
   if (!parsed.success) {
     throw new Error(
@@ -90,52 +78,13 @@ export function parseDataforseoLighthousePayload(
     throw new Error("DataForSEO Lighthouse response missing result");
   }
 
-  const fetchedAt = new Date().toISOString();
-  const categories = result.categories ?? {};
-  const audits = result.audits ?? {};
-  const issueReport = buildStoredLighthouseIssues({ audits, categories });
-  const metrics = buildStoredLighthouseMetrics({ audits });
-  const storedPayload: StoredLighthousePayload = {
-    version: 2,
+  return buildStoredLighthousePayload({
+    report: result,
+    request: input,
     source: "dataforseo-lighthouse",
-    hasIssueDetails: issueReport.hasIssueDetails,
-    metadata: {
-      requestedUrl: result.requestedUrl ?? input.url,
-      finalUrl: result.finalUrl ?? input.url,
-      strategy: input.strategy,
-      fetchedAt,
-      lighthouseVersion: result.lighthouseVersion ?? null,
-      taskId: task.id ?? null,
-      cost: task.cost ?? null,
-    },
-    scores: {
-      performance: scoreToPercent(categories.performance?.score),
-      accessibility: scoreToPercent(categories.accessibility?.score),
-      "best-practices": scoreToPercent(categories["best-practices"]?.score),
-      seo: scoreToPercent(categories.seo?.score),
-    },
-    metrics,
-    issues: issueReport.issues,
-  };
-
-  const allScoresMissing = Object.values(storedPayload.scores).every(
-    (score) => score == null,
-  );
-  if (allScoresMissing) {
-    throw new Error(
-      `DataForSEO Lighthouse returned no category scores for ${storedPayload.metadata.finalUrl}`,
-    );
-  }
-
-  // Without this, an off-spec provider field (a numeric audit title, say) would
-  // be stored and then fail to parse on read, silently blanking the page's
-  // whole Lighthouse view instead of failing the check.
-  const validated = storedLighthousePayloadSchema.safeParse(storedPayload);
-  if (!validated.success) {
-    throw new Error(
-      `DataForSEO Lighthouse returned an invalid report: ${summarizeZodIssues(validated.error)}`,
-    );
-  }
-
-  return storedPayload;
+    taskId: task.id ?? null,
+    cost: task.cost ?? null,
+    fetchedAt: new Date().toISOString(),
+    providerLabel: "DataForSEO Lighthouse",
+  });
 }

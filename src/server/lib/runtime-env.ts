@@ -41,6 +41,19 @@ export async function isHostedServerAuthMode(): Promise<boolean> {
   return isHostedAuthMode(await getOptionalEnvValue("AUTH_MODE"));
 }
 
+/**
+ * A free Google API key that stands in for DataForSEO. It applies only on
+ * self-hosted installs without a DataForSEO key, so hosted billing and every
+ * install that already uses DataForSEO keep their exact behavior.
+ */
+export async function getGoogleFallbackKey(
+  name: "GOOGLE_PAGESPEED_API_KEY",
+): Promise<string | null> {
+  if (await getOptionalEnvValue("DATAFORSEO_API_KEY")) return null;
+  if (await isHostedServerAuthMode()) return null;
+  return (await getOptionalEnvValue(name)) ?? null;
+}
+
 async function getWorkersEnv(): Promise<Record<string, unknown> | null> {
   if (!workersEnvPromise) {
     workersEnvPromise = loadWorkersEnv();

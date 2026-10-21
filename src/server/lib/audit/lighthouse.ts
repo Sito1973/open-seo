@@ -1,6 +1,8 @@
 import { detectUrlTemplate, canonicalUrlKey } from "./url-utils";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
 import { createDataforseoClient } from "@/server/lib/dataforseo";
+import { fetchPagespeedLighthouse } from "@/server/lib/pagespeedLighthouse";
+import { getGoogleFallbackKey } from "@/server/lib/runtime-env";
 import type { LighthouseResult, LighthouseStrategy } from "./types";
 import type { PageFetchClass } from "@/shared/audit-fetch-class";
 import { putTextToR2 } from "@/server/lib/r2";
@@ -56,9 +58,14 @@ export async function fetchLighthouseResult(
   strategy: "mobile" | "desktop",
   billingCustomer: BillingCustomerContext,
 ): Promise<LighthouseFetchResult> {
-  const dataforseo = createDataforseoClient(billingCustomer);
   try {
-    const data = await dataforseo.lighthouse.live({ url, strategy });
+    const pagespeedKey = await getGoogleFallbackKey("GOOGLE_PAGESPEED_API_KEY");
+    const data = pagespeedKey
+      ? await fetchPagespeedLighthouse({ url, strategy, apiKey: pagespeedKey })
+      : await createDataforseoClient(billingCustomer).lighthouse.live({
+          url,
+          strategy,
+        });
 
     return {
       result: {
@@ -81,11 +88,12 @@ export async function fetchLighthouseResult(
     // Lighthouse runtime errors (ERRORED_DOCUMENT_REQUEST, NOT_HTML, NO_FCP) mean the
     // tenant's page didn't load for the provider's Chrome. The failure is already
     // surfaced on the audit row, so there is nothing for us to act on.
-    const log = failed.message.includes(
-      "Lighthouse encountered an error with the following code",
-    )
-      ? console.warn
-      : console.error;
+    const log =
+      /Lighthouse (encountered an error with the following code|returned error)/.test(
+        failed.message,
+      )
+        ? console.warn
+        : console.error;
     log(`Lighthouse failed for ${url} (${strategy}): ${failed.message}`);
     return failedLighthouseFetch(url, pageId, strategy, failed.message);
   }

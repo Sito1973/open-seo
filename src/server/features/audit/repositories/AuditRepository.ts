@@ -285,6 +285,25 @@ async function getPagesForAudit(auditId: string) {
     .where(eq(auditPages.auditId, auditId));
 }
 
+// Scores and headline metrics only: the full Lighthouse report lives in R2.
+async function getLighthouseResultsForAudit(auditId: string) {
+  return db
+    .select({
+      pageId: auditLighthouseResults.pageId,
+      strategy: auditLighthouseResults.strategy,
+      performanceScore: auditLighthouseResults.performanceScore,
+      accessibilityScore: auditLighthouseResults.accessibilityScore,
+      bestPracticesScore: auditLighthouseResults.bestPracticesScore,
+      seoScore: auditLighthouseResults.seoScore,
+      lcpMs: auditLighthouseResults.lcpMs,
+      cls: auditLighthouseResults.cls,
+      ttfbMs: auditLighthouseResults.ttfbMs,
+      errorMessage: auditLighthouseResults.errorMessage,
+    })
+    .from(auditLighthouseResults)
+    .where(eq(auditLighthouseResults.auditId, auditId));
+}
+
 async function countPagesByFetchClass(
   auditId: string,
   fetchClass: PageFetchClass,
@@ -426,6 +445,7 @@ export const AuditRepository = {
   getLatestAuditForProject,
   getIssuesForAudit,
   getPagesForAudit,
+  getLighthouseResultsForAudit,
   countPagesByFetchClass,
   hasPagesForAudit,
   getAuditsByProject,

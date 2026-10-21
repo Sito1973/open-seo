@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const createDataforseoClientMock = vi.hoisted(() => vi.fn());
 
@@ -87,6 +87,64 @@ describe("fetchLighthouseResult", () => {
     userEmail: "test@example.com",
     organizationId: "org-1",
   };
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("uses PageSpeed Insights when only GOOGLE_PAGESPEED_API_KEY is set", async () => {
+    vi.stubEnv("DATAFORSEO_API_KEY", "");
+    vi.stubEnv("GOOGLE_PAGESPEED_API_KEY", "psi-key");
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        lighthouseResult: {
+          categories: {
+            performance: { score: 0.54 },
+            accessibility: { score: 0.93 },
+            "best-practices": { score: 0.79 },
+            seo: { score: 0.92 },
+          },
+          audits: {
+            "largest-contentful-paint": { numericValue: 2500 },
+            "cumulative-layout-shift": { numericValue: 0.05 },
+            "server-response-time": { numericValue: 120 },
+          },
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const fetched = await fetchLighthouseResult(
+      "https://example.com/",
+      "page-1",
+      "mobile",
+      billingCustomer,
+    );
+
+    expect(fetched.result).toMatchObject({
+      performanceScore: 54,
+      accessibilityScore: 93,
+      bestPracticesScore: 79,
+      seoScore: 92,
+      lcpMs: 2500,
+      cls: 0.05,
+      ttfbMs: 120,
+    });
+    const request = new Request(...fetchMock.mock.calls[0]);
+    const params = new URL(request.url).searchParams;
+    expect(params.getAll("category")).toEqual([
+      "PERFORMANCE",
+      "ACCESSIBILITY",
+      "BEST_PRACTICES",
+      "SEO",
+    ]);
+    expect(params.get("strategy")).toBe("MOBILE");
+    // The key travels in a header so it never lands in a logged URL.
+    expect(params.has("key")).toBe(false);
+    expect(request.headers.get("X-Goog-Api-Key")).toBe("psi-key");
+    expect(createDataforseoClientMock).not.toHaveBeenCalled();
+  });
 
   it("does not retry an ambiguous generic failure", async () => {
     const live = vi

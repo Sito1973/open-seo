@@ -56,7 +56,7 @@ const storedLighthouseIssueSchema = z.object({
 
 export const storedLighthousePayloadSchema = z.object({
   version: z.literal(2),
-  source: z.literal("dataforseo-lighthouse"),
+  source: z.enum(["dataforseo-lighthouse", "pagespeed-insights"]),
   hasIssueDetails: z.boolean(),
   metadata: z.object({
     requestedUrl: z.string(),
@@ -88,9 +88,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function scoreToPercent(
-  score: number | null | undefined,
-): number | null {
+function scoreToPercent(score: number | null | undefined): number | null {
   if (typeof score !== "number" || Number.isNaN(score)) return null;
   return Math.round(score * 100);
 }
@@ -269,4 +267,97 @@ export function buildStoredLighthouseMetrics(input: {
     ),
     serverResponseTime: buildStoredMetric(input.audits["server-response-time"]),
   };
+}
+
+export function summarizeZodIssues(error: z.ZodError, maxIssues = 3): string {
+  return error.issues
+    .slice(0, maxIssues)
+    .map((issue) => {
+      const path = issue.path.length > 0 ? issue.path.join(".") : "<root>";
+      return `${path}: ${issue.message}`;
+    })
+    .join("; ");
+}
+
+// One payload read+parse at a time per isolate, shared by every Lighthouse
+// provider. This runs in the open-seo-audit worker, and the raw Lighthouse
+// payload (1-10MB, held several times over while parsing) is the operation
+// that OOMed the main worker; concurrent checks bursting onto one isolate
+// could do the same here. The provider fetches themselves stay concurrent —
+// parsing (well under a second each) is cheap against a 30-60s fetch, and
+// workerd streams un-read response bodies, so queued siblings don't buffer.
+let parseChain: Promise<unknown> = Promise.resolve();
+export function withLighthouseParseLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = parseChain.then(fn, fn);
+  parseChain = run.catch(() => {});
+  return run;
+}
+
+/**
+ * Reduces a provider's Lighthouse report (the same report shape whether it
+ * came from DataForSEO or PageSpeed Insights) into the compact stored
+ * payload, and validates that payload in full.
+ */
+export function buildStoredLighthousePayload(input: {
+  report: {
+    requestedUrl?: string;
+    finalUrl?: string;
+    lighthouseVersion?: string;
+    categories?: Record<string, RawLighthouseCategory>;
+    audits?: Record<string, RawLighthouseAudit>;
+  };
+  request: { url: string; strategy: "mobile" | "desktop" };
+  source: StoredLighthousePayload["source"];
+  taskId: string | null;
+  cost: number | null;
+  fetchedAt: string;
+  providerLabel: string;
+}): StoredLighthousePayload {
+  const { report, request, providerLabel } = input;
+  const categories = report.categories ?? {};
+  const audits = report.audits ?? {};
+  const issueReport = buildStoredLighthouseIssues({ audits, categories });
+  const storedPayload: StoredLighthousePayload = {
+    version: 2,
+    source: input.source,
+    hasIssueDetails: issueReport.hasIssueDetails,
+    metadata: {
+      requestedUrl: report.requestedUrl ?? request.url,
+      finalUrl: report.finalUrl ?? request.url,
+      strategy: request.strategy,
+      fetchedAt: input.fetchedAt,
+      lighthouseVersion: report.lighthouseVersion ?? null,
+      taskId: input.taskId,
+      cost: input.cost,
+    },
+    scores: {
+      performance: scoreToPercent(categories.performance?.score),
+      accessibility: scoreToPercent(categories.accessibility?.score),
+      "best-practices": scoreToPercent(categories["best-practices"]?.score),
+      seo: scoreToPercent(categories.seo?.score),
+    },
+    metrics: buildStoredLighthouseMetrics({ audits }),
+    issues: issueReport.issues,
+  };
+
+  const allScoresMissing = Object.values(storedPayload.scores).every(
+    (score) => score == null,
+  );
+  if (allScoresMissing) {
+    throw new Error(
+      `${providerLabel} returned no category scores for ${storedPayload.metadata.finalUrl}`,
+    );
+  }
+
+  // Without this, an off-spec provider field (a numeric audit title, say) would
+  // be stored and then fail to parse on read, silently blanking the page's
+  // whole Lighthouse view instead of failing the check.
+  const validated = storedLighthousePayloadSchema.safeParse(storedPayload);
+  if (!validated.success) {
+    throw new Error(
+      `${providerLabel} returned an invalid report: ${summarizeZodIssues(validated.error)}`,
+    );
+  }
+
+  return storedPayload;
 }

@@ -12,24 +12,13 @@ import {
   requestCategories,
   type LighthouseStrategy,
 } from "@/server/lib/dataforseoLighthousePayload";
-import type { StoredLighthousePayload } from "@/server/lib/lighthouseStoredPayload";
+import {
+  type StoredLighthousePayload,
+  withLighthouseParseLock,
+} from "@/server/lib/lighthouseStoredPayload";
 
 const LIGHTHOUSE_PATH = "/v3/on_page/lighthouse/live/json";
 const REQUEST_TIMEOUT_MS = 60_000;
-
-// One payload read+parse at a time per isolate. This module runs in the
-// open-seo-audit worker, and the raw Lighthouse payload (1-10MB, held several
-// times over while parsing) is the operation that OOMed the main worker;
-// concurrent checks bursting onto one isolate could do the same here. The
-// DataForSEO fetches themselves stay concurrent — parsing (well under a
-// second each) is cheap against a 30-60s fetch, and workerd streams un-read
-// response bodies, so queued siblings don't buffer.
-let parseChain: Promise<unknown> = Promise.resolve();
-function withParseLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = parseChain.then(fn, fn);
-  parseChain = run.catch(() => {});
-  return run;
-}
 
 export async function fetchLighthouseResult(input: {
   url: string;
@@ -60,7 +49,7 @@ export async function fetchLighthouseResult(input: {
     clearTimeout(timeout);
   }
 
-  return withParseLock(async () => {
+  return withLighthouseParseLock(async () => {
     const body =
       await response.json<DataforseoResponseLike<DataforseoTaskLike>>();
     // Build the metering envelope before parsing. The provider has already

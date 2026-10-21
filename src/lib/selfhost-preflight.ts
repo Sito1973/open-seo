@@ -147,12 +147,18 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
   const key = get(env, "DATAFORSEO_API_KEY");
 
   if (!key) {
+    // Free Google APIs that stand in for DataForSEO while it is unset.
+    const replacements = get(env, "GOOGLE_PAGESPEED_API_KEY")
+      ? ["site audit Lighthouse checks (PageSpeed Insights)"]
+      : [];
+    const impact = replacements.length
+      ? `free Google APIs cover ${replacements.join(", ")}; every other SEO data feature stays unavailable until it is set.`
+      : "all SEO data features will be unavailable until it is.";
     items.push({
       key: "dataforseo",
       name: "DATAFORSEO_API_KEY",
       level: "warn",
-      message:
-        "Not set — all SEO data features will be unavailable until it is. It is the base64 of your DataForSEO login:password (NOT the dashboard API key). See docs/DATAFORSEO_API_KEY.md.",
+      message: `Not set — ${impact} It is the base64 of your DataForSEO login:password (NOT the dashboard API key). See docs/DATAFORSEO_API_KEY.md.`,
     });
     return;
   }

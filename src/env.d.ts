@@ -64,6 +64,9 @@ declare namespace Cloudflare {
 
     // DataForSEO API Basic auth value (base64 of login:password)
     DATAFORSEO_API_KEY: string;
+    // Free PageSpeed Insights key for the site audit's Lighthouse checks.
+    // Used only on self-hosted installs without DATAFORSEO_API_KEY.
+    GOOGLE_PAGESPEED_API_KEY?: string;
     AI_VISIBILITY_WORKFLOW: Workflow<
       (
         | { runId: string }

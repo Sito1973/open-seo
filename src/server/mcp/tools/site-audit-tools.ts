@@ -20,6 +20,7 @@ import { withMcpProjectAuth } from "@/server/mcp/project-auth";
 import { projectIdSchema } from "@/server/mcp/schemas";
 import { renderingEstimateText } from "@/shared/audit-rendering";
 import { RENDERED_MAX_AUDIT_PAGES } from "@/shared/audit-limits";
+import { auditLighthouseRows } from "./site-audit-lighthouse";
 
 const auditIdSchema = z
   .string()
@@ -379,12 +380,13 @@ export const getAuditPagesTool = {
   config: {
     title: "Get site audit pages",
     description:
-      "List crawled pages from a site audit with per-page SEO data (status, title, description, word count, indexability, crawl depth, link counts). Free — reads OpenSEO state. Omit auditId for the most recent audit.",
+      "List crawled pages from a site audit with per-page SEO data (status, title, description, word count, indexability, crawl depth, link counts), plus Lighthouse scores (performance, accessibility, best practices, SEO, LCP, CLS, TTFB) for the sampled pages. Free — reads OpenSEO state. Omit auditId for the most recent audit.",
     inputSchema: pagesInputSchema,
     outputSchema: z
       .object({
         pages: z.array(looseObjectOutputSchema),
         total: z.number(),
+        lighthouse: z.array(looseObjectOutputSchema),
         ...optionalMetaOutputSchema,
       })
       .passthrough(),
@@ -396,7 +398,10 @@ export const getAuditPagesTool = {
   },
   handler: withMcpProjectAuth(async (args: PagesArgs, context) => {
     const audit = await resolveAudit(args.projectId, args.auditId);
-    const allPages = await AuditRepository.getPagesForAudit(audit.id);
+    const [allPages, lighthouseRows] = await Promise.all([
+      AuditRepository.getPagesForAudit(audit.id),
+      AuditRepository.getLighthouseResultsForAudit(audit.id),
+    ]);
 
     const filtered = allPages.filter(
       (page) =>
@@ -407,6 +412,7 @@ export const getAuditPagesTool = {
     );
     const limit = args.limit ?? 100;
     const pages = filtered.slice(0, limit);
+    const { lighthouse, lines } = auditLighthouseRows(lighthouseRows, filtered);
 
     const text = [
       `Audit ${audit.id}: ${filtered.length} pages${filtered.length > limit ? ` (showing ${limit})` : ""}.`,
@@ -417,6 +423,7 @@ export const getAuditPagesTool = {
             `- ${page.statusCode} ${page.url}${page.fetchClass !== "ok" ? ` [${page.fetchClass}]` : ""}  "${page.title ?? ""}"`,
         ),
       "Full rows are in structuredContent.pages.",
+      ...lines,
     ].join("\n");
 
     return mcpResponse({
@@ -426,7 +433,7 @@ export const getAuditPagesTool = {
         args.projectId,
         auditPath(args.projectId, audit.id),
       ),
-      structuredContent: { pages, total: filtered.length },
+      structuredContent: { pages, total: filtered.length, lighthouse },
     });
   }),
 };
