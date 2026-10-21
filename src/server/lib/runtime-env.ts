@@ -45,11 +45,12 @@ export async function isHostedServerAuthMode(): Promise<boolean> {
  * DATAFORSEO_SCOPE=backlinks keeps DataForSEO to its Backlinks API on a
  * self-hosted install, under a monthly request budget (see
  * meterBacklinks in dataforseo/client.ts). Hosted ignores it and always uses
- * DataForSEO for everything.
+ * DataForSEO for everything. Any other value counts as backlinks too, so a
+ * typo can never widen spending; the startup preflight rejects it.
  */
 export async function isDataforseoBacklinksOnly(): Promise<boolean> {
   const scope = await getOptionalEnvValue("DATAFORSEO_SCOPE");
-  if (scope?.trim() !== "backlinks") return false;
+  if (!scope?.trim()) return false;
   return !(await isHostedServerAuthMode());
 }
 

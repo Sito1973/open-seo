@@ -183,7 +183,7 @@ async function fetchSerpPage(
   });
   if (usedThisMonth == null) {
     throw new AppError(
-      "RATE_LIMITED",
+      "MONTHLY_BUDGET_EXHAUSTED",
       `This server's monthly Bright Data budget (${MONTHLY_BUDGET} SERP requests in ${month}, UTC) is used up, so no request was sent. It resets on the 1st.`,
     );
   }

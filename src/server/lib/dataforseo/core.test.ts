@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/lib/runtime-env", () => ({
   getDataforseoKey: vi.fn(async () => "encoded-credentials"),
+  isDataforseoBacklinksOnly: async () => false,
 }));
 
 import { dataforseoPost } from "@/server/lib/dataforseo/core";

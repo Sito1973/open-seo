@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/lib/runtime-env", () => ({
   getDataforseoKey: vi.fn(async () => "test-api-key"),
+  isDataforseoBacklinksOnly: async () => false,
 }));
 
 import {

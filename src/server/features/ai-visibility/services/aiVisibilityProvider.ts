@@ -56,7 +56,7 @@ export function requireAiEngines(
     `${unavailable.map((engine) => AI_ENGINE_LABELS[engine]).join(" and ")} cannot collect answers on this server. ${
       provider === "serpapi"
         ? "Without DataForSEO (DATAFORSEO_API_KEY unset or DATAFORSEO_SCOPE=backlinks) it collects Google AI Mode only, through SerpApi. Remove the other engines."
-        : "Google AI Mode is collected through SerpApi, only on self-hosted servers without DATAFORSEO_API_KEY. Remove it."
+        : "Google AI Mode is collected through SerpApi, only on self-hosted servers without DataForSEO (DATAFORSEO_API_KEY unset or DATAFORSEO_SCOPE=backlinks). Remove it."
     }`,
   );
 }

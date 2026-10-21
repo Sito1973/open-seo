@@ -216,7 +216,7 @@ async function reserveBudget(
 function budgetExhausted(sku: PlacesSku, count: number): AppError {
   const { limit, label } = BUDGETS[sku];
   return new AppError(
-    "RATE_LIMITED",
+    "MONTHLY_BUDGET_EXHAUSTED",
     `This server's monthly Google Places budget for ${label} (${limit.toLocaleString("en-US")} calls in ${billingMonth()}) has fewer than ${count} calls left, so no request was sent. It resets next month.`,
   );
 }

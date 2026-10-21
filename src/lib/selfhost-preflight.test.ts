@@ -57,8 +57,8 @@ describe("runSelfhostPreflight", () => {
     },
   );
 
-  // The runtime treats any other value as unset, which would spend on DataForSEO
-  // for every feature.
+  // The runtime keeps DataForSEO to backlinks for any value; the startup check
+  // stops on a typo so the operator sees it.
   it("fails a DATAFORSEO_SCOPE typo", () => {
     const result = runSelfhostPreflight({
       AUTH_MODE: "local_noauth",

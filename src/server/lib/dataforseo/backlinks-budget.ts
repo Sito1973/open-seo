@@ -40,7 +40,7 @@ export async function reserveBacklinksRequest(estimatedUsd: number) {
   });
   if (used == null) {
     throw new AppError(
-      "RATE_LIMITED",
+      "MONTHLY_BUDGET_EXHAUSTED",
       `This server's monthly DataForSEO backlinks budget (${budget} requests in ${month}, UTC) is used up, so no request was sent. It resets on the 1st; DATAFORSEO_BACKLINKS_MONTHLY_REQUESTS sets it.`,
     );
   }

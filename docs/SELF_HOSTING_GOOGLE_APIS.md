@@ -42,9 +42,10 @@ Then:
 - The app shows no missing-key warning, because a DataForSEO key is set.
 
 `backlinks` is the only accepted value. Any other value stops the container at
-startup, so a typo cannot send every feature to DataForSEO. Leave
-`DATAFORSEO_SCOPE` unset to use DataForSEO for everything. Hosted OpenSEO
-ignores it.
+startup. A platform that runs its own start command skips that check, so
+OpenSEO also treats any other value as `backlinks`: a typo can never send every
+feature to DataForSEO. Leave `DATAFORSEO_SCOPE` unset to use DataForSEO for
+everything. Hosted OpenSEO ignores it.
 
 ### Monthly request budget
 
@@ -52,10 +53,11 @@ ignores it.
 | --------------------------------------------- | -------------------------- | ---------------------- |
 | One Backlinks API request of up to 1,000 rows | $0.024 + $0.000036 per row | 300 requests per month |
 
-OpenSEO counts each request before sending it, failed requests included, and
-refuses a request that could return more than 1,000 rows, DataForSEO's own
-maximum. When the month's requests run out, backlinks show an error and nothing
-is sent until the 1st of the next month, UTC. A month therefore costs at most
+OpenSEO counts each request before sending it, failed requests included, never
+retries a failed one on its own, and refuses a request that could return more
+than 1,000 rows, DataForSEO's own maximum. When the month's requests run out,
+backlinks say the monthly budget is used up, and nothing is sent until the 1st
+of the next month, UTC. A month therefore costs at most
 300 × ($0.024 + 1,000 × $0.000036) = $18. The app never asks for more than 200
 rows (the largest page size), so in practice the most is 300 × $0.0312 = $9.36.
 
@@ -67,7 +69,10 @@ rows (the largest page size), so in practice the most is 300 × $0.0312 = $9.36.
 | Open a tab of the dashboard's Backlinks section                    | 1 per project a day      |
 
 OpenSEO reuses a backlinks result for 6 hours, and a dashboard card for 24
-hours, so repeating a lookup within that time sends nothing.
+hours, so repeating a lookup within that time sends nothing. Opening a project
+dashboard and all three tabs of its Backlinks section every day still uses up to
+4 requests per project a day, about 120 a month. Raise the budget if you check
+more than two projects that way.
 
 To change the budget, set `DATAFORSEO_BACKLINKS_MONTHLY_REQUESTS` to a whole
 number of requests per month. The most a month can cost is that number ×

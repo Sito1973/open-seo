@@ -71,7 +71,7 @@ it("sends backlinks to DataForSEO and keeps every other feature on its stand-in"
       locationCode: 2840,
       languageCode: "en",
     }),
-  ).rejects.toThrow("DATAFORSEO_API_KEY");
+  ).rejects.toThrow("DATAFORSEO_SCOPE=backlinks");
   expect(state.fetch).toHaveBeenCalledOnce();
   expect(await getGoogleFallbackKey("GOOGLE_PAGESPEED_API_KEY")).toBe(
     "pagespeed-key",
@@ -84,9 +84,26 @@ it("refuses backlinks requests past the monthly budget without sending them", as
   await backlinksSummary();
   await backlinksSummary();
   await expect(backlinksSummary()).rejects.toMatchObject({
-    code: "RATE_LIMITED",
+    code: "MONTHLY_BUDGET_EXHAUSTED",
   });
   expect(state.fetch).toHaveBeenCalledTimes(2);
+});
+
+it("sends one request per budgeted request, without retrying a 5xx", async () => {
+  state.fetch.mockResolvedValueOnce(new Response("", { status: 503 }));
+
+  await expect(backlinksSummary()).rejects.toMatchObject({
+    code: "UPSTREAM_UNAVAILABLE",
+  });
+  expect(state.fetch).toHaveBeenCalledOnce();
+});
+
+// The startup preflight rejects a typo, but a platform that overrides the
+// start command skips it; the typo must still not widen spending.
+it("keeps DataForSEO to backlinks for any DATAFORSEO_SCOPE value", async () => {
+  vi.stubEnv("DATAFORSEO_SCOPE", "Backlink");
+
+  expect(await getDataforseoKey("other")).toBeNull();
 });
 
 it("ignores the scope on hosted, which uses DataForSEO for everything", async () => {

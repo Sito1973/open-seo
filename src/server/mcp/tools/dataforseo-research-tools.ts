@@ -816,7 +816,7 @@ async function getPlacesLocalSerp(
   if (args.searchType === "local_finder") {
     throw new AppError(
       "VALIDATION_ERROR",
-      "Google Places has no Local Finder. Use searchType maps, or set DATAFORSEO_API_KEY.",
+      "Google Places has no Local Finder. Use searchType maps, or use DataForSEO for every feature (DATAFORSEO_API_KEY without DATAFORSEO_SCOPE).",
     );
   }
   const requested = args.depth ?? 20;
@@ -875,7 +875,7 @@ async function searchPlacesBusinesses(
   if (args.isClaimed != null) {
     throw new AppError(
       "VALIDATION_ERROR",
-      "Google Places does not report whether a listing is claimed. Remove isClaimed, or set DATAFORSEO_API_KEY.",
+      "Google Places does not report whether a listing is claimed. Remove isClaimed, or use DataForSEO for every feature (DATAFORSEO_API_KEY without DATAFORSEO_SCOPE).",
     );
   }
   const textQuery = args.query ?? args.categories?.[0]?.replaceAll("_", " ");
