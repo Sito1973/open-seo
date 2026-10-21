@@ -10,11 +10,19 @@ import { fetchLiveSerp } from "@/server/lib/dataforseo/serp";
 import { DataforseoChargedTaskError } from "@/server/lib/dataforseo/envelope";
 import { normalizeBacklinksTarget } from "@/server/lib/dataforseoBacklinksTarget";
 import { AppError } from "@/server/lib/errors";
-import { buildChatAgentModel } from "@/server/lib/openrouter";
 import {
-  getOptionalEnvValue,
-  getRequiredEnvValue,
-} from "@/server/lib/runtime-env";
+  buildChatAgentModel,
+  getResearchModelKey,
+} from "@/server/lib/openrouter";
+import { getOptionalEnvValue } from "@/server/lib/runtime-env";
+import {
+  getBrightDataSerp,
+  type BrightDataSerp,
+} from "@/server/lib/brightDataSerp";
+import {
+  projectSearchTracker,
+  searchGoogleCandidates,
+} from "@/server/features/serp/services/googleCandidates";
 import { readSite } from "@/server/lib/scrape";
 import {
   MAX_SUGGESTED_KEYWORDS,
@@ -24,6 +32,7 @@ import {
 import { normalizeAiSuggestion } from "@/shared/ai-prompt-suggestions";
 import { ProjectContextRepository } from "@/server/features/project-context/repositories/ProjectContextRepository";
 import { AiVisibilityRepository } from "@/server/features/ai-visibility/repositories/AiVisibilityRepository";
+import { researchWebsiteWithoutModel } from "./websiteResearchWithoutModel";
 
 const SEARCH_RETRIES = 3;
 
@@ -31,6 +40,38 @@ const SEARCH_RETRIES = 3;
 // request or account.
 function isSearchOutage(error: unknown): error is AppError {
   return error instanceof AppError && error.code === "UPSTREAM_UNAVAILABLE";
+}
+
+/**
+ * One competitor search on Bright Data, near the city of the project's rank
+ * tracker: organic results plus the local pack. Bright Data has no search
+ * outages to retry.
+ */
+async function searchNearby(
+  config: BrightDataSerp,
+  project: { id: string; locationCode: number; languageCode: string },
+  keyword: string,
+  organizationId: string,
+) {
+  const found = await searchGoogleCandidates(config, {
+    query: keyword,
+    market: (await projectSearchTracker(project)).market,
+    organizationId,
+  });
+  return {
+    keyword,
+    items: found.organic.map(({ title, url, description }) => ({
+      title,
+      url,
+      description,
+    })),
+    localPack: found.localPack.map(({ name, url, rating, reviewsCount }) => ({
+      name,
+      url,
+      rating,
+      reviewsCount,
+    })),
+  };
 }
 
 /** Internal research for callers that have already checked admission credits. */
@@ -83,6 +124,15 @@ export async function researchWebsite(
     : null;
   if (site && site.pages.length === 0)
     throw new AppError("VALIDATION_ERROR", WEBSITE_UNREADABLE_MESSAGE);
+  const modelKey = await getResearchModelKey();
+  if (!modelKey)
+    return researchWebsiteWithoutModel({
+      project,
+      preserved,
+      pages: site?.pages ?? [],
+      missingTopics,
+      organizationId: customer.organizationId,
+    });
   const spend: ResearchSpend[] = [];
   const sources = new Set<string>();
   let searched = false;
@@ -120,7 +170,7 @@ export async function researchWebsite(
   try {
     const result = await generateText({
       model: buildChatAgentModel(
-        await getRequiredEnvValue("OPENROUTER_API_KEY"),
+        modelKey,
         await getOptionalEnvValue("OPENROUTER_MODEL"),
         "low",
       ),
@@ -175,8 +225,16 @@ export async function researchWebsite(
                     "The search budget is exhausted. Use the existing results.",
                   );
                 searched = true;
+                const brightData = await getBrightDataSerp();
                 const results = await Promise.allSettled(
                   queries.map(async (keyword) => {
+                    if (brightData)
+                      return searchNearby(
+                        brightData,
+                        project,
+                        keyword,
+                        customer.organizationId,
+                      );
                     // Searches belong to the already-admitted research task; collect
                     // actual cost instead of reserving credits and interrupting it.
                     let response;

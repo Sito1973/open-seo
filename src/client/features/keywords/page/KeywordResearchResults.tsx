@@ -294,6 +294,7 @@ function SerpPanel({ controller }: Props) {
         loading={controller.serpLoading}
         loadingMore={controller.serpLoadingMore}
         canLoadMore={controller.canLoadMoreSerp}
+        maxDepth={controller.serpMaxDepth}
         error={controller.serpError}
         onRetry={controller.retrySerp}
         retrying={controller.serpRetrying}

@@ -384,6 +384,18 @@ It runs:
   median position, and its position per keyword. Visibility and traffic
   estimates need search volumes, which a live results page does not have, so
   they are not returned, and only organic results are counted.
+- **The SERP Analysis card** in keyword research: the top 20 organic results
+  (two requests), and up to 50 when you page past them ("Load top 50").
+  Google pages by offset here, so loading more sends requests only for
+  pages 3 to 5 and adds them to the snapshot already cached for 12 hours.
+  Traffic estimates and backlink counts per result come from DataForSEO and
+  stay empty.
+- **Competitor search during project setup** (the AI visibility setup screen,
+  `research_project_website` and `complete_ai_research_setup`): one request
+  per search, top 10 plus the local pack, near the city of the project's rank
+  tracker when it has one. See
+  [Setup without an AI model](#setup-without-an-ai-model) for installs
+  without `OPENROUTER_API_KEY`.
 
 Each response says where its results came from, for example "Bright Data live
 Google SERP from www.google.com.co (exit country CO, language es)". The rank
@@ -411,7 +423,9 @@ Each request fetches one Google results page with about 10 organic results:
 - **Depth:** each further 10 results is one more request (`start=10`,
   `start=20`, …). A rank check stops at the page where the tracked domain
   appears, so a domain on page 1 costs one request whatever the tracker's
-  depth.
+  depth. Requests without a tracked domain (`get_serp_results`, the SERP
+  Analysis card) send all their pages at once, so a deeper request takes about
+  as long as one page; results after an empty page are dropped.
 
 A request takes 20 to 50 seconds. A rank check sends its keywords in batches
 of 10, both devices at once, so 20 keywords on both devices take a few minutes.
@@ -426,7 +440,8 @@ proof that Google shows none for that query.
 ### Saved first pages
 
 OpenSEO saves the first results page of every Bright Data request, from rank
-checks, `get_serp_results` and `find_serp_competitors`: the keyword, market
+checks, `get_serp_results`, `find_serp_competitors`, the SERP Analysis card
+and project setup searches: the keyword, market
 (country, language and city), device and time, the organic results and the
 local pack (position, domain, link, title, and the pack's rating and review
 count), and the page's SERP features. Later pages are not saved. The pages
@@ -514,7 +529,8 @@ ranking URL and the names of the SERP features on the page. It keeps no copy
 of the results page. `get_serp_results` keeps its rows for 12 hours, as
 it does with DataForSEO, so repeating a call within that time sends no new
 request. `find_serp_competitors` is not cached, so repeating it sends new
-requests.
+requests. The SERP Analysis card and the searches of project setup and prompt
+suggestions also keep their results for 12 hours.
 
 ## Google Ads Keyword Planner: search volume and keyword ideas
 
@@ -773,3 +789,44 @@ compare trends over several checks rather than single answers.
 What it stores for any engine: the answer text, the cited pages with where
 the answer cites them, and each brand's mention and citation. It keeps no copy
 of SerpApi's response.
+
+## Setup without an AI model
+
+OpenSEO drafts three things with a language model through OpenRouter: the
+project setup research (business overview, verified competitors, five topics
+with five prompts each, and Prompt Research keywords), and the prompts behind
+**Generate** in Prompt Tracking. On a Docker install without
+`OPENROUTER_API_KEY`, these return the raw material instead of drafts, so you,
+or your own assistant connected over [MCP](https://openseo.so/docs/mcp), write
+them. Hosted OpenSEO always drafts them.
+
+**Project setup** (the AI visibility setup screen, `research_project_website`
+and `complete_ai_research_setup`) returns:
+
+- the pages it read from your website, with the overview prefilled from your
+  homepage's text when none is saved;
+- with [Bright Data](#bright-data-live-google-serp-for-rank-tracking), live
+  Google results for the first two keywords the project tracks in Rank
+  Tracking, near the tracker's city: organic results, the local pack, People
+  Also Ask and related searches. Keywords that contain the project's name or
+  domain are skipped, because they find the business itself. Each search is
+  one Bright Data request;
+- Prompt Research keyword candidates: your tracked keywords and Google's
+  related searches.
+
+The setup screen explains this, lets you rewrite the overview, add
+competitors from Google's results with one click, and edit the keyword list.
+It then saves the keywords without topics, so no prompts are tracked until you
+add some. Setup always stops at this review, even when the overview and
+competitors are already saved. Over MCP, the result carries `withoutModel`
+with the same material and step-by-step guidance; the assistant drafts the
+overview, competitors, topics and prompts, shows them to you, and saves them
+with `save_project_website_setup`.
+
+**Generate** in Prompt Tracking (and `generate_ai_visibility_prompts`)
+returns Google's People Also Ask questions, then its related searches, for the
+topic near the project's tracked city, from one Bright Data request, minus
+prompts you already track. Without a topic, it uses the first Prompt Research
+keyword that is not a topic yet. Edit them into questions a customer would ask
+an AI assistant before saving. Without Bright Data, it returns no suggestions
+and says so.

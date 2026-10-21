@@ -6,6 +6,13 @@ import {
   WebsiteCompetitorRow,
   type WebsiteCompetitor,
 } from "./WebsiteCompetitorRow";
+import {
+  CompetitorCandidates,
+  KeywordCandidatesField,
+  NoModelNotice,
+  OverviewDraftField,
+  parseKeywordLines,
+} from "./WebsiteSetupCandidates";
 import { Alert, AlertDescription } from "@/client/components/ui/alert";
 import { Card, CardContent } from "@/client/components/ui/card";
 import {
@@ -46,6 +53,16 @@ export function WebsiteSetupReview({
     })),
   );
   const [editing, setEditing] = useState<string | null>(null);
+  // Without an AI model, research returns raw candidates: the overview and
+  // keywords are the user's to edit, and they pick competitors from Google.
+  const candidates = research.withoutModel;
+  const [overview, setOverview] = useState(research.overview);
+  const [keywordText, setKeywordText] = useState(
+    research.suggestedKeywords.join("\n"),
+  );
+  const keywords = candidates?.missing.keywords
+    ? parseKeywordLines(keywordText)
+    : research.suggestedKeywords;
   return (
     <Card className="w-full max-w-3xl py-6 md:py-8">
       <CardContent className="px-6 md:px-8">
@@ -56,9 +73,9 @@ export function WebsiteSetupReview({
             onSave({
               name: research.name,
               domain: research.domain,
-              overview: research.overview,
+              overview: overview.trim(),
               suggestedTopics: research.suggestedTopics,
-              suggestedKeywords: research.suggestedKeywords,
+              suggestedKeywords: keywords ?? [],
               competitors: competitors.map(({ name, domain, notes }) => ({
                 name,
                 domain,
@@ -86,6 +103,10 @@ export function WebsiteSetupReview({
             </p>
           </div>
           <fieldset disabled={saving} className="min-w-0 space-y-5">
+            {candidates && <NoModelNotice />}
+            {candidates?.missing.overview && (
+              <OverviewDraftField value={overview} onChange={setOverview} />
+            )}
             {research.preserveCompetitors ? (
               <p className="text-sm text-muted-foreground">
                 We’ll use the competitors already saved in your project context.
@@ -154,6 +175,25 @@ export function WebsiteSetupReview({
                 </Table>
               </div>
             )}
+            {candidates && !research.preserveCompetitors && (
+              <CompetitorCandidates
+                candidates={candidates}
+                ownDomain={research.domain}
+                added={new Set(competitors.map((row) => row.domain))}
+                onAdd={({ name, domain }) =>
+                  setCompetitors([
+                    ...competitors,
+                    { id: crypto.randomUUID(), name, domain, notes: "" },
+                  ])
+                }
+              />
+            )}
+            {candidates?.missing.keywords && (
+              <KeywordCandidatesField
+                value={keywordText}
+                onChange={setKeywordText}
+              />
+            )}
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>
@@ -172,9 +212,13 @@ export function WebsiteSetupReview({
               )}
               <Button
                 type="submit"
-                disabled={competitors.some(
-                  (row) => !row.name.trim() || !row.domain.trim(),
-                )}
+                disabled={
+                  competitors.some(
+                    (row) => !row.name.trim() || !row.domain.trim(),
+                  ) ||
+                  !overview.trim() ||
+                  keywords === null
+                }
               >
                 {saving && <LoaderCircle className="size-4 animate-spin" />}{" "}
                 Continue

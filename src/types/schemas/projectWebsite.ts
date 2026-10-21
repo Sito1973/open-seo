@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { suggestedAiTopicSchema } from "./aiPromptSuggestions";
+import { googleSearchCandidatesSchema } from "./googleCandidates";
 import { PROSE_MAX_CHARS } from "./projectContext";
 
 const domain = z.string().trim().min(1).max(255);
@@ -19,6 +20,29 @@ const websiteCompetitorSchema = z.object({
   notes: z.string().trim().min(1).max(500),
   sourceUrl: z.string().url(),
 });
+// A self-hosted server without an AI model cannot write the overview,
+// verify competitors or draft topics. Its research returns the raw material
+// instead, for the user or their own AI agent (over MCP) to finish.
+const websiteCandidatesSchema = z.object({
+  /** The fields that were not saved yet, so someone has to fill them. */
+  missing: z.object({
+    overview: z.boolean(),
+    competitors: z.boolean(),
+    keywords: z.boolean(),
+  }),
+  /** Next steps for an AI agent finishing setup over MCP. */
+  guidance: z.string(),
+  /** The website pages read, when the overview is missing. */
+  sitePages: z.array(
+    z.object({
+      url: z.string(),
+      title: z.string().nullable(),
+      text: z.string(),
+    }),
+  ),
+  /** Live Google results for the project's tracked keywords. */
+  searches: z.array(googleSearchCandidatesSchema),
+});
 export const websiteResearchSchema = z.object({
   name: z.string().trim().min(1).max(120),
   domain,
@@ -29,6 +53,10 @@ export const websiteResearchSchema = z.object({
   // keywords become Prompt Research keywords.
   suggestedTopics: z.array(suggestedAiTopicSchema).max(5),
   suggestedKeywords: z.array(researchKeywordSchema).max(MAX_SUGGESTED_KEYWORDS),
+  // Set only when no model ran: overview is then a raw excerpt of the
+  // homepage when it was missing, competitors is empty, suggestedTopics is
+  // empty and suggestedKeywords are Google's own candidates.
+  withoutModel: websiteCandidatesSchema.optional(),
 });
 export const researchProjectWebsiteSchema = z.object({
   projectId: z.string().uuid(),
@@ -39,6 +67,7 @@ export const saveProjectWebsiteSetupSchema = websiteResearchSchema
     suggestedTopics: true,
     suggestedKeywords: true,
     preserveCompetitors: true,
+    withoutModel: true,
   })
   .extend({
     projectId: z.string().uuid(),

@@ -149,10 +149,12 @@ export const generateAiVisibilityPromptsTool = defineAiTool({
   output: aiPromptSuggestionsSchema,
   readOnly: false,
   description:
-    "Generate editable topic and prompt suggestions from shared Project context. Uses existing usage credits for one model call. Supply topic to add unique prompts to a saved topic or to name a new one, or omit it for a new topic the model names. Excludes all saved prompts and excludePrompts drafts, including case/whitespace variants. Does not save or collect answers. Review suggestions before saving through save_ai_visibility_tracker with the returned topic.",
+    "Generate editable topic and prompt suggestions from shared Project context. Uses existing usage credits for one model call. Supply topic to add unique prompts to a saved topic or to name a new one, or omit it for a new topic the model names. Excludes all saved prompts and excludePrompts drafts, including case/whitespace variants. Does not save or collect answers. Review suggestions before saving through save_ai_visibility_tracker with the returned topic. On a self-hosted server without an AI model, prompts are instead Google's People Also Ask questions and related searches for the topic (or the first Prompt Research keyword that is not a topic yet), from one Bright Data request cached 12 hours, and withoutModel.guidance says how to turn them into prompts yourself.",
   execute: (s, a, b) => s.generatePrompts(a, b),
   summarize: (d) =>
-    `Generated ${d.prompts.length} prompt suggestions for ${d.topic}. Review and edit before saving.`,
+    d.withoutModel
+      ? `${d.prompts.length} Google candidates for "${d.topic}". ${d.withoutModel.guidance}`
+      : `Generated ${d.prompts.length} prompt suggestions for ${d.topic}. Review and edit before saving.`,
 });
 
 export const completeAiResearchSetupTool = defineAiTool({
@@ -167,7 +169,7 @@ export const completeAiResearchSetupTool = defineAiTool({
   readOnly: false,
   path: "research",
   description:
-    "Give a project with a saved website its Prompt Research keywords. Get the user's approval first: unless keywords exist, this starts paid research with usage credits. Starting is idempotent: a running or reviewable setup is returned, not restarted. With a business overview and competitors in shared context, one model call writes the keywords and, when the project has no tracking yet, seeds three tracker topics with five prompts each, scheduled weekly with the first check about a week later. Missing overview and competitors are researched independently; saved values are reused. Status becomes review when basics or competitors were researched: review new competitors, or preserve the saved list when preserveCompetitors=true, then save with save_project_website_setup. While status is running, call again after about 20 seconds. Never starts answer collection.",
+    "Give a project with a saved website its Prompt Research keywords. Get the user's approval first: unless keywords exist, this starts paid research with usage credits. Starting is idempotent: a running or reviewable setup is returned, not restarted. With a business overview and competitors in shared context, one model call writes the keywords and, when the project has no tracking yet, seeds three tracker topics with five prompts each, scheduled weekly with the first check about a week later. Missing overview and competitors are researched independently; saved values are reused. Status becomes review when basics or competitors were researched: review new competitors, or preserve the saved list when preserveCompetitors=true, then save with save_project_website_setup. While status is running, call again after about 20 seconds. Never starts answer collection. On a self-hosted server without an AI model, setup always stops at review with raw candidates in review.withoutModel and its guidance: write the overview, competitors, topics and keywords yourself, then save with save_project_website_setup.",
   execute: (s, a, b) => s.startResearchSetup(a, b),
   summarize: (d) =>
     d.status === "ready"

@@ -2,6 +2,11 @@ import {
   createOpenRouter,
   type LanguageModelV3,
 } from "@openrouter/ai-sdk-provider";
+import {
+  getOptionalEnvValue,
+  getRequiredEnvValue,
+  isHostedServerAuthMode,
+} from "@/server/lib/runtime-env";
 
 // OpenRouter model slug used for the SAM in-app chat agent. Override with
 // OPENROUTER_MODEL to swap models without a code change.
@@ -58,4 +63,19 @@ export function buildChatAgentModel(
     usage: { include: true },
     extraBody: { reasoning: { effort: reasoningEffort } },
   });
+}
+
+/**
+ * OPENROUTER_API_KEY for the drafts the app writes with a model (website
+ * research, prompt suggestions), or null on a self-hosted install without
+ * one. Those features then return their raw candidates and guidance, so the
+ * user, or their own AI agent over MCP, writes the drafts and saves them with
+ * the existing tools. Hosted always runs the model, so a missing key there
+ * still fails.
+ */
+export async function getResearchModelKey(): Promise<string | null> {
+  if (await isHostedServerAuthMode()) {
+    return getRequiredEnvValue("OPENROUTER_API_KEY");
+  }
+  return (await getOptionalEnvValue("OPENROUTER_API_KEY")) ?? null;
 }

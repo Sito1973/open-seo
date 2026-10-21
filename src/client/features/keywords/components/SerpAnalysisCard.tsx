@@ -61,6 +61,7 @@ export function SerpAnalysisCard({
   loading,
   loadingMore,
   canLoadMore,
+  maxDepth,
   error,
   onRetry,
   retrying,
@@ -76,6 +77,8 @@ export function SerpAnalysisCard({
   loadingMore: boolean;
   /** Paging past the loaded results can buy a deeper snapshot. */
   canLoadMore: boolean;
+  /** How deep that snapshot goes on this server. */
+  maxDepth: number;
   error?: string | null;
   onRetry?: () => void;
   retrying: boolean;
@@ -175,7 +178,7 @@ export function SerpAnalysisCard({
             isLoading={loadingMore}
             // Past the loaded results, "Next" buys a deeper crawl. The button
             // says so rather than spending silently.
-            loadMoreLabel={canLoadMore ? "Load top 100" : undefined}
+            loadMoreLabel={canLoadMore ? `Load top ${maxDepth}` : undefined}
             onPageChange={(nextPage) => onPageChange(nextPage - 1)}
           />
         ) : null

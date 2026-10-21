@@ -29,6 +29,10 @@ export const generateAiPromptsSchema = z.object({
 });
 export const aiPromptSuggestionsSchema = z.looseObject({
   topic: z.string(),
-  prompts: z.array(z.string()).min(1).max(5),
+  // Empty only without a model, when Google offered nothing new.
+  prompts: z.array(z.string()).max(5),
+  // Set only on a self-hosted server without an AI model: prompts are then
+  // Google's questions and related searches for the topic, not drafts.
+  withoutModel: z.looseObject({ guidance: z.string() }).optional(),
 });
 export type GenerateAiPromptsInput = z.infer<typeof generateAiPromptsSchema>;

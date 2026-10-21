@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- one module per SERP provider (dataforseo/serp.ts precedent): page requests, paging, rank checks and the saved first pages they share */
+import { range } from "remeda";
 import { z } from "zod";
 import { GooglePlacesUsageRepository } from "@/server/features/google-places/repositories/GooglePlacesUsageRepository";
 import {
@@ -342,23 +343,56 @@ async function fetchSerpPage(
   return { page: page.data, usedThisMonth };
 }
 
+/** Pages already fetched: paging resumes after them. */
+type ResumeAfter = { pages: number; organicCount: number };
+
 /**
  * Organic results to `depth`, one request per page of about 10. With
- * `targetDomain`, paging stops at the page where that domain ranks. Positions
- * count organic results only, in Google's order across pages. The first page
- * is saved to the SERP observation store as soon as it arrives. With
- * `storedFirstPage`, paging resumes on page 2 and numbers positions after its
- * organic results.
+ * `targetDomain`, pages go one at a time and paging stops at the page where
+ * that domain ranks; without it, nothing but an empty page ends paging early,
+ * so the pages go out at once. Positions count organic results only, in
+ * Google's order across pages, and results after an empty page are dropped.
+ * The first page is saved to the SERP observation store as soon as it
+ * arrives. With `resume`, paging starts after those pages and numbers
+ * positions after their organic results.
  */
 async function fetchOrganicPages(
   config: BrightDataSerp,
   input: SerpRequest,
-  storedFirstPage?: { organicCount: number },
+  resume: ResumeAfter = { pages: 0, organicCount: 0 },
 ) {
   const pages = Math.min(
     MAX_PAGES,
     Math.max(1, Math.ceil(input.depth / RESULTS_PER_PAGE)),
   );
+  const fetchPage = async (index: number) => {
+    const result = await fetchSerpPage(config, {
+      ...input,
+      start: index * RESULTS_PER_PAGE,
+    });
+    if (index === 0) await recordFirstPage(input, result.page);
+    return result;
+  };
+  const indexes = range(resume.pages, pages);
+  const { targetDomain } = input;
+  let fetched: Array<{ page: SerpPage; usedThisMonth: number }> = [];
+  if (targetDomain) {
+    for (const index of indexes) {
+      const result = await fetchPage(index);
+      fetched.push(result);
+      if (
+        result.page.organic.length === 0 ||
+        result.page.organic.some((item) =>
+          linkMatchesDomain(item.link, targetDomain),
+        )
+      ) {
+        break;
+      }
+    }
+  } else {
+    fetched = await Promise.all(indexes.map(fetchPage));
+  }
+
   const organic: Array<{
     position: number;
     title: string | null;
@@ -367,23 +401,12 @@ async function fetchOrganicPages(
     description: string | null;
   }> = [];
   const features = new Set<string>();
-  let firstPage: SerpPage = { organic: [], snack_pack: [] };
-  let usedThisMonth = 0;
-
-  for (let index = storedFirstPage ? 1 : 0; index < pages; index++) {
-    const result = await fetchSerpPage(config, {
-      ...input,
-      start: index * RESULTS_PER_PAGE,
-    });
-    usedThisMonth = result.usedThisMonth;
-    for (const feature of serpFeatures(result.page)) features.add(feature);
-    if (index === 0) {
-      firstPage = result.page;
-      await recordFirstPage(input, result.page);
-    }
-    const before = (storedFirstPage?.organicCount ?? 0) + organic.length;
+  for (const { page } of fetched) {
+    for (const feature of serpFeatures(page)) features.add(feature);
+    if (page.organic.length === 0) break;
+    const before = resume.organicCount + organic.length;
     organic.push(
-      ...result.page.organic.map((item, offset) => ({
+      ...page.organic.map((item, offset) => ({
         position: before + offset + 1,
         title: item.title ?? null,
         url: item.link ?? null,
@@ -391,19 +414,18 @@ async function fetchOrganicPages(
         description: item.description ?? null,
       })),
     );
-    const { targetDomain } = input;
-    if (
-      result.page.organic.length === 0 ||
-      (targetDomain &&
-        result.page.organic.some((item) =>
-          linkMatchesDomain(item.link, targetDomain),
-        ))
-    ) {
-      break;
-    }
   }
 
-  return { organic, features: [...features], firstPage, usedThisMonth };
+  const firstPage = resume.pages === 0 ? fetched[0]?.page : undefined;
+  return {
+    organic,
+    features: [...features],
+    firstPage: firstPage ?? { organic: [], snack_pack: [] },
+    usedThisMonth: Math.max(
+      0,
+      ...fetched.map((result) => result.usedThisMonth),
+    ),
+  };
 }
 
 /**
@@ -412,14 +434,17 @@ async function fetchOrganicPages(
  * page-1 ranking costs one request. Positions count organic results only, in
  * Google's order across pages. The local pack and the other sections (People
  * Also Ask, ads, AI Overview...) come from the first page, which is also saved
- * to the organization's SERP observation store.
+ * to the organization's SERP observation store. With `resume`, only the pages
+ * after those already fetched are requested, so the local pack and the other
+ * sections are empty.
  */
 export async function fetchBrightDataSerp(
   config: BrightDataSerp,
   input: SerpRequest,
+  resume?: ResumeAfter,
 ) {
   const { organic, features, firstPage, usedThisMonth } =
-    await fetchOrganicPages(config, input);
+    await fetchOrganicPages(config, input, resume);
   return {
     organic,
     localPack: firstPage.snack_pack.map((item, index) => ({
@@ -484,6 +509,7 @@ export async function checkRankOnBrightData(
       stored.organic.length > 0 &&
       input.depth > RESULTS_PER_PAGE
         ? await fetchOrganicPages(config, request, {
+            pages: 1,
             organicCount: stored.organic.length,
           })
         : null;

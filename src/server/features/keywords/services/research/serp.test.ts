@@ -1,10 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
 
 const mocks = vi.hoisted(() => ({
   assertLocalResearchLocation: vi.fn(async () => {}),
   buildCacheKey: vi.fn(async () => "serp:analysis:key"),
   createDataforseoClient: vi.fn(),
+  getBrightDataSerp: vi.fn(),
+  fetchBrightDataSerp: vi.fn(),
   getCached: vi.fn(),
   setCached: vi.fn(async () => {}),
 }));
@@ -24,6 +26,11 @@ vi.mock("./local-volume", () => ({
 vi.mock("@/server/lib/dataforseo", () => ({
   SERP_ANALYSIS_DEPTH: 20,
   createDataforseoClient: mocks.createDataforseoClient,
+}));
+
+vi.mock("@/server/lib/brightDataSerp", () => ({
+  getBrightDataSerp: mocks.getBrightDataSerp,
+  fetchBrightDataSerp: mocks.fetchBrightDataSerp,
 }));
 
 import { getSerpAnalysis } from "./serp";
@@ -62,6 +69,10 @@ function cachedSnapshot(depth: number) {
     ],
   };
 }
+
+beforeEach(() => {
+  mocks.getBrightDataSerp.mockResolvedValue(null);
+});
 
 function mockLiveSerp() {
   const live = vi.fn().mockResolvedValue([
@@ -150,5 +161,46 @@ describe("getSerpAnalysis cache depth", () => {
       "serp:analysis",
       expect.objectContaining({ locationName }),
     );
+  });
+});
+
+describe("getSerpAnalysis on Bright Data", () => {
+  it("stops at depth 50 and fetches only the pages after the cached ones", async () => {
+    const config = { apiKey: "bd-key", zone: "serp" };
+    mocks.getBrightDataSerp.mockResolvedValue(config);
+    mocks.getCached.mockResolvedValue(cachedSnapshot(20));
+    mocks.fetchBrightDataSerp.mockResolvedValue({
+      organic: [
+        {
+          position: 2,
+          title: "Deeper",
+          url: "https://deeper.example/",
+          domain: "deeper.example",
+          description: null,
+        },
+      ],
+    });
+
+    const result = await getSerpAnalysis(
+      { ...input, depth: 100 },
+      billingCustomer,
+    );
+
+    // Google pages by offset on Bright Data: the cached snapshot's two pages
+    // are not bought again.
+    expect(mocks.fetchBrightDataSerp).toHaveBeenCalledWith(
+      config,
+      expect.objectContaining({ depth: 50 }),
+      { pages: 2, organicCount: 1 },
+    );
+    expect(mocks.createDataforseoClient).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      depth: 50,
+      maxDepth: 50,
+      items: [
+        { rank: 1, title: "Cached" },
+        { rank: 2, domain: "deeper.example", description: "", etv: null },
+      ],
+    });
   });
 });

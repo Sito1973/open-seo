@@ -54,7 +54,11 @@ export function TrackerPromptFields({
       );
       onChange({
         ...value,
-        topic: { name: suggestions.topic, prompts: [...entered, ...accepted] },
+        topic: {
+          // Without a model and a topic, nothing is suggested or named.
+          name: suggestions.topic || group.name,
+          prompts: [...entered, ...accepted],
+        },
       });
     },
   });
@@ -153,6 +157,13 @@ export function TrackerPromptFields({
           <Plus /> Add prompt
         </Button>
       </Field>
+      {generate.data?.withoutModel && (
+        <p className="text-xs text-muted-foreground">
+          {generate.data.prompts.length
+            ? "This server has no AI model, so these are Google’s “People also ask” questions and related searches for this topic. Edit them into questions a customer would ask an AI assistant before saving."
+            : "This server has no AI model, and Google showed no new questions for this topic. Type a topic and try again, or write the prompts yourself."}
+        </p>
+      )}
       {generate.isError && <AiQueryError error={generate.error} />}
     </section>
   );

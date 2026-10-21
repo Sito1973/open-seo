@@ -26,7 +26,7 @@ Tracking collects ChatGPT and Gemini answers from their consumer sites. Claude a
 
 On hosted OpenSEO, Prompt Research and Prompt Explorer require the paid plan; prompt tracking only needs credits. Setup research uses available credits and is billed after completion.
 
-Self-hosted users pay providers directly: set `DATAFORSEO_API_KEY` for research and answer collection, and `OPENROUTER_API_KEY` for setup research and generated prompt suggestions. Without DataForSEO, `SERPAPI_API_KEY` collects Google AI Mode answers on SerpApi's free plan: each answer costs $0 but uses one of a monthly budget of 240 searches shared by every tracker on the install, a check can use at most 50 (SerpApi's hourly limit), and the estimate shows how many a check and the schedules use. See the [self-hosting guides](/docs/self-hosting).
+Self-hosted users pay providers directly: set `DATAFORSEO_API_KEY` for research and answer collection, and `OPENROUTER_API_KEY` for setup research and generated prompt suggestions. Without `OPENROUTER_API_KEY`, setup shows the raw material instead of drafts (your website's text, and with Bright Data, Google results and related searches for the keywords you track), and **Generate** fills in Google's "People also ask" questions for the topic; you edit them, or ask your assistant over [MCP](/docs/mcp) to draft and save them. Without DataForSEO, `SERPAPI_API_KEY` collects Google AI Mode answers on SerpApi's free plan: each answer costs $0 but uses one of a monthly budget of 240 searches shared by every tracker on the install, a check can use at most 50 (SerpApi's hourly limit), and the estimate shows how many a check and the schedules use. See the [self-hosting guides](/docs/self-hosting).
 
 ## Use your assistant
 

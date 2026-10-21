@@ -7,9 +7,11 @@ const SERP_PAGE_SIZE = 10;
 /** Depth every SERP panel opens at — two pages of results, ~5 credits. */
 const SERP_INITIAL_DEPTH = 20;
 /**
- * Depth we buy when a user pages past what's loaded. Google has no offset, so
- * this re-crawls the top of the SERP: the deeper snapshot replaces the shallow
- * one instead of extending it, and costs ~20 more credits.
+ * Depth we buy when a user pages past what's loaded. On DataForSEO Google has
+ * no offset, so this re-crawls the top of the SERP: the deeper snapshot
+ * replaces the shallow one instead of extending it, and costs ~20 more
+ * credits. A server on Bright Data stops at its own maxDepth (50) and fetches
+ * only the pages after the cached ones.
  */
 const SERP_DEEP_DEPTH = 100;
 
@@ -75,9 +77,11 @@ export function useKeywordSerpAnalysis(
     ? getStandardErrorMessage(serpQuery.error, "Failed to load SERP data.")
     : null;
 
-  // A deeper fetch is available until the loaded snapshot is the deep one.
+  // A deeper fetch is available until the loaded snapshot is as deep as this
+  // server goes: 100 on DataForSEO, 50 on Bright Data.
+  const serpMaxDepth = serpQuery.data?.maxDepth ?? SERP_DEEP_DEPTH;
   const canLoadMoreSerp =
-    (serpQuery.data?.depth ?? SERP_DEEP_DEPTH) < SERP_DEEP_DEPTH;
+    (serpQuery.data?.depth ?? serpMaxDepth) < serpMaxDepth;
   const serpLoadingMore = serpQuery.isPlaceholderData;
 
   // A failed deep fetch leaves nothing on screen, and retrying it re-buys the
@@ -139,6 +143,7 @@ export function useKeywordSerpAnalysis(
     serpLoading,
     serpLoadingMore,
     canLoadMoreSerp,
+    serpMaxDepth,
     deepFetchFailed,
     serpError,
     // `isLoading` stays false while a failed query refetches.
