@@ -491,6 +491,7 @@ export const RankTrackingService = {
   triggerAutoCheck,
   getLatestRun,
   estimateCost: RankTrackingKeywordService.estimateCost,
+  getRankCheckBudget: RankTrackingKeywordService.getRankCheckBudget,
   refreshKeywordMetrics,
   getConfigs,
   getTracker,

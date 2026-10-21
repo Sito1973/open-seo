@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { chunk, unique } from "remeda";
 import { toast } from "sonner";
-import { getStandardErrorMessage } from "@/client/lib/error-messages";
+import {
+  getErrorCode,
+  getStandardErrorMessage,
+} from "@/client/lib/error-messages";
 import { getAhrefsDomainRatings } from "@/serverFunctions/ahrefs";
 
 /** Map of domain (as held in table rows) → Ahrefs DR, or null when unknown. */
 export type DomainRatings = Record<string, number | null>;
 
-// The server function caps each call at 100 domains (Workers subrequest limit),
-// so the client chunks larger sets and calls sequentially.
+// The server function caps each call at 100 domains (one KV read and write
+// each), so the client chunks larger sets and calls sequentially.
 const DOMAINS_PER_REQUEST = 100;
 
 export function useAhrefsDomainRatings(projectId: string) {
@@ -47,7 +50,9 @@ export function useAhrefsDomainRatings(projectId: string) {
       } catch (error) {
         // Opt-in convenience feature — surface partial results, don't crash.
         toast.error(
-          getStandardErrorMessage(error, "Could not load Ahrefs DR."),
+          getErrorCode(error) === "PROVIDER_NOT_CONFIGURED"
+            ? "Ahrefs Domain Rating is not set up on this server: it needs a free Ahrefs account's API key (AHREFS_API_KEY)."
+            : getStandardErrorMessage(error, "Could not load Ahrefs DR."),
         );
       } finally {
         if (Object.keys(fetched).length > 0) {

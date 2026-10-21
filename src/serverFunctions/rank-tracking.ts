@@ -185,6 +185,13 @@ export const estimateRankCheckCost = createServerFn({ method: "POST" })
     return RankTrackingService.estimateCost(data.configId, context.projectId);
   });
 
+// Lets the tracker form price checks in Bright Data requests before a
+// tracker exists. Null where checks run on DataForSEO.
+export const getRankCheckBudget = createServerFn({ method: "POST" })
+  .middleware(requireProjectContext)
+  .validator(getConfigsSchema)
+  .handler(() => RankTrackingService.getRankCheckBudget());
+
 function logAutoActionFailure(action: string, err: unknown) {
   const appErr = asAppError(err);
   if (appErr?.code === "PAYMENT_REQUIRED") {

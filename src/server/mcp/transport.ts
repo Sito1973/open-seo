@@ -20,7 +20,7 @@ import {
 } from "@/server/mcp/context";
 import { getPublicOrigin } from "@/server/mcp/public-origin";
 import { createOpenSeoMcpServer } from "@/server/mcp/server";
-import { usesGoogleFallbacks } from "@/server/lib/runtime-env";
+import { getMcpStandIns } from "@/server/mcp/stand-ins";
 import { AuthRepository } from "@/server/auth/repositories/AuthRepository";
 import { resolveExistingActiveHostedOrganization } from "@/server/auth/default-hosted-organization";
 
@@ -272,6 +272,8 @@ export async function handleSelfHostedOpenSeoMcpRequest(
 
   return createRequestHandler(props, {
     selfHosted: true,
-    googleFallbacks: await usesGoogleFallbacks(),
+    // Read once per request: the tool list and descriptions follow the
+    // providers this server has set up.
+    standIns: (await getMcpStandIns()) ?? undefined,
   })(request, env, ctx);
 }

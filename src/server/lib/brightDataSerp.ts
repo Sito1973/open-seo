@@ -9,6 +9,7 @@ import {
 import { googleSerpUrl } from "@/shared/google-serp-url";
 import { jsonCodec } from "@/shared/json";
 import { getIsoCountryCode } from "@/shared/keyword-locations";
+import type { BrightDataBudget } from "@/shared/rank-tracking";
 
 // Bright Data's SERP API: the live Google SERP behind rank tracking,
 // get_serp_results and find_serp_competitors on self-hosted installs without
@@ -116,6 +117,15 @@ export function brightDataSourceNote(market: SerpMarket): string {
   const { country, host } = googleTarget(market);
   const near = market.locationName ? `, near ${market.locationName}` : "";
   return `Source: Bright Data live Google SERP from ${host} (exit country ${country.toUpperCase()}, language ${market.languageCode}${near}), about 10 organic results per request.`;
+}
+
+/** This month's Bright Data requests (UTC) against this server's cap. */
+export async function getBrightDataBudget(): Promise<BrightDataBudget> {
+  const usedThisMonth = await GooglePlacesUsageRepository.usedCalls({
+    month: new Date().toISOString().slice(0, 7),
+    sku: "brightdata_serp",
+  });
+  return { usedThisMonth, monthlyBudget: MONTHLY_BUDGET };
 }
 
 export function brightDataBudgetLine(usedThisMonth: number): string {

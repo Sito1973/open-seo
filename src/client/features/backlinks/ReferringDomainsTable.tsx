@@ -141,7 +141,7 @@ function buildReferringDomainColumns(domainRatings: DomainRatings | null) {
     header: () => (
       <HelpLabel
         label="Ahrefs DR"
-        helpText="Ahrefs Domain Rating (0-100) for this referring domain."
+        helpText="Domain Rating by Ahrefs (0-100) for this referring domain."
       />
     ),
     cell: ({ row }) => {

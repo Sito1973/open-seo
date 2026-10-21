@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runSelfhostPreflight } from "./selfhost-preflight";
+import { runSelfhostPreflight, seoDataProviders } from "./selfhost-preflight";
 
 function itemFor(
   result: ReturnType<typeof runSelfhostPreflight>,
@@ -80,5 +80,41 @@ describe("runSelfhostPreflight", () => {
 
     expect(itemFor(result, "Search Console")?.level).toBe("warn");
     expect(itemFor(result, "Search Console")?.message).toContain("32");
+  });
+});
+
+// The app shell asks for setup only when this finds nothing at all, so a
+// stand-in must count only where it actually runs.
+describe("seoDataProviders", () => {
+  const key = btoa("user@example.com:secret");
+  const places = { GOOGLE_PLACES_API_KEY: "places-key" };
+
+  it.each([
+    [
+      "DataForSEO for everything hides the stand-ins",
+      { DATAFORSEO_API_KEY: key, ...places },
+      { dataforseo: "all", standIns: [] },
+    ],
+    [
+      "hosted ignores the scope and never runs stand-ins",
+      {
+        AUTH_MODE: "hosted",
+        DATAFORSEO_API_KEY: key,
+        DATAFORSEO_SCOPE: "backlinks",
+        ...places,
+      },
+      { dataforseo: "all", standIns: [] },
+    ],
+    [
+      "the backlinks scope keeps the stand-ins",
+      { DATAFORSEO_API_KEY: key, DATAFORSEO_SCOPE: "backlinks", ...places },
+      {
+        dataforseo: "backlinks",
+        standIns: [expect.stringContaining("Places")],
+      },
+    ],
+    ["nothing set up", {}, { dataforseo: null, standIns: [] }],
+  ])("%s", (_name, env, expected) => {
+    expect(seoDataProviders(env)).toEqual(expected);
   });
 });

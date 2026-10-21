@@ -17,7 +17,14 @@ type PreflightLevel = "ok" | "info" | "warn" | "fail";
 
 type PreflightItem = {
   // Stable identifier shared with /api/health's check map.
-  key: "auth" | "dataforseo" | "gsc" | "ai" | "rendering" | "runtime";
+  key:
+    | "auth"
+    | "dataforseo"
+    | "gsc"
+    | "ai"
+    | "rendering"
+    | "ahrefs"
+    | "runtime";
   name: string;
   level: PreflightLevel;
   message: string;
@@ -178,6 +185,28 @@ function standInProviders(env: EnvRecord): string[] {
   return replacements;
 }
 
+/**
+ * What serves SEO data on this install, shared by the startup preflight,
+ * /api/health and the app shell's setup prompt: DataForSEO for every feature,
+ * DataForSEO for backlinks only (DATAFORSEO_SCOPE), or no DataForSEO, plus the
+ * stand-ins that apply whenever DataForSEO does not serve the other features.
+ * Hosted always uses DataForSEO for everything and never runs stand-ins.
+ */
+export function seoDataProviders(env: EnvRecord): {
+  dataforseo: "all" | "backlinks" | null;
+  standIns: string[];
+} {
+  const hosted = get(env, "AUTH_MODE") === "hosted";
+  const key = get(env, "DATAFORSEO_API_KEY");
+  if (key && (hosted || !get(env, "DATAFORSEO_SCOPE"))) {
+    return { dataforseo: "all", standIns: [] };
+  }
+  return {
+    dataforseo: key ? "backlinks" : null,
+    standIns: hosted ? [] : standInProviders(env),
+  };
+}
+
 function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
   const key = get(env, "DATAFORSEO_API_KEY");
   // Hosted always uses DataForSEO for everything and ignores the scope.
@@ -209,7 +238,7 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
     return;
   }
 
-  const replacements = standInProviders(env);
+  const replacements = seoDataProviders(env).standIns;
 
   if (!key) {
     const impact = replacements.length
@@ -316,6 +345,23 @@ function checkOptionalFeatures(env: EnvRecord, items: PreflightItem[]): void {
   );
 
   items.push(
+    get(env, "AHREFS_API_KEY")
+      ? {
+          key: "ahrefs",
+          name: "Ahrefs Domain Rating",
+          level: "ok",
+          message: "AHREFS_API_KEY set",
+        }
+      : {
+          key: "ahrefs",
+          name: "Ahrefs Domain Rating",
+          level: "info",
+          message:
+            "AHREFS_API_KEY not set (optional) — the Backlinks tables' Ahrefs DR column stays empty. A free Ahrefs account's APIv3 key enables it. See docs/SELF_HOSTING_GOOGLE_APIS.md.",
+        },
+  );
+
+  items.push(
     get(env, "CONTEXT_API_KEY")
       ? {
           key: "rendering",
@@ -369,7 +415,7 @@ export function runSelfhostPreflight(env: EnvRecord): PreflightResult {
     name: "Scheduled checks",
     level: "info",
     message:
-      "Rank-tracking schedules do not run in Docker mode — trigger checks from the Rank Tracking page.",
+      "The container's built-in scheduler runs scheduled rank checks, AI visibility checks and other due work every five minutes while it runs. Failures appear as [scheduler] lines in the logs.",
   });
 
   return { items, failed: items.some((item) => item.level === "fail") };

@@ -19,6 +19,22 @@ These keys work on Docker self-hosting, including platforms that run the Docker
 image for you. The Cloudflare deploy requires a DataForSEO key, so it always
 uses DataForSEO.
 
+## Features without a source
+
+On an install without DataForSEO for a feature, that feature runs on the key
+from this guide that covers it, or has no source on this server:
+
+- The app's setup banner and setup dialog appear only when nothing serves SEO
+  data at all: no DataForSEO key and none of the keys in this guide. With any
+  of them set, the app opens without them.
+- A page or MCP tool with no source says "This server has no data source for
+  this feature" (error code `PROVIDER_NOT_CONFIGURED`) instead of an unexpected
+  error. It is not reported as a bug.
+- MCP tool descriptions say which provider a call uses instead of credits,
+  such as "each keyword sends one Bright Data request per 10 results of
+  depth", or that the tool has no source on this server, so an assistant can
+  skip it. The tool list follows the keys set when the request arrives.
+
 ## DataForSEO for backlinks only
 
 No Google API reports the links that point at a site, so backlinks need
@@ -484,6 +500,17 @@ For scale: four sites with 25 keywords each, checked weekly on both devices at
 depth 10, send about 870 requests a month when every domain ranks on page 1.
 A domain outside the top 10 costs one more request per 10 results of depth.
 
+The Rank Tracking page prices checks in requests instead of dollars. Next to a
+tracker it shows how many requests one check sends, from the minimum when
+every domain ranks on page 1 to the maximum at the tracker's depth, and how
+many of the month's 4,500 are left, for example "100–300 Bright Data
+requests/check · 3,912 of 4,500 left this month". It warns when the tracker's
+schedule can need more requests a month than the budget, or one check needs
+more than is left this month. The tracker form shows the same for 50 keywords
+before you save, and `estimate_rank_tracker_cost` returns the same numbers
+and warning to an assistant. The budget is shared: other trackers and
+`get_serp_results` take from the same 4,500.
+
 There is no setting to raise the budget. The counter shares the table and the
 caveats of the [Google Places budget](#built-in-monthly-budget): it covers one
 OpenSEO database, so do not put the same Bright Data account on a second
@@ -790,3 +817,25 @@ compare trends over several checks rather than single answers.
 What it stores for any engine: the answer text, the cited pages with where
 the answer cites them, and each brand's mention and citation. It keeps no copy
 of SerpApi's response.
+
+## Ahrefs: Domain Rating in the Backlinks tables
+
+The Backlinks tables can show each linking domain's
+[Ahrefs Domain Rating](https://docs.ahrefs.com/api/reference/public/post-domain-rating-free)
+(0–100) from **Ahrefs DR** in the table menu. Ahrefs' free endpoint needs the
+APIv3 key of a free Ahrefs account; without one the column stays empty and the
+app says the key is missing. It works with or without DataForSEO.
+
+1. Create a free Ahrefs account and an APIv3 key in its account settings.
+2. Set the environment variable and recreate the container:
+
+   ```bash
+   AHREFS_API_KEY=your-ahrefs-api-key
+   ```
+
+OpenSEO sends one request per table page of up to 100 domains, with the key
+in the `Authorization` header, and keeps each rating for 24 hours. Requests to
+this endpoint are free. Ahrefs' license requires the credit "Domain Rating by
+Ahrefs" wherever the ratings show, so the tables show it under the rows, and
+Ahrefs can withdraw the license. `/api/health` reports whether the key is set
+under `ahrefs`.

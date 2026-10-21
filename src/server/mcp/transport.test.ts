@@ -43,6 +43,17 @@ vi.mock("@/middleware/ensure-user/delegated", () => ({
   resolveLocalNoAuthContext: selfHostedAuthMocks.resolveLocalNoAuthContext,
 }));
 
+// What the transport reads from the environment and hands to the server.
+const standIns = vi.hoisted(() => ({
+  brightData: true,
+  places: false,
+  keywordPlanner: false,
+  dataforseoBacklinks: false,
+}));
+vi.mock("@/server/mcp/stand-ins", () => ({
+  getMcpStandIns: async () => standIns,
+}));
+
 vi.mock("@/lib/auth", () => ({
   getHostedBaseUrl: () => "https://open-seo.test",
 }));
@@ -198,7 +209,7 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
             baseUrl: "https://open-seo.test",
           },
         },
-        { selfHosted: true, googleFallbacks: true },
+        { selfHosted: true, standIns },
       );
       // Self-hosted must not pin Origins to the request's own Host — the
       // handler's localhost-class default is the rebinding-safe choice.

@@ -22,6 +22,7 @@ const ERROR_CODES = [
   "GOOGLE_ADS_ACCESS_PENDING",
   "RATE_LIMITED",
   "MONTHLY_BUDGET_EXHAUSTED",
+  "PROVIDER_NOT_CONFIGURED",
   "UPSTREAM_UNAVAILABLE",
   "CONFLICT",
   "INTERNAL_ERROR",
@@ -38,6 +39,9 @@ const NON_REPORTABLE_ERROR_CODES = new Set<ErrorCode>([
   "RATE_LIMITED",
   // A self-hosted provider budget doing its job.
   "MONTHLY_BUDGET_EXHAUSTED",
+  // A self-hosted install without a data source for the feature: setup the
+  // owner acts on, not a bug.
+  "PROVIDER_NOT_CONFIGURED",
   "NOT_FOUND",
   "PAYMENT_REQUIRED",
   "INSUFFICIENT_CREDITS",

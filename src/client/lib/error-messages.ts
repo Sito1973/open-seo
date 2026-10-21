@@ -37,6 +37,8 @@ const STANDARD_MESSAGES: Record<ErrorCode, string> = {
   RATE_LIMITED: "Too many requests. Please wait and try again.",
   MONTHLY_BUDGET_EXHAUSTED:
     "This server's monthly budget for this data provider is used up, so nothing was sent. It resets next month.",
+  PROVIDER_NOT_CONFIGURED:
+    "This server has no data source for this feature: it needs DataForSEO or a stand-in provider that is not set up. See docs/SELF_HOSTING_GOOGLE_APIS.md.",
   UPSTREAM_UNAVAILABLE:
     "The data provider is temporarily unavailable. Please retry in a moment.",
   CONFLICT: "This request conflicts with existing data.",

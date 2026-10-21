@@ -27,6 +27,7 @@ import {
 } from "@/server/mcp/context";
 import { objectSchema } from "@/server/mcp/output-schemas";
 import { instrumentMcpToolHandler } from "@/server/mcp/instrumentation";
+import { describeForStandIns, type McpStandIns } from "@/server/mcp/stand-ins";
 import { getBacklinksOverviewTool } from "@/server/mcp/tools/get-backlinks-overview";
 import { getBacklinksProfileTool } from "@/server/mcp/tools/get-backlinks-profile";
 import { getDomainKeywordSuggestionsTool } from "@/server/mcp/tools/get-domain-keyword-suggestions";
@@ -159,6 +160,7 @@ function registerOpenSeoTool<Input extends ToolSchema>(
   server: McpServer,
   tool: OpenSeoToolDefinition<Input>,
   authProps: McpProps,
+  standIns: McpStandIns | undefined,
 ) {
   // Output objects must allow added fields, including nested objects. The
   // tools/list contract test checks every registered tool for cached-client
@@ -174,6 +176,11 @@ function registerOpenSeoTool<Input extends ToolSchema>(
     tool.name,
     {
       ...tool.config,
+      description: describeForStandIns(
+        tool.name,
+        tool.config.description,
+        standIns,
+      ),
       inputSchema: objectSchema(tool.config.inputSchema),
       outputSchema,
     },
@@ -189,9 +196,10 @@ function registerOpenSeoTool<Input extends ToolSchema>(
 
 export function createOpenSeoMcpServer(
   authProps: McpProps,
-  // googleFallbacks: a self-hosted install that runs stand-ins for
-  // DataForSEO (usesGoogleFallbacks), which hides the tools that have none.
-  options: { selfHosted: boolean; googleFallbacks?: boolean } = {
+  // standIns: set on a self-hosted install that runs stand-ins for
+  // DataForSEO (usesGoogleFallbacks). It hides the tools that have none and
+  // says in each description which provider a call uses instead of credits.
+  options: { selfHosted: boolean; standIns?: McpStandIns } = {
     selfHosted: false,
   },
 ) {
@@ -224,7 +232,7 @@ export function createOpenSeoMcpServer(
 
   const register = <Input extends ToolSchema>(
     tool: OpenSeoToolDefinition<Input>,
-  ) => registerOpenSeoTool(server, tool, authProps);
+  ) => registerOpenSeoTool(server, tool, authProps, options.standIns);
 
   register(whoamiTool);
   register(listProjectsTool);
@@ -271,7 +279,7 @@ export function createOpenSeoMcpServer(
   register(getLocalSerpResultsTool);
   // Google retired Business Profile Q&A in November 2025, so only DataForSEO
   // still serves it.
-  if (!options.googleFallbacks) register(getGoogleBusinessQuestionsTool);
+  if (!options.standIns) register(getGoogleBusinessQuestionsTool);
   register(getBusinessProfileTool);
   register(getBusinessReviewsTool);
   register(getBusinessUpdatesTool);
