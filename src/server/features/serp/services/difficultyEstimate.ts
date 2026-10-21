@@ -34,7 +34,7 @@ export const MAX_LIVE_ESTIMATES = 10;
 
 // Live searches for estimates, a share of the Bright Data budget that rank
 // tracking needs most. There is deliberately no setting to raise it.
-const MONTHLY_LIVE_ESTIMATES = 300;
+export const MONTHLY_LIVE_ESTIMATES = 300;
 
 const LOCAL_WEIGHT = 0.6;
 const OPEN_SITE_PENALTY = 10;

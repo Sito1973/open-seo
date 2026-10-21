@@ -5,6 +5,7 @@ import {
 import { mcpResponse } from "@/server/mcp/formatters";
 import { type ToolContext } from "@/server/mcp/context";
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import { getDataSources } from "@/server/lib/data-sources";
 import { optionalMetaOutputSchema } from "@/server/mcp/output-schemas";
 import { z } from "zod";
 
@@ -13,13 +14,19 @@ export const whoamiTool = {
   config: {
     title: "Who am I",
     description:
-      "Confirms the connected OpenSEO account, server mode, token scopes, and current credit balance when the user asks to check their account or connection. Initializes billing for new hosted accounts. Uses no credits — does not call DataForSEO. Returns creditsRemaining: null when the balance is unavailable.",
+      "Confirms the connected OpenSEO account, server mode, token scopes, and current credit balance when the user asks to check their account or connection. Initializes billing for new hosted accounts. Uses no credits — does not call DataForSEO. Returns creditsRemaining: null when the balance is unavailable. On a self-hosted server without DataForSEO, also returns dataSources: what serves each section there (ready, partial, needs_setup or unavailable) and the monthly budgets used so far.",
     inputSchema: {} as Record<string, never>,
     outputSchema: z.looseObject({
       userEmail: z.string(),
       scopes: z.array(z.string()),
       mode: z.enum(["hosted", "self-hosted"]),
       creditsRemaining: z.number().nullable(),
+      dataSources: z
+        .looseObject({
+          sections: z.array(z.looseObject({})),
+          budgets: z.array(z.looseObject({})),
+        })
+        .optional(),
       ...optionalMetaOutputSchema,
     }),
     annotations: {
@@ -53,6 +60,22 @@ export const whoamiTool = {
         `Credits remaining: ${creditsRemaining != null ? creditsRemaining.toLocaleString() : "unknown"}`,
       );
     }
+    // Null on hosted and wherever DataForSEO serves every feature.
+    const dataSources = isHosted ? null : await getDataSources();
+    if (dataSources) {
+      lines.push(
+        "Data sources on this server (no credits are billed):",
+        ...dataSources.sections.map(
+          (section) =>
+            `- ${section.label}: ${section.state.replace("_", " ")} (${section.source})`,
+        ),
+        "Monthly budgets used:",
+        ...dataSources.budgets.map(
+          (budget) =>
+            `- ${budget.label}: ${budget.used.toLocaleString("en-US")} of ${budget.limit.toLocaleString("en-US")} (resets ${budget.resets})${budget.note ? `. ${budget.note}` : ""}`,
+        ),
+      );
+    }
     return mcpResponse({
       text: lines.join("\n"),
       meta: {
@@ -63,6 +86,7 @@ export const whoamiTool = {
         scopes: auth.scopes,
         mode: isHosted ? "hosted" : "self-hosted",
         creditsRemaining,
+        ...(dataSources ? { dataSources } : {}),
       },
     });
   },

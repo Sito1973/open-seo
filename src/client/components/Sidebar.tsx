@@ -8,6 +8,7 @@ import {
   Check,
   CircleHelp,
   CreditCard,
+  Database,
   LogOut,
   Settings,
   User,
@@ -24,6 +25,10 @@ import {
   SamSidebarPanel,
 } from "@/client/features/sam/SamSidebarPanel";
 import { ThemePreferenceRadio } from "@/client/components/ThemePreferenceMenuItems";
+import {
+  pathsWithoutSource,
+  useDataSources,
+} from "@/client/features/help/dataSources";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { signOutAndRedirect, useSession } from "@/lib/auth-client";
 import { BILLING_ROUTE } from "@/shared/billing";
@@ -59,12 +64,15 @@ function SidebarNavLink({
   label,
   linkProps,
   placeholder = false,
+  noSource = false,
 }: {
   icon: ComponentType<{ className?: string }>;
   label: string;
   linkProps: LinkOptions;
   /** Show the row without its link, while its project is still unknown. */
   placeholder?: boolean;
+  /** Dim a section this server has no data source for. */
+  noSource?: boolean;
 }) {
   const { setOpenMobile } = useSidebar();
   const matchRoute = useMatchRoute();
@@ -81,7 +89,8 @@ function SidebarNavLink({
       render={<span />}
       isActive={isActive}
       aria-disabled={placeholder || undefined}
-      className={navButtonClass}
+      className={noSource ? `${navButtonClass} opacity-50` : navButtonClass}
+      title={noSource ? "No data source on this server" : undefined}
     >
       <Icon className="size-4" />
       <span>{label}</span>
@@ -135,6 +144,8 @@ export function Sidebar({
   // SAM is hidden from navigation: the chat route is only reachable by URL,
   // and while it is open its chat list takes the nav's place.
   const onSamRoute = pathname.includes("/sam");
+  const dataSources = useDataSources(ready);
+  const noSourcePaths = pathsWithoutSource(dataSources.data?.sections);
 
   return (
     <UiSidebar variant="inset" collapsible="offcanvas" className="md:!p-0">
@@ -186,6 +197,7 @@ export function Sidebar({
                           label={label}
                           linkProps={linkProps}
                           placeholder={navPlaceholder}
+                          noSource={noSourcePaths.has(linkProps.to)}
                         />
                       );
                     })}
@@ -196,12 +208,19 @@ export function Sidebar({
           </nav>
         )}
       </SidebarContent>
-      <AccountFooter ready={ready} />
+      <AccountFooter ready={ready} showDataSources={!!dataSources.data} />
     </UiSidebar>
   );
 }
 
-function AccountFooter({ ready }: { ready: boolean }) {
+function AccountFooter({
+  ready,
+  showDataSources,
+}: {
+  ready: boolean;
+  /** A self-hosted server without DataForSEO lists what serves each section. */
+  showDataSources: boolean;
+}) {
   const { data: session } = useSession();
   const { setOpenMobile } = useSidebar();
   const email = session?.user?.email;
@@ -228,6 +247,13 @@ function AccountFooter({ ready }: { ready: boolean }) {
   return (
     <UiSidebarFooter className="gap-0 border-t border-sidebar-border pb-safe">
       <SidebarMenu>
+        {showDataSources ? (
+          <SidebarNavLink
+            icon={Database}
+            label="Data sources"
+            linkProps={{ to: "/help/data-sources" }}
+          />
+        ) : null}
         <SidebarNavLink
           icon={CircleHelp}
           label="Help & Community"

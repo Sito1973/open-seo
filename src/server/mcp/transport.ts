@@ -20,7 +20,7 @@ import {
 } from "@/server/mcp/context";
 import { getPublicOrigin } from "@/server/mcp/public-origin";
 import { createOpenSeoMcpServer } from "@/server/mcp/server";
-import { getMcpStandIns } from "@/server/mcp/stand-ins";
+import { getDataSourceProviders } from "@/server/lib/data-sources";
 import { AuthRepository } from "@/server/auth/repositories/AuthRepository";
 import { resolveExistingActiveHostedOrganization } from "@/server/auth/default-hosted-organization";
 
@@ -274,6 +274,6 @@ export async function handleSelfHostedOpenSeoMcpRequest(
     selfHosted: true,
     // Read once per request: the tool list and descriptions follow the
     // providers this server has set up.
-    standIns: (await getMcpStandIns()) ?? undefined,
+    standIns: (await getDataSourceProviders()) ?? undefined,
   })(request, env, ctx);
 }

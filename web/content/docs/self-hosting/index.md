@@ -60,6 +60,6 @@ Without DataForSEO, Brand Lookup counts the AI answers your own prompt tracking 
 
 No Google API reports backlinks, so they still need DataForSEO. To pay DataForSEO for backlinks alone, set `DATAFORSEO_SCOPE=backlinks` next to `DATAFORSEO_API_KEY`. The Backlinks page, the dashboard's backlink cards and the backlinks MCP tools then use DataForSEO's pay-as-you-go Backlinks API ($0.024 per request plus $0.000036 per row), and every other feature runs as if the key were unset, on the keys above. OpenSEO sends at most 300 backlinks requests a month (UTC) of up to 1,000 rows each, so a month costs at most $18; `DATAFORSEO_BACKLINKS_MONTHLY_REQUESTS` changes the 300. The same guide covers it.
 
-With any of these keys set, the app no longer asks for a DataForSEO key. A page or MCP tool that none of them covers says the server has no data source for it, and MCP tool descriptions name the provider a call uses instead of credits.
+With any of these keys set, the app no longer asks for a DataForSEO key. A page or MCP tool that none of them covers says the server has no data source for it, and MCP tool descriptions name the provider a call uses instead of credits. **Data sources**, at the bottom of the sidebar, shows what serves each section on your server and how much of each monthly budget is used; sections with no source are dimmed.
 
 To fill the Backlinks tables' **Ahrefs DR** column, set `AHREFS_API_KEY` to the APIv3 key of a free Ahrefs account. Without it the column stays empty. The same guide covers it.

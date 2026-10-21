@@ -27,7 +27,11 @@ import {
 } from "@/server/mcp/context";
 import { objectSchema } from "@/server/mcp/output-schemas";
 import { instrumentMcpToolHandler } from "@/server/mcp/instrumentation";
-import { describeForStandIns, type McpStandIns } from "@/server/mcp/stand-ins";
+import {
+  describeForStandIns,
+  standInInstructions,
+} from "@/server/mcp/stand-ins";
+import type { DataSourceProviders } from "@/shared/data-sources";
 import { getBacklinksOverviewTool } from "@/server/mcp/tools/get-backlinks-overview";
 import { getBacklinksProfileTool } from "@/server/mcp/tools/get-backlinks-profile";
 import { getDomainKeywordSuggestionsTool } from "@/server/mcp/tools/get-domain-keyword-suggestions";
@@ -161,7 +165,7 @@ function registerOpenSeoTool<Input extends ToolSchema>(
   server: McpServer,
   tool: OpenSeoToolDefinition<Input>,
   authProps: McpProps,
-  standIns: McpStandIns | undefined,
+  standIns: DataSourceProviders | undefined,
 ) {
   // Output objects must allow added fields, including nested objects. The
   // tools/list contract test checks every registered tool for cached-client
@@ -198,9 +202,10 @@ function registerOpenSeoTool<Input extends ToolSchema>(
 export function createOpenSeoMcpServer(
   authProps: McpProps,
   // standIns: set on a self-hosted install that runs stand-ins for
-  // DataForSEO (usesGoogleFallbacks). It hides the tools that have none and
-  // says in each description which provider a call uses instead of credits.
-  options: { selfHosted: boolean; standIns?: McpStandIns } = {
+  // DataForSEO (usesGoogleFallbacks). It hides the tools that have none, says
+  // in each description which provider a call uses instead of credits, and
+  // replaces the credit instructions with the server's data sources.
+  options: { selfHosted: boolean; standIns?: DataSourceProviders } = {
     selfHosted: false,
   },
 ) {
@@ -226,8 +231,9 @@ export function createOpenSeoMcpServer(
       // use it to decide whether to open a subscriptions/listen stream.
       // Without the pre-declaration, registerTool defaults it to true.
       capabilities: { tools: { listChanged: false } },
-      instructions:
-        "OpenSEO research tools use credits. Proceed with normal focused research, but ask the user for confirmation before planned batches over 2,000 credits. OpenSEO cannot purchase credits or charge cards. Explain unsupported purchase requests without promoting subscriptions, upgrades or credit purchases, or directing users to checkout.",
+      instructions: options.standIns
+        ? standInInstructions(options.standIns)
+        : "OpenSEO research tools use credits. Proceed with normal focused research, but ask the user for confirmation before planned batches over 2,000 credits. OpenSEO cannot purchase credits or charge cards. Explain unsupported purchase requests without promoting subscriptions, upgrades or credit purchases, or directing users to checkout.",
     },
   );
 

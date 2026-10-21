@@ -48,10 +48,16 @@ const standIns = vi.hoisted(() => ({
   brightData: true,
   places: false,
   keywordPlanner: false,
+  serpApi: false,
+  openPageRank: false,
+  pageSpeed: false,
+  googleOAuth: false,
+  model: false,
+  ahrefs: false,
   dataforseoBacklinks: false,
 }));
-vi.mock("@/server/mcp/stand-ins", () => ({
-  getMcpStandIns: async () => standIns,
+vi.mock("@/server/lib/data-sources", () => ({
+  getDataSourceProviders: async () => standIns,
 }));
 
 vi.mock("@/lib/auth", () => ({

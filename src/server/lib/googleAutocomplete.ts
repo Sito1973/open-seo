@@ -17,7 +17,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const MIN_REQUEST_INTERVAL_MS = 1_000;
 const CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 // About 50 new seeds a month. There is deliberately no setting to raise it.
-const MONTHLY_BUDGET = 2_000;
+export const AUTOCOMPLETE_MONTHLY_BUDGET = 2_000;
 const PAUSE_SECONDS = 24 * 60 * 60;
 const PAUSE_CACHE_KEY = "google-autocomplete:paused";
 
@@ -97,6 +97,12 @@ async function lookup(url: string): Promise<Lookup> {
   return { suggestions: parsed.data[1] };
 }
 
+/** When lookups resume after Google refused one, or null when not paused. */
+export async function googleAutocompletePausedUntil(): Promise<string | null> {
+  const paused = pauseSchema.safeParse(await getCached(PAUSE_CACHE_KEY));
+  return paused.success ? paused.data.until : null;
+}
+
 function utcMinute(iso: string) {
   return `${iso.slice(0, 16).replace("T", " ")} UTC`;
 }
@@ -151,10 +157,10 @@ export async function fetchGoogleAutocomplete(input: {
       found.push(...cached.data.suggestions);
       continue;
     }
-    const paused = pauseSchema.safeParse(await getCached(PAUSE_CACHE_KEY));
-    if (paused.success) {
+    const pausedUntil = await googleAutocompletePausedUntil();
+    if (pausedUntil) {
       return result(
-        `Google autocomplete is paused until ${utcMinute(paused.data.until)} because Google refused this server's lookups.`,
+        `Google autocomplete is paused until ${utcMinute(pausedUntil)} because Google refused this server's lookups.`,
       );
     }
     const month = new Date().toISOString().slice(0, 7);
@@ -162,11 +168,11 @@ export async function fetchGoogleAutocomplete(input: {
       month,
       sku: "google_autocomplete",
       count: 1,
-      limit: MONTHLY_BUDGET,
+      limit: AUTOCOMPLETE_MONTHLY_BUDGET,
     });
     if (used == null) {
       return result(
-        `This server's monthly Google autocomplete budget (${MONTHLY_BUDGET} lookups in ${month}, UTC) is used up. It resets on the 1st.`,
+        `This server's monthly Google autocomplete budget (${AUTOCOMPLETE_MONTHLY_BUDGET} lookups in ${month}, UTC) is used up. It resets on the 1st.`,
       );
     }
     const params = new URLSearchParams({

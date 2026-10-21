@@ -27,6 +27,7 @@ vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: mocks.isHosted,
 }));
 vi.mock("@/server/lib/posthog", () => ({ captureServerEvent: vi.fn() }));
+vi.mock("@/server/lib/data-sources", () => ({ getDataSources: vi.fn() }));
 
 const context = makeToolContext({ orgScope: "user" });
 

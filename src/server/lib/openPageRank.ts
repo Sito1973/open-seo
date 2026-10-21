@@ -17,7 +17,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
 
 // The free plan counts 30,000 unique domains a month; this stays under it.
 // There is deliberately no setting to raise it.
-const MONTHLY_DOMAIN_BUDGET = 25_000;
+export const OPEN_PAGERANK_MONTHLY_DOMAINS = 25_000;
 
 // Scores move with Common Crawl releases, about monthly, so each domain's is
 // kept 30 days.
@@ -126,12 +126,12 @@ export async function fetchOpenPageRanks(
       month,
       sku: "open_pagerank",
       count: missing.length,
-      limit: MONTHLY_DOMAIN_BUDGET,
+      limit: OPEN_PAGERANK_MONTHLY_DOMAINS,
     });
     if (used == null) {
       return {
         scores: null,
-        unavailable: `This server's monthly Open PageRank budget (${MONTHLY_DOMAIN_BUDGET} domains in ${month}, UTC) is used up. It resets on the 1st.`,
+        unavailable: `This server's monthly Open PageRank budget (${OPEN_PAGERANK_MONTHLY_DOMAINS} domains in ${month}, UTC) is used up. It resets on the 1st.`,
       };
     }
     try {

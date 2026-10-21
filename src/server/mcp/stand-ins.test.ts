@@ -11,7 +11,8 @@ vi.mock("cloudflare:workers", () => ({
   },
 }));
 
-// Nothing bills credits where stand-ins run, so no tool may still claim it.
+// Nothing bills credits where stand-ins run, so no tool may still claim it,
+// and a tool whose section has no source here says so first.
 it("replaces every credit claim on a server with stand-ins", async () => {
   const server = createOpenSeoMcpServer(
     createWorkersOAuthMcpProps({
@@ -26,6 +27,12 @@ it("replaces every credit claim on a server with stand-ins", async () => {
         brightData: true,
         places: false,
         keywordPlanner: false,
+        serpApi: false,
+        openPageRank: false,
+        pageSpeed: false,
+        googleOAuth: false,
+        model: false,
+        ahrefs: false,
         dataforseoBacklinks: false,
       },
     },
@@ -51,6 +58,10 @@ it("replaces every credit claim on a server with stand-ins", async () => {
     expect(description("get_domain_overview")).toContain(
       "PROVIDER_NOT_CONFIGURED",
     );
+    expect(description("explore_prompt")).toMatch(
+      /^Prompt Explorer has no source on this server/,
+    );
+    expect(client.getInstructions()).toContain("bills no credits");
   } finally {
     await client.close();
     await server.close();

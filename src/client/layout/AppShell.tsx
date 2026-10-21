@@ -1,12 +1,18 @@
 import * as React from "react";
+import { sortBy } from "remeda";
 import { projectsQueryOptions } from "@/client/features/projects/projectQueries";
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useMatchRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   MissingSeoSetupModal,
   SeoApiStatusBanners,
 } from "@/client/layout/AppShellParts";
 import { GscReEngagementModal } from "@/client/features/gsc/GscReEngagementModal";
+import {
+  NoDataSourceState,
+  useDataSources,
+} from "@/client/features/help/dataSources";
+import { hasDataSource } from "@/shared/data-sources";
 import { Sidebar } from "@/client/components/Sidebar";
 import { BILLING_ROUTE } from "@/shared/billing";
 import { getSeoApiKeyStatus } from "@/serverFunctions/config";
@@ -99,6 +105,22 @@ export function AuthenticatedAppLayout({
     shouldCheckSeoApiKeyStatus,
   ]);
 
+  // A section this self-hosted server has no source for shows one shared
+  // empty state instead of a page whose every request would fail. The longest
+  // matching path wins, so Prompt Research is not taken for Prompt Tracking.
+  const matchRoute = useMatchRoute();
+  const dataSources = useDataSources(ready);
+  const currentSection = sortBy(
+    (dataSources.data?.sections ?? []).flatMap((section) =>
+      section.path ? [{ ...section, path: section.path }] : [],
+    ),
+    [(section) => section.path.length, "desc"],
+  ).find((section) => matchRoute({ to: section.path, fuzzy: true }));
+  const sectionWithoutSource =
+    currentSection && !hasDataSource(currentSection.state)
+      ? currentSection
+      : null;
+
   const shouldShowSeoApiWarning =
     !seoApiKeyStatusError &&
     isSeoApiKeyConfigured === false &&
@@ -118,7 +140,13 @@ export function AuthenticatedAppLayout({
           seoApiKeyStatusError={seoApiKeyStatusError}
         />
         {banner}
-        <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+        <div className="min-h-0 flex-1 overflow-auto">
+          {sectionWithoutSource ? (
+            <NoDataSourceState section={sectionWithoutSource} />
+          ) : (
+            children
+          )}
+        </div>
       </SidebarInset>
 
       {showMissingSeoApiKeyModal ? (

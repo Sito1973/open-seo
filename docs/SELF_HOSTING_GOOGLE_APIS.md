@@ -35,6 +35,38 @@ from this guide that covers it, or has no source on this server:
   depth", or that the tool has no source on this server, so an assistant can
   skip it. The tool list follows the keys set when the request arrives.
 
+### Data sources page
+
+**Data sources**, at the bottom of the sidebar (`/help/data-sources`), lists
+every section DataForSEO used to serve, with the source that serves it on this
+server and its state:
+
+| State       | Meaning                                                                      |
+| ----------- | ---------------------------------------------------------------------------- |
+| Ready       | A stand-in serves the section.                                               |
+| Partial     | A stand-in serves part of it, such as your own sites only, or estimates.     |
+| Needs setup | A stand-in exists, but this server has not set its key; the page says which. |
+| No source   | Nothing replaces DataForSEO there yet, such as Prompt Explorer.              |
+
+Below the sections, a meter per provider shows how much of each monthly
+budget this server has used: Bright Data requests (and the share difficulty
+estimates may take), SerpApi searches, each Google Places SKU, Google
+autocomplete lookups (with the pause after Google refuses one), Open PageRank
+domains and, with `DATAFORSEO_SCOPE=backlinks`, DataForSEO backlinks
+requests. The meters read the same counters the budgets stop at.
+
+The same map drives the rest of the app:
+
+- Sidebar entries for sections with no source (needs setup or no source) are
+  dimmed, and opening one shows a single empty state that names what is
+  missing and links to the page, instead of a page whose every request fails.
+- Over MCP, the server instructions say that nothing bills credits and which
+  sections have no source, and `whoami` lists each section's source and state
+  and the budgets used this month.
+
+Hosted OpenSEO and installs with DataForSEO for every feature show none of
+this: DataForSEO serves every section there.
+
 ## DataForSEO for backlinks only
 
 No Google API reports the links that point at a site, so backlinks need

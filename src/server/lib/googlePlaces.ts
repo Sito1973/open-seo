@@ -221,6 +221,20 @@ function budgetExhausted(sku: PlacesSku, count: number): AppError {
   );
 }
 
+/** This month's (Pacific) calls against each capped Places SKU. */
+export async function getPlacesBudgets() {
+  const month = billingMonth();
+  const usage = async (sku: PlacesSku) => ({
+    ...BUDGETS[sku],
+    usedThisMonth: await GooglePlacesUsageRepository.usedCalls({ month, sku }),
+  });
+  return Promise.all([
+    usage("text_search_pro"),
+    usage("text_search_enterprise"),
+    usage("place_details_enterprise_atmosphere"),
+  ]);
+}
+
 export function placesBudgetLine(budget: PlacesBudget): string {
   return `Google Places budget: ${budget.usedThisMonth} of ${budget.limit} ${BUDGETS[budget.sku].label} calls used this month (resets on the 1st, Pacific time).`;
 }
