@@ -11,6 +11,7 @@ import {
 } from "@/server/lib/dataforseo";
 import { AppError } from "@/server/lib/errors";
 import { buildCacheKey, getCached, setCached } from "@/server/lib/r2-cache";
+import { getGoogleFallbackKey } from "@/server/lib/runtime-env";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
 import {
@@ -36,9 +37,17 @@ import {
   businessIdentifierKeyword,
   formatBusinessDataCoordinate,
   formatLocalSerpCoordinate,
+  KM_PER_DEGREE_LATITUDE,
+  KM_PER_DEGREE_LONGITUDE,
+  MIN_LONGITUDE_COSINE,
   pickRowFields,
   resolveBusinessIdentifier,
 } from "@/server/mcp/tools/local-seo-shared";
+import {
+  fetchPlacesGridOutcomes,
+  placesLocale,
+  placesNotes,
+} from "@/server/mcp/tools/local-seo-places";
 
 // ---------------------------------------------------------------------------
 // Shared plumbing
@@ -673,11 +682,6 @@ export const listBusinessCategoriesTool = {
 // get_local_rank_grid
 // ---------------------------------------------------------------------------
 
-// Degrees per kilometre. Longitude degrees shrink with latitude; the cosine is
-// floored so a near-polar center can't blow the spacing up.
-const KM_PER_DEGREE_LATITUDE = 110.574;
-const KM_PER_DEGREE_LONGITUDE = 111.32;
-const MIN_LONGITUDE_COSINE = 0.01;
 const RANK_GRID_DEPTH = 20;
 // The grid's searches run as queued Maps tasks (~5-40 s each, in parallel at
 // DataForSEO). Polling stops 40 s into the call so it answers inside the 60 s
@@ -897,6 +901,93 @@ function renderGrid(results: GridPointResult[], gridSize: number): string {
   return lines.join("\n");
 }
 
+/** Ranks the target at every point and builds the completed grid response. */
+function buildRankGridResponse(input: {
+  outcomes: LocalSerpTaskOutcome[];
+  points: GridPoint[];
+  gridSize: number;
+  target: GetLocalRankGridArgs["target"];
+  header: string;
+  failedLegend: string;
+  notes: string[];
+  meta: ReturnType<typeof buildProjectMeta>;
+  providerFields: Record<string, unknown>;
+}) {
+  let matchedBusiness: {
+    title: string | null;
+    cid: string | null;
+    placeId: string | null;
+  } | null = null;
+  const grid = input.points.map((point, index): GridPointResult => {
+    const outcome = input.outcomes[index];
+    if (outcome.status !== "completed") {
+      return { ...point, rank: null, error: true };
+    }
+    const { items } = outcome;
+    const match = matchGridItem(items, input.target);
+    if (match && !matchedBusiness) {
+      matchedBusiness = {
+        title: readString(match, "title"),
+        cid: readString(match, "cid"),
+        placeId: readString(match, "place_id"),
+      };
+    }
+    const rank =
+      readPath(match, "rank_absolute") ?? readPath(match, "rank_group");
+    const first = items[0];
+    return {
+      ...point,
+      rank: typeof rank === "number" ? rank : null,
+      resultsCount: items.length,
+      topResult:
+        first == null
+          ? null
+          : {
+              title: readString(first, "title"),
+              cid: readString(first, "cid"),
+            },
+    };
+  });
+
+  const found = grid.filter((point) => point.rank != null);
+  const ranks = found.map((point) => point.rank ?? 0);
+  const summary = {
+    pointsSearched: grid.length,
+    pointsFound: found.length,
+    averageRank: ranks.length
+      ? Number(
+          (ranks.reduce((sum, rank) => sum + rank, 0) / ranks.length).toFixed(
+            2,
+          ),
+        )
+      : null,
+    top3Count: ranks.filter((rank) => rank <= 3).length,
+    top10Count: ranks.filter((rank) => rank <= 10).length,
+  };
+
+  const text = [
+    input.header,
+    `Rank per point, north at the top ("–" = not among the results returned there; check that point's resultsCount and topResult before reading it as outranked, ${input.failedLegend}):`,
+    renderGrid(grid, input.gridSize),
+    `- ranked at ${summary.pointsFound} of ${summary.pointsSearched} points`,
+    `- average rank where found: ${summary.averageRank ?? "—"}`,
+    `- top 3 at ${summary.top3Count} points, top 10 at ${summary.top10Count} points`,
+    ...input.notes,
+  ].join("\n");
+
+  return mcpResponse({
+    text,
+    meta: input.meta,
+    structuredContent: {
+      status: "completed",
+      grid,
+      summary,
+      matchedBusiness,
+      ...input.providerFields,
+    },
+  });
+}
+
 export const getLocalRankGridTool = {
   name: "get_local_rank_grid",
   config: {
@@ -966,13 +1057,44 @@ export const getLocalRankGridTool = {
       );
     }
 
-    const deadline = Date.now() + RANK_GRID_COLLECT_MS;
     const gridSize = args.gridSize ?? 3;
     const spacingKm = args.spacingKm ?? 2;
-    const zoom = args.zoom ?? rankGridZoom(spacingKm, args.center.latitude);
-    const device = args.device ?? "mobile";
     const languageCode = args.languageCode ?? context.project.languageCode;
     const points = buildRankGridPoints(args.center, gridSize, spacingKm);
+    const meta = buildProjectMeta(
+      context,
+      args.projectId,
+      `/p/${args.projectId}`,
+    );
+
+    const placesKey = await getGoogleFallbackKey("GOOGLE_PLACES_API_KEY");
+    if (placesKey) {
+      // Places answers each search directly: no queue, so no receipt to
+      // recover from, and the Maps terms restrict caching its results.
+      const radiusM = Math.round(spacingKm * 1000);
+      const places = await fetchPlacesGridOutcomes(placesKey, {
+        points,
+        textQuery: args.keyword,
+        radiusM,
+        ...placesLocale(languageCode, context.project),
+      });
+      return buildRankGridResponse({
+        outcomes: places.outcomes,
+        points,
+        gridSize,
+        target: args.target,
+        header: `Local rank grid for "${args.keyword}" on Google Places (${gridSize}x${gridSize}, ${spacingKm} km spacing, each point biased to a ${radiusM} m circle, top ${RANK_GRID_DEPTH} checked; zoom and device do not apply).`,
+        failedLegend:
+          '"x" = search failed (still counted against the monthly budget)',
+        notes: placesNotes(places.budget),
+        meta,
+        providerFields: places.fields,
+      });
+    }
+
+    const deadline = Date.now() + RANK_GRID_COLLECT_MS;
+    const zoom = args.zoom ?? rankGridZoom(spacingKm, args.center.latitude);
+    const device = args.device ?? "mobile";
 
     // The target is not part of the key: it only filters the collected rows.
     const receiptKey = await buildCacheKey("mcp:local-rank-grid", {
@@ -1024,7 +1146,7 @@ export const getLocalRankGridTool = {
     if (ready < points.length) {
       return mcpResponse({
         text: `Local rank grid for "${args.keyword}": ${ready} of ${points.length} searches are back. Call get_local_rank_grid again with the same arguments in about a minute to collect the rest; that charges no extra credits.`,
-        meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
+        meta,
         // Clients that read only structured results still see the progress
         // and when to call again.
         structuredContent: {
@@ -1053,76 +1175,16 @@ export const getLocalRankGridTool = {
       );
     }
 
-    let matchedBusiness: {
-      title: string | null;
-      cid: string | null;
-      placeId: string | null;
-    } | null = null;
-    const grid = points.map((point, index): GridPointResult => {
-      const outcome = outcomes[index];
-      if (outcome.status !== "completed") {
-        return { ...point, rank: null, error: true };
-      }
-      const { items } = outcome;
-      const match = matchGridItem(items, args.target);
-      if (match && !matchedBusiness) {
-        matchedBusiness = {
-          title: readString(match, "title"),
-          cid: readString(match, "cid"),
-          placeId: readString(match, "place_id"),
-        };
-      }
-      const rank =
-        readPath(match, "rank_absolute") ?? readPath(match, "rank_group");
-      const first = items[0];
-      return {
-        ...point,
-        rank: typeof rank === "number" ? rank : null,
-        resultsCount: items.length,
-        topResult:
-          first == null
-            ? null
-            : {
-                title: readString(first, "title"),
-                cid: readString(first, "cid"),
-              },
-      };
-    });
-
-    const found = grid.filter((point) => point.rank != null);
-    const ranks = found.map((point) => point.rank ?? 0);
-    const summary = {
-      pointsSearched: grid.length,
-      pointsFound: found.length,
-      averageRank: ranks.length
-        ? Number(
-            (ranks.reduce((sum, rank) => sum + rank, 0) / ranks.length).toFixed(
-              2,
-            ),
-          )
-        : null,
-      top3Count: ranks.filter((rank) => rank <= 3).length,
-      top10Count: ranks.filter((rank) => rank <= 10).length,
-    };
-
-    const text = [
-      `Local rank grid for "${args.keyword}" (${gridSize}x${gridSize}, ${spacingKm} km spacing, zoom ${zoom}, top ${RANK_GRID_DEPTH} checked).`,
-      `Rank per point, north at the top ("–" = not among the results returned there; check that point's resultsCount and topResult before reading it as outranked, "x" = search failed but may still be charged):`,
-      renderGrid(grid, gridSize),
-      `- ranked at ${summary.pointsFound} of ${summary.pointsSearched} points`,
-      `- average rank where found: ${summary.averageRank ?? "—"}`,
-      `- top 3 at ${summary.top3Count} points, top 10 at ${summary.top10Count} points`,
-    ].join("\n");
-
-    return mcpResponse({
-      text,
-      meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
-      structuredContent: {
-        status: "completed",
-        grid,
-        summary,
-        matchedBusiness,
-      },
+    return buildRankGridResponse({
+      outcomes,
+      points,
+      gridSize,
+      target: args.target,
+      header: `Local rank grid for "${args.keyword}" (${gridSize}x${gridSize}, ${spacingKm} km spacing, zoom ${zoom}, top ${RANK_GRID_DEPTH} checked).`,
+      failedLegend: '"x" = search failed but may still be charged',
+      notes: [],
+      meta,
+      providerFields: {},
     });
   }),
 };

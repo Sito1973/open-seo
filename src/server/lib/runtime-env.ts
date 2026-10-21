@@ -47,7 +47,7 @@ export async function isHostedServerAuthMode(): Promise<boolean> {
  * install that already uses DataForSEO keep their exact behavior.
  */
 export async function getGoogleFallbackKey(
-  name: "GOOGLE_PAGESPEED_API_KEY",
+  name: "GOOGLE_PAGESPEED_API_KEY" | "GOOGLE_PLACES_API_KEY",
 ): Promise<string | null> {
   if (await getOptionalEnvValue("DATAFORSEO_API_KEY")) return null;
   if (await isHostedServerAuthMode()) return null;

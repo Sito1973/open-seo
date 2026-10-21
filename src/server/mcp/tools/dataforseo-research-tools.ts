@@ -6,6 +6,9 @@ import {
   fetchKeywordMetricsForList,
   type KeywordMetricRow,
 } from "@/server/lib/dataforseo";
+import { AppError } from "@/server/lib/errors";
+import { PLACES_MAX_ROWS, searchListings } from "@/server/lib/googlePlaces";
+import { getGoogleFallbackKey } from "@/server/lib/runtime-env";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
 import {
@@ -27,6 +30,13 @@ import {
   pickRowFields,
   resolveBusinessIdentifier,
 } from "@/server/mcp/tools/local-seo-shared";
+import {
+  boundsAround,
+  placesLocale,
+  placesNotes,
+  placesResponseFields,
+  toLocalRow,
+} from "@/server/mcp/tools/local-seo-places";
 import { resolveLabsMarket, resolveMarket } from "@/shared/keyword-locations";
 import {
   assertLabsLocationCode,
@@ -778,6 +788,175 @@ const KEYWORD_METRIC_COLUMNS: McpTableColumn<unknown>[] = [
   { header: "intent", value: (row) => readPath(row, "main_intent") },
 ];
 
+type PlacesToolContext = {
+  baseUrl: string;
+  project: { locationCode: number; languageCode: string };
+};
+
+// A Maps search from one point: Places has no zoom, so the point biases a
+// circle of this radius instead.
+const PLACES_LOCAL_SERP_BIAS_M = 2000;
+
+async function getPlacesLocalSerp(
+  apiKey: string,
+  args: GetLocalSerpResultsArgs,
+  context: PlacesToolContext,
+) {
+  if (args.searchType === "local_finder") {
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "Google Places has no Local Finder. Use searchType maps, or set DATAFORSEO_API_KEY.",
+    );
+  }
+  const requested = args.depth ?? 20;
+  const listing = await searchListings(apiKey, {
+    textQuery: args.keyword,
+    area: {
+      bias: {
+        latitude: args.near.latitude,
+        longitude: args.near.longitude,
+        radiusM: PLACES_LOCAL_SERP_BIAS_M,
+      },
+    },
+    maxRows: Math.min(requested, PLACES_MAX_ROWS),
+    ...placesLocale(
+      args.languageCode ?? context.project.languageCode,
+      context.project,
+    ),
+  });
+  const results = listing.places.map((place, index) => ({
+    rank_group: index + 1,
+    rank_absolute: index + 1,
+    ...toLocalRow(place),
+  }));
+
+  const lines = [
+    `Fetched ${results.length} Google Maps rows for "${args.keyword}" from Google Places, biased to a ${PLACES_LOCAL_SERP_BIAS_M / 1000} km circle around the point (zoom and device do not apply).`,
+  ];
+  if (requested > PLACES_MAX_ROWS) {
+    lines.push(
+      `Google Places returns at most ${PLACES_MAX_ROWS} rows, so depth was capped at ${PLACES_MAX_ROWS}.`,
+    );
+  }
+  if (listing.budgetStopped) {
+    lines.push(
+      "Stopped early: the monthly Google Places budget has no calls left for another page.",
+    );
+  }
+  if (results.length > 0) {
+    lines.push(formatMcpTable(results, LOCAL_SERP_COLUMNS));
+  }
+  return mcpResponse({
+    text: [...lines, ...placesNotes(listing.budget)].join("\n"),
+    meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
+    structuredContent: {
+      results,
+      ...placesResponseFields(listing.budget, listing.places),
+    },
+  });
+}
+
+async function searchPlacesBusinesses(
+  apiKey: string,
+  args: SearchLocalBusinessesArgs,
+  context: PlacesToolContext,
+) {
+  // Places does not say whether a listing is claimed; dropping the filter
+  // would present claimed listings as unclaimed prospects.
+  if (args.isClaimed != null) {
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "Google Places does not report whether a listing is claimed. Remove isClaimed, or set DATAFORSEO_API_KEY.",
+    );
+  }
+  const textQuery = args.query ?? args.categories?.[0]?.replaceAll("_", " ");
+  if (!textQuery) {
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "Google Places searches by text: pass query or categories.",
+    );
+  }
+  const offset = args.offset ?? 0;
+  const limit = args.limit ?? 20;
+  if (offset >= PLACES_MAX_ROWS) {
+    throw new AppError(
+      "VALIDATION_ERROR",
+      `Google Places returns at most ${PLACES_MAX_ROWS} businesses per search, so offset must be below ${PLACES_MAX_ROWS}.`,
+    );
+  }
+
+  // Filters and sorts Google can't apply run here over the whole fetched set,
+  // before the offset, so they need every row Google will return.
+  const needsAllRows =
+    args.sortBy === "rating" ||
+    args.sortBy === "reviews" ||
+    args.minReviews != null;
+  const listing = await searchListings(apiKey, {
+    textQuery,
+    area: { restriction: boundsAround(args.near, args.near.radiusKm) },
+    maxRows: needsAllRows
+      ? PLACES_MAX_ROWS
+      : Math.min(PLACES_MAX_ROWS, offset + limit),
+    // Google rounds minRating up to the next 0.5; send it rounded down and
+    // apply the exact threshold below.
+    minRating:
+      args.minRating == null ? undefined : Math.floor(args.minRating * 2) / 2,
+    ...placesLocale(context.project.languageCode, context.project),
+  });
+
+  const matching = listing.places
+    .map(toLocalRow)
+    .filter(
+      (row) =>
+        (args.minRating == null ||
+          (row.rating.value ?? 0) >= args.minRating) &&
+        (args.minReviews == null ||
+          (row.rating.votes_count ?? 0) >= args.minReviews),
+    );
+  const sortField =
+    args.sortBy === "rating"
+      ? "value"
+      : args.sortBy === "reviews"
+        ? "votes_count"
+        : null;
+  const ordered = sortField
+    ? sort(
+        matching,
+        (a, b) => (b.rating[sortField] ?? 0) - (a.rating[sortField] ?? 0),
+      )
+    : matching;
+  const businesses = ordered.slice(offset, offset + limit);
+
+  const ignoredCategories = args.query
+    ? (args.categories ?? [])
+    : (args.categories ?? []).slice(1);
+  const lines = [
+    `Found ${businesses.length} local businesses for "${textQuery}" on Google Places, within ±${args.near.radiusKm} km of the point.`,
+    "On Google Places this row is the full listing; get_business_profile needs DataForSEO.",
+  ];
+  if (ignoredCategories.length > 0) {
+    lines.push(
+      `Google Places searches by text only; these categories were not used: ${ignoredCategories.join(", ")}.`,
+    );
+  }
+  if (listing.budgetStopped) {
+    lines.push(
+      "Stopped early: the monthly Google Places budget has no calls left for another page.",
+    );
+  }
+  if (businesses.length > 0) {
+    lines.push(formatMcpTable(businesses, LOCAL_BUSINESS_COLUMNS));
+  }
+  return mcpResponse({
+    text: [...lines, ...placesNotes(listing.budget)].join("\n"),
+    meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
+    structuredContent: {
+      businesses,
+      ...placesResponseFields(listing.budget, listing.places),
+    },
+  });
+}
+
 export const getRankedKeywordsTool = {
   name: "get_ranked_keywords",
   config: {
@@ -879,6 +1058,10 @@ export const searchLocalBusinessesTool = {
   },
   handler: withMcpProjectAuth(
     async (args: SearchLocalBusinessesArgs, context) => {
+      const placesKey = await getGoogleFallbackKey("GOOGLE_PLACES_API_KEY");
+      if (placesKey) {
+        return searchPlacesBusinesses(placesKey, args, context);
+      }
       const client = createDataforseoClient(context.billing);
       const rows = await client.business.businessListings({
         categories: args.categories,
@@ -926,6 +1109,10 @@ export const getLocalSerpResultsTool = {
   },
   handler: withMcpProjectAuth(
     async (args: GetLocalSerpResultsArgs, context) => {
+      const placesKey = await getGoogleFallbackKey("GOOGLE_PLACES_API_KEY");
+      if (placesKey) {
+        return getPlacesLocalSerp(placesKey, args, context);
+      }
       const client = createDataforseoClient(context.billing);
       const rows = await client.serp.local({
         keyword: args.keyword,
