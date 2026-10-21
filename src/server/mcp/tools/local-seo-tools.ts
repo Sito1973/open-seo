@@ -11,7 +11,10 @@ import {
 } from "@/server/lib/dataforseo";
 import { AppError } from "@/server/lib/errors";
 import { buildCacheKey, getCached, setCached } from "@/server/lib/r2-cache";
-import { getGoogleFallbackKey } from "@/server/lib/runtime-env";
+import {
+  getGoogleFallbackKey,
+  usesGoogleFallbacks,
+} from "@/server/lib/runtime-env";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
 import {
@@ -48,6 +51,7 @@ import {
   placesLocale,
   placesNotes,
 } from "@/server/mcp/tools/local-seo-places";
+import { listGoogleBusinessCategories } from "@/server/mcp/tools/business-categories-google";
 
 // ---------------------------------------------------------------------------
 // Shared plumbing
@@ -643,6 +647,9 @@ export const listBusinessCategoriesTool = {
   },
   handler: withMcpProjectAuth(
     async (args: ListBusinessCategoriesArgs, context) => {
+      if (await usesGoogleFallbacks()) {
+        return listGoogleBusinessCategories(args, context);
+      }
       // The upstream list takes no parameters, so one cache entry serves every
       // query/limit combination; filtering happens below, in memory.
       const cacheKey = await buildCacheKey(

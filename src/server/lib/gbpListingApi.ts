@@ -45,6 +45,8 @@ const LISTING_READ_MASK = [
   "metadata",
 ].join(",");
 const MAX_ATTRIBUTE_METADATA = 500;
+// Google lists about 4,000 categories per region.
+const MAX_CATEGORIES = 10_000;
 const RECENT_POSTS = 10;
 const POST_SUMMARY_PREVIEW = 200;
 
@@ -53,6 +55,14 @@ export type RawFoodMenu = z.infer<typeof foodMenuSchema>;
 
 const splitMask = (mask: string | undefined) =>
   (mask ?? "").split(",").filter(Boolean);
+
+function categoriesUrl(input: { regionCode: string; languageCode: string }) {
+  const url = new URL(`${BUSINESS_INFO_API_BASE}/categories`);
+  url.searchParams.set("regionCode", input.regionCode);
+  url.searchParams.set("languageCode", input.languageCode);
+  url.searchParams.set("view", "BASIC");
+  return url;
+}
 
 export function createGbpListingApi(request: GbpRequest) {
   const get = (url: URL | string) => request("GET", url);
@@ -147,14 +157,25 @@ export function createGbpListingApi(request: GbpRequest) {
       regionCode: string;
       languageCode: string;
     }) {
-      const url = new URL(`${BUSINESS_INFO_API_BASE}/categories`);
-      url.searchParams.set("regionCode", input.regionCode);
-      url.searchParams.set("languageCode", input.languageCode);
-      url.searchParams.set("view", "BASIC");
+      const url = categoriesUrl(input);
       url.searchParams.set("filter", `displayName=${input.query}`);
       url.searchParams.set("pageSize", "25");
       const data = categoriesResponseSchema.parse(await get(url));
       return data.categories ?? [];
+    },
+
+    /** Every category Google offers businesses in the region. */
+    async listCategories(input: { regionCode: string; languageCode: string }) {
+      return collectPages(MAX_CATEGORIES, async (pageToken) => {
+        const url = categoriesUrl(input);
+        url.searchParams.set("pageSize", "100");
+        if (pageToken) url.searchParams.set("pageToken", pageToken);
+        const page = categoriesResponseSchema.parse(await get(url));
+        return {
+          items: page.categories ?? [],
+          nextPageToken: page.nextPageToken,
+        };
+      });
     },
 
     async putReviewReply(input: {

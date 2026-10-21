@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- every local-SEO tool is covered in this one spec, matching local-seo-tools.ts */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@/server/lib/errors";
+import { GbpNotConnectedError } from "@/server/lib/gbpErrors";
 import {
   getBusinessProfileTool,
   getBusinessReviewsTool,
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     >(),
   getCached: vi.fn(),
   setCached: vi.fn(),
+  listGbpCategories: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
@@ -47,6 +49,10 @@ vi.mock("@/server/features/projects/services/ProjectService", () => ({
   ProjectService: {
     getProjectForOrganization: mocks.getProjectForOrganization,
   },
+}));
+
+vi.mock("@/server/features/gbp/services/GbpListingService", () => ({
+  GbpListingService: { listCategories: mocks.listGbpCategories },
 }));
 
 const toolContext = makeToolContext();
@@ -429,7 +435,12 @@ describe("list_business_categories", () => {
     { category: "plumber", businessCount: 90 },
   ];
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("caches the full list and filters it in memory", async () => {
+    vi.stubEnv("DATAFORSEO_API_KEY", "dataforseo-key");
     mocks.fetchBusinessListingsCategories.mockResolvedValue({
       data: categories,
       billing: { path: [], costUsd: 0 },
@@ -448,5 +459,75 @@ describe("list_business_categories", () => {
       { category: "pizza_restaurant", businessCount: 120 },
     ]);
     expect(textContent(result)).toContain("pizza_restaurant | 120");
+  });
+
+  describe("on a self-hosted install without DataForSEO", () => {
+    beforeEach(() => {
+      vi.stubEnv("DATAFORSEO_API_KEY", "");
+      vi.stubEnv("AUTH_MODE", "");
+      mocks.getProjectForOrganization.mockResolvedValue({
+        id: "project_1",
+        locationCode: 2170,
+        languageCode: "es",
+      });
+      mocks.listGbpCategories.mockResolvedValue([
+        {
+          name: "categories/gcid:hamburger_restaurant",
+          displayName: "Hamburguesería",
+        },
+        { name: "categories/gcid:arepa_restaurant", displayName: "Arepera" },
+      ]);
+    });
+
+    it("lists Business Profile categories in the project's country and language", async () => {
+      const result = await listBusinessCategoriesTool.handler(
+        { projectId: "project_1", query: "hamburgueseria" },
+        toolContext,
+      );
+
+      expect(mocks.listGbpCategories).toHaveBeenCalledWith({
+        projectId: "project_1",
+        regionCode: "CO",
+        languageCode: "es",
+      });
+      expect(mocks.fetchBusinessListingsCategories).not.toHaveBeenCalled();
+      expect(mocks.setCached).toHaveBeenCalledWith(
+        expect.any(String),
+        [
+          { category: "hamburger_restaurant", displayName: "Hamburguesería" },
+          { category: "arepa_restaurant", displayName: "Arepera" },
+        ],
+        30 * 24 * 60 * 60,
+      );
+      expect(result.structuredContent).toMatchObject({
+        source: "google_business_profile",
+        categories: [
+          {
+            category: "hamburger_restaurant",
+            displayName: "Hamburguesería",
+            placesType: true,
+            businessCount: null,
+          },
+        ],
+      });
+    });
+
+    it("lists Google Places types, uncached, while Business Profile is not connected", async () => {
+      mocks.listGbpCategories.mockRejectedValue(
+        new GbpNotConnectedError("project_1"),
+      );
+
+      const result = await listBusinessCategoriesTool.handler(
+        { projectId: "project_1", query: "hamburger" },
+        toolContext,
+      );
+
+      expect(mocks.setCached).not.toHaveBeenCalled();
+      expect(result.structuredContent).toMatchObject({
+        source: "google_places_types",
+        categories: [{ category: "hamburger_restaurant", placesType: true }],
+      });
+      expect(textContent(result)).toContain("not connected");
+    });
   });
 });

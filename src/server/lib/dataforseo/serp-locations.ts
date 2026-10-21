@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { dataforseoGet } from "@/server/lib/dataforseo/core";
 import { assertOk } from "@/server/lib/dataforseo/envelope";
+import { fetchGoogleGeotargets } from "@/server/lib/googleGeotargets";
+import { usesGoogleFallbacks } from "@/server/lib/runtime-env";
 import { formatLocationLabel } from "@/shared/keyword-locations";
 
 export interface SerpLocationResult {
@@ -54,7 +56,9 @@ function cacheKey(iso: string): string {
  * The DataForSEO response is ~9.5MB for the US and the endpoint has no search
  * parameter, so the slimmed list (~1.5MB) is cached in KV (30d TTL, hot reads
  * edge-cached via cacheTtl); only a miss pays the origin fetch. The endpoint
- * is free (cost 0), so no billing envelope.
+ * is free (cost 0), so no billing envelope. A self-hosted install without
+ * DataForSEO fills the same cache from Google Ads' geo targets file, which
+ * has the same codes, names and types.
  */
 export async function fetchSerpLocationsForCountry(
   countryCode: string,
@@ -82,7 +86,7 @@ function fillFromOrigin(iso: string): Promise<SerpLocationResult[]> {
   const inflight = inflightFills.get(iso);
   if (inflight) return inflight;
 
-  const fill = fetchFromDataforseo(iso)
+  const fill = fetchFromOrigin(iso)
     .then(async (fresh) => {
       await env.KV.put(cacheKey(iso), JSON.stringify(fresh), {
         expirationTtl: KV_TTL_SECONDS,
@@ -94,7 +98,21 @@ function fillFromOrigin(iso: string): Promise<SerpLocationResult[]> {
   return fill;
 }
 
-async function fetchFromDataforseo(iso: string): Promise<SerpLocationResult[]> {
+async function fetchFromOrigin(iso: string): Promise<SerpLocationResult[]> {
+  const locations = (await usesGoogleFallbacks())
+    ? await fetchGoogleGeotargets(iso)
+    : await fetchFromDataforseo(iso);
+  return locations
+    .filter((location) => INCLUDED_LOCATION_TYPES.has(location.locationType))
+    .map((location) => ({
+      ...location,
+      // The whole canonical name: Colombia has two "Pereira" cities,
+      // "Pereira,Risaralda,Colombia" and "Pereira,Pereira,Risaralda,Colombia".
+      displayLabel: formatLocationLabel(location.locationName),
+    }));
+}
+
+async function fetchFromDataforseo(iso: string) {
   const response = await dataforseoGet(
     `/v3/serp/google/locations/${encodeURIComponent(iso)}`,
   );
@@ -102,11 +120,9 @@ async function fetchFromDataforseo(iso: string): Promise<SerpLocationResult[]> {
   return (task.result ?? [])
     .map((item) => locationItemSchema.safeParse(item))
     .flatMap((parsed) => (parsed.success ? [parsed.data] : []))
-    .filter((item) => INCLUDED_LOCATION_TYPES.has(item.location_type ?? ""))
     .map((item) => ({
       locationCode: item.location_code,
       locationName: item.location_name,
-      displayLabel: formatLocationLabel(item.location_name),
       locationType: item.location_type ?? "",
     }));
 }

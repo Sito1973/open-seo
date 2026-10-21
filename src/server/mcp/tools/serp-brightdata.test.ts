@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   reserveCalls: vi.fn(),
   getCached: vi.fn(),
   setCached: vi.fn(),
+  fetchSerpLocationsForCountry: vi.fn(),
   fetch: vi.fn<typeof fetch>(),
 }));
 
@@ -28,6 +29,9 @@ vi.mock("@/server/lib/r2-cache", () => ({
 vi.mock("@/server/lib/dataforseo", () => ({
   createDataforseoClient: mocks.createDataforseoClient,
   SERP_ANALYSIS_DEPTH: 20,
+}));
+vi.mock("@/server/lib/dataforseo/serp-locations", () => ({
+  fetchSerpLocationsForCountry: mocks.fetchSerpLocationsForCountry,
 }));
 vi.mock("@/server/features/projects/services/ProjectService", () => ({
   ProjectService: {
@@ -74,6 +78,9 @@ beforeEach(() => {
   mocks.reserveCalls.mockResolvedValue(7);
   mocks.getCached.mockResolvedValue(null);
   mocks.setCached.mockResolvedValue(undefined);
+  mocks.fetchSerpLocationsForCountry.mockResolvedValue([
+    { locationName: "Pereira,Risaralda,Colombia" },
+  ]);
 });
 
 afterEach(() => {
@@ -151,7 +158,7 @@ it("answers a repeat within 12 hours from the cache without a request", async ()
   });
 });
 
-it("sends a query's city as Google's uule without a DataForSEO lookup", async () => {
+it("checks each query's city against Google's location list before spending a request", async () => {
   answerPages({ cafe: { organic: organic("https://a.com/") } });
 
   const result = await getSerpResultsTool.handler(
@@ -159,12 +166,23 @@ it("sends a query's city as Google's uule without a DataForSEO lookup", async ()
       projectId: "project_1",
       queries: [
         { keyword: "cafe", locationName: "Pereira,Risaralda,Colombia" },
+        { keyword: "bar", locationName: "Pereira, Colombia" },
       ],
     },
     toolContext,
   );
 
-  expect(result.structuredContent).toMatchObject({ results: [{ ok: true }] });
+  expect(mocks.fetchSerpLocationsForCountry).toHaveBeenCalledWith("co");
+  expect(result.structuredContent).toMatchObject({
+    results: [
+      { keyword: "cafe", ok: true },
+      { keyword: "bar", ok: false },
+    ],
+  });
+  expect(textContent(result)).toContain(
+    '"bar": FAILED — "Pereira, Colombia" is not a city',
+  );
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
   expect(mocks.fetch.mock.calls[0]?.[1]?.body).toContain("&uule=w+");
 });
 

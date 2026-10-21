@@ -214,6 +214,32 @@ and `https://www.example.com` are different sites. A bare domain such as
 - OpenSEO stores nothing from CrUX. For trends, ask for `historyWeeks` instead
   of keeping snapshots.
 
+## Locations: Google's geo targets file
+
+Without DataForSEO, the city picker, the `search_serp_locations` MCP tool and
+every check of a city name read Google's own location list: the
+[geo targets file](https://developers.google.com/google-ads/api/data/geotargets)
+Google publishes for Google Ads. It needs no key and costs nothing. Its IDs
+and names are the ones DataForSEO uses, so a tracker saved with one works with
+the other.
+
+- The first search in a country downloads the file (about 3.5 MB) and keeps
+  that country's active cities, counties, municipalities and regions for 30
+  days. Postal codes, neighborhoods and states are left out, as with
+  DataForSEO.
+- OpenSEO reads the file Google published on 2026-10-06. Places Google adds
+  later appear with a later OpenSEO release.
+- Saving a rank tracker with a city checks the name against this list and
+  refuses a name that is not on it. If the file cannot be downloaded, the
+  tracker saves without the check. `get_serp_results` checks a query's city
+  the same way before it sends a request, and fails while the file cannot be
+  downloaded.
+
+The picker shows each location's full name. Colombia has two cities named
+Pereira: `Pereira,Risaralda,Colombia` (ID 1003665) and
+`Pereira,Pereira,Risaralda,Colombia` (ID 9198430). This guide uses 1003665;
+pick the same one for every tracker so they measure the same place.
+
 ## Google Places: Maps rank grid, local SERP, business search and place details
 
 With `GOOGLE_PLACES_API_KEY` set, three MCP tools run on the
@@ -230,8 +256,11 @@ Text Search instead of DataForSEO:
 - `get_local_serp_results`: the `maps` search type only. `local_finder` still
   needs DataForSEO.
 - `search_local_businesses`: searches by `query`, or by the first category when
-  no query is given. The `isClaimed` filter still needs DataForSEO, because
-  Places does not say whether a listing is claimed.
+  no query is given. When the first category is also a
+  [Places type](https://developers.google.com/maps/documentation/places/web-service/place-types),
+  such as `hamburger_restaurant`, Google returns only places of that type. The
+  `isClaimed` filter still needs DataForSEO, because Places does not say
+  whether a listing is claimed.
 
 The tools keep their names and output shapes. Their responses add
 `provider: "google_places"`, the Google Maps attribution and the month's budget
@@ -248,8 +277,17 @@ so they are a sample, not the newest reviews or the full history. Pass it a
 
 These tools still need DataForSEO: `get_business_profile` and
 `get_business_reviews` (on Places, use `get_place_details`),
-`get_business_updates`, `get_google_business_questions` and
-`list_business_categories`.
+`get_business_updates` and `get_google_business_questions`.
+
+`list_business_categories` needs no Places key. With Google Business Profile
+connected to the project (see the
+[Business Profile guide](SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md)), it lists
+Google's Business Profile categories for the project's country, in the
+project's language, and keeps the list for 30 days. Their IDs are the category
+slugs DataForSEO uses, such as `hamburger_restaurant`. Until Business Profile
+is connected, it lists the Places types in English. Neither source counts the
+businesses in each category. Each row says whether the category is a Places
+type, the only kind that narrows `search_local_businesses`.
 
 ### Built-in monthly budget
 
@@ -391,12 +429,11 @@ Each request fetches one Google results page with about 10 organic results:
   describe. If checks for another country fail with that error, Bright Data
   could not follow Google's redirect for it.
 - **Language and city:** `hl` is the tracker's or query's language. A tracker
-  or query with a city adds Google's `uule` location parameter. Without
-  DataForSEO, OpenSEO cannot look up or check city names, and
-  `search_serp_locations` does not work. Pass Google's canonical name for the
-  city, `City,Region,Country` with no spaces after the commas, for example
-  `Pereira,Risaralda,Colombia`, as a tracker's or query's `locationName`. Google
-  may ignore a name it does not recognize and return country-wide results.
+  or query with a city adds Google's `uule` location parameter. The city must
+  be a name from [Google's geo targets file](#locations-googles-geo-targets-file)
+  exactly as `search_serp_locations` returns it, for example
+  `Pereira,Risaralda,Colombia`. OpenSEO refuses any other name before it sends
+  a request.
 - **Device:** mobile checks ask Bright Data for a mobile browser
   (`brd_mobile=1`); `get_serp_results` and `find_serp_competitors` use desktop.
 - **Depth:** each further 10 results is one more request (`start=10`,
@@ -508,9 +545,8 @@ For a city, county or region, pass Google's canonical name as `locationName`,
 for example `Pereira,Risaralda,Colombia` (geo target 1003665). OpenSEO looks
 the name up in Google Ads and rejects a name that is not a location in the
 project's country. Ideas then stay national and the volumes become local, as
-with DataForSEO. Without DataForSEO, `search_serp_locations` does not work, so
-take the name from Google's
-[geo targets table](https://developers.google.com/google-ads/api/data/geotargets).
+with DataForSEO. Without DataForSEO, `search_serp_locations` and the city
+picker search [Google's geo targets file](#locations-googles-geo-targets-file).
 
 The project's language becomes a Google Ads language (Spanish is 1003). A
 language Google Ads does not offer is left out, which Google reads as every

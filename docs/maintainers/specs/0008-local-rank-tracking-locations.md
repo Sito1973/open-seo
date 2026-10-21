@@ -62,6 +62,39 @@ usually happens before the first keystroke. Warm searches are tens of ms.
 Cost is noise either way: KV bills per operation, so storage for all supported
 countries is ~$0.02/month and each search read is fractions of a cent.
 
+## Self-hosted installs without DataForSEO
+
+DataForSEO's registry is a copy of Google Ads' geo targets: its location codes
+are criteria IDs and its location names are canonical names. A self-hosted
+install that does not use DataForSEO for these features (no key, or a key kept
+to backlinks) fills the same KV entry, with the same shape, types and 30-day
+TTL, from the geo targets file Google publishes as a CSV inside a zip. The rest
+of the stack (picker, `search_serp_locations`, research and SERP checks) cannot
+tell the two sources apart, and a config saved under one stays valid under the
+other.
+
+- **Fetch:** one dated file URL pinned in code. The zip holds a single deflated
+  CSV with its size in the local file header, so it is unpacked with the
+  runtime's `DecompressionStream('deflate-raw')` and no zip library. The ~23 MB
+  CSV is streamed line by line and only the requested country's lines are
+  parsed (papaparse), so it is never held whole in memory.
+- **Filter:** country code, `Active` status, and the same five types.
+- **Validation:** with no DataForSEO sandbox to ask, saving a config checks its
+  `location_name` against this registry, failing open when the file cannot be
+  loaded, as the sandbox check does. Live SERP requests check a query's city
+  the same way before spending a request, since an unknown `uule` name silently
+  returns country-wide results.
+
+| Alternative                                 | Why not                                                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Discover the newest file from the docs page | Scrapes an HTML page for a link; a redesign breaks it. A pinned file changes only when code changes it. |
+| Google Ads `SuggestGeoTargetConstants`      | Needs the owner's Ads OAuth and API access for a lookup that should work before any setup.              |
+| A zip library                               | One known layout needs a 30-byte header read, which the platform's decompression already covers.        |
+
+Colombia shows why the picker always displays the full canonical name: the
+file has two "Pereira" cities, `Pereira,Risaralda,Colombia` and
+`Pereira,Pereira,Risaralda,Colombia`.
+
 ## Future directions (not built)
 
 - **Picker quality**: prominence-ranked results (offline GeoNames/Census tier

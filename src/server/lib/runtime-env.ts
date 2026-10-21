@@ -69,12 +69,20 @@ export async function getDataforseoKey(
 }
 
 /**
+ * Whether stand-ins for DataForSEO apply: a self-hosted install that does not
+ * use DataForSEO for features other than backlinks (no key, or a key kept to
+ * backlinks by DATAFORSEO_SCOPE). Hosted billing and every install that uses
+ * DataForSEO for them keep their exact behavior.
+ */
+export async function usesGoogleFallbacks(): Promise<boolean> {
+  if (await getDataforseoKey("other")) return false;
+  return !(await isHostedServerAuthMode());
+}
+
+/**
  * A key for a provider of Google data that stands in for DataForSEO: a free
  * Google API, the Google Ads Keyword Planner, Bright Data's live Google SERP,
- * or SerpApi's Google AI Mode. It applies only on self-hosted installs that do
- * not use DataForSEO for that feature (no key, or a key kept to backlinks by
- * DATAFORSEO_SCOPE), so hosted billing and every install that uses DataForSEO
- * for it keep their exact behavior.
+ * or SerpApi's Google AI Mode. Null unless usesGoogleFallbacks().
  */
 export async function getGoogleFallbackKey(
   name:
@@ -84,8 +92,7 @@ export async function getGoogleFallbackKey(
     | "BRIGHTDATA_API_KEY"
     | "SERPAPI_API_KEY",
 ): Promise<string | null> {
-  if (await getDataforseoKey("other")) return null;
-  if (await isHostedServerAuthMode()) return null;
+  if (!(await usesGoogleFallbacks())) return null;
   return (await getOptionalEnvValue(name)) ?? null;
 }
 

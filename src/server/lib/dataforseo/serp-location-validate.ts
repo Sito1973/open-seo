@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { dataforseoPost } from "@/server/lib/dataforseo/core";
 import { invalidFieldName } from "@/server/lib/dataforseo/envelope";
+import { fetchSerpLocationsForCountry } from "@/server/lib/dataforseo/serp-locations";
 import { AppError } from "@/server/lib/errors";
+import { usesGoogleFallbacks } from "@/server/lib/runtime-env";
 
 const DATAFORSEO_SANDBOX_URL = "https://sandbox.dataforseo.com";
 const SANDBOX_TIMEOUT_MS = 10_000;
@@ -48,8 +50,10 @@ export function probeSerpLocation(
 export async function assertSerpLocationNameAccepted(input: {
   locationName: string;
   languageCode: string;
-  countryCode?: string;
+  countryCode: string;
 }): Promise<void> {
+  if (await usesGoogleFallbacks()) return assertInLocationRegistry(input);
+
   let task: z.infer<typeof sandboxTaskSchema>;
   try {
     task = await probeSerpLocation(input.locationName, input.languageCode, {
@@ -78,8 +82,43 @@ export async function assertSerpLocationNameAccepted(input: {
       `DataForSEO rejected this tracker: ${task.status_message}`,
     );
   }
-  throw new AppError(
+  throw unknownLocationName(input);
+}
+
+/**
+ * Without DataForSEO there is no sandbox to ask, so the name must be one of
+ * the country's registry rows (Google Ads' geo targets file), the list the
+ * picker and search_serp_locations search. Fails open, like the sandbox, when
+ * the registry cannot load.
+ */
+async function assertInLocationRegistry(input: {
+  locationName: string;
+  countryCode: string;
+}): Promise<void> {
+  let locationNames: string[];
+  try {
+    const locations = await fetchSerpLocationsForCountry(input.countryCode);
+    locationNames = locations.map((location) => location.locationName);
+  } catch (error) {
+    console.warn(
+      "[serp-location-validate] location list unavailable, skipping",
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+    return;
+  }
+  if (!locationNames.includes(input.locationName)) {
+    throw unknownLocationName(input);
+  }
+}
+
+function unknownLocationName(input: {
+  locationName: string;
+  countryCode: string;
+}): AppError {
+  return new AppError(
     "VALIDATION_ERROR",
-    `"${input.locationName}" is not a Google location name. Call search_serp_locations({ query: "${input.locationName.split(",")[0].trim()}"${input.countryCode ? `, countryCode: "${input.countryCode}"` : ""} }) and pass the returned locationName exactly.`,
+    `"${input.locationName}" is not a Google location name. Call search_serp_locations({ query: "${input.locationName.split(",")[0].trim()}", countryCode: "${input.countryCode}" }) and pass the returned locationName exactly.`,
   );
 }

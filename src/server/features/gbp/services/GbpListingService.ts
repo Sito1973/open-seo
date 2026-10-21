@@ -142,6 +142,21 @@ async function searchCategories(input: {
   };
 }
 
+/** Every Business Profile category in the region, read with the project's
+ *  connection: Google's list is the same for any account. */
+async function listCategories(input: {
+  projectId: string;
+  languageCode: string;
+  regionCode: string;
+}) {
+  await requireSelfHosted();
+  const { client } = await connectedClient(input.projectId);
+  return client.listCategories({
+    languageCode: input.languageCode,
+    regionCode: input.regionCode,
+  });
+}
+
 async function updateListing(
   input: LocationInput & { fields: ListingFields; apply: boolean },
 ): Promise<EditResult> {
@@ -371,6 +386,7 @@ async function updateAttributes(
 export const GbpListingService = {
   getListing,
   searchCategories,
+  listCategories,
   updateListing,
   updateAttributes,
 };

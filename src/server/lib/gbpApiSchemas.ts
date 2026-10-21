@@ -307,6 +307,7 @@ export const categoriesResponseSchema = z.object({
   categories: z
     .array(z.object({ name: z.string(), displayName: z.string().default("") }))
     .optional(),
+  nextPageToken: z.string().optional(),
 });
 
 export const localPostsResponseSchema = z.object({

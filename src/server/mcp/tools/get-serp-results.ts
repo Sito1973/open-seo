@@ -248,8 +248,9 @@ export const getSerpResultsTool = {
  * A self-hosted install without DataForSEO reads the live SERP from Bright
  * Data, one request from the monthly budget per 10 rows of depth (default
  * one page). Rows are cached like DataForSEO's, so a repeat within 12 hours
- * sends no request. A city name goes straight into uule: checking it needs
- * DataForSEO's location list.
+ * sends no request. A city name must be in the country's location list
+ * (Google Ads' geo targets file) before it goes into uule, so a misspelled
+ * city fails without spending a request on country-wide results.
  */
 async function getBrightDataSerpResults(
   config: BrightDataSerp,
@@ -268,6 +269,12 @@ async function getBrightDataSerpResults(
           ...resolveMarket(q, context.project),
           locationName: q.locationName,
         };
+        if (q.locationName) {
+          await assertLocalResearchLocation(
+            market.locationCode,
+            q.locationName,
+          );
+        }
         const source = brightDataSourceNote(market);
         const cacheKey = await buildCacheKey("mcp:serp-results", {
           organizationId: context.billing.organizationId,
