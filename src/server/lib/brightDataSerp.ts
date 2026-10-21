@@ -285,7 +285,9 @@ async function fetchSerpPage(
     `https://${host}/`,
   );
   if (input.start > 0) url += `&start=${input.start}`;
-  if (input.device === "mobile") url += "&brd_mobile=1";
+  // brd_mobile=1 (any mobile browser) answered 502 "no_ready_cookies" on this
+  // zone for Colombian searches, while android answered.
+  if (input.device === "mobile") url += "&brd_mobile=android";
 
   let response: Response;
   try {

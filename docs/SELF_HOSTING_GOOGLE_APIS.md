@@ -540,7 +540,7 @@ Each request fetches one Google results page with about 10 organic results:
   `Pereira,Risaralda,Colombia`. OpenSEO refuses any other name before it sends
   a request.
 - **Device:** mobile checks ask Bright Data for a mobile browser
-  (`brd_mobile=1`); `get_serp_results` uses desktop, and
+  (`brd_mobile=android`); `get_serp_results` uses desktop, and
   `find_serp_competitors` uses mobile only for a project whose rank tracker
   checks mobile only.
 - **Depth:** each further 10 results is one more request (`start=10`,

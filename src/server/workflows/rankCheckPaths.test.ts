@@ -129,7 +129,7 @@ it("stores the domain's organic position from the country's Google page", async 
       country: "co",
     },
   });
-  expect(mobile.body).toMatchObject({ url: `${googleUrl}&brd_mobile=1` });
+  expect(mobile.body).toMatchObject({ url: `${googleUrl}&brd_mobile=android` });
   expect(rest).toEqual([]);
   expect(mocks.reserveCalls).toHaveBeenCalledWith(
     expect.objectContaining({ sku: "brightdata_serp", count: 1, limit: 4500 }),

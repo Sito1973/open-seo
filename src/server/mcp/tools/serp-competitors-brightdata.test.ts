@@ -135,7 +135,7 @@ it("answers from this organization's saved pages and searches only the rest live
   expect(rest).toEqual([]);
   expect(sent).toContain("q=pizza+pereira");
   expect(sent).toContain("&uule=w+");
-  expect(sent).toContain("&brd_mobile=1");
+  expect(sent).toContain("&brd_mobile=android");
   expect(result.structuredContent).toMatchObject({
     competitors: [{ domain: "bandidos.co" }, { domain: "sumo.co" }],
     keywords: [
