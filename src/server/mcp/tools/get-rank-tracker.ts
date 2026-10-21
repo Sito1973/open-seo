@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { RankTrackingService } from "@/server/features/rank-tracking/services/RankTrackingService";
+import {
+  brightDataSourceNote,
+  getBrightDataSerp,
+} from "@/server/lib/brightDataSerp";
 import { mcpResponse } from "@/server/mcp/formatters";
 import { buildProjectMeta } from "@/server/mcp/context";
 import {
@@ -146,6 +150,7 @@ export const getRankTrackerTool = {
     const text = [
       `Tracker ${config.id} (${config.domain}${config.locationName ? `, ${config.locationName}` : ""}):`,
       `Schedule: ${config.scheduleInterval}, devices: ${config.devices}, depth: ${config.serpDepth}`,
+      ...((await getBrightDataSerp()) ? [brightDataSourceNote(config)] : []),
       formatLatestRun(results.run),
       `Keywords (${results.rows.length}):`,
       results.rows.length === 0

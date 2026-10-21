@@ -10,6 +10,10 @@ import type {
   RankCheckResult,
   RankCheckTaskInput,
 } from "@/server/lib/dataforseo";
+import {
+  checkRankOnBrightData,
+  type BrightDataSerp,
+} from "@/server/lib/brightDataSerp";
 import { AppError } from "@/server/lib/errors";
 import type { RankTrackingConfig } from "@/types/schemas/rank-tracking";
 import { KEYWORDS_PER_BATCH } from "@/shared/rank-tracking";
@@ -18,6 +22,14 @@ import { pgStep } from "@/server/workflows/pgStep";
 const SINGLE_ATTEMPT_STEP_CONFIG = {
   retries: { limit: 0, delay: "1 second" as const },
   timeout: "2 minutes" as const,
+};
+
+// Bright Data fetches one Google page per request in 20-50 s, and a deep
+// check pages until it finds the domain, so its batches get room for 10
+// pages at the request timeout. Not retried: a retry spends budget again.
+const BRIGHT_DATA_STEP_CONFIG = {
+  retries: { limit: 0, delay: "1 second" as const },
+  timeout: "15 minutes" as const,
 };
 
 type KeywordEntry = { id: string; keyword: string };
@@ -43,6 +55,8 @@ function mapResultsToSnapshotRows(
 
 interface CheckContext {
   client: ReturnType<typeof createDataforseoClient>;
+  /** Set on a self-hosted install without DataForSEO: checks run on it. */
+  brightData: BrightDataSerp | null;
   keywords: KeywordEntry[];
   devices: RankTrackingConfig["devices"];
   serpDepth: number;
@@ -79,26 +93,32 @@ function expandToTaskInputs(
  * Check keyword/device pairs against the live endpoint and persist snapshots.
  * The batch is billed with one credit hold and one settle. Per-call failures
  * are logged and skipped; if the hold itself fails, no call runs and every
- * pair fails with that error. Returns the snapshot count written.
+ * pair fails with that error. On Bright Data each pair instead reserves its
+ * requests from the monthly budget one page at a time. Returns the snapshot
+ * count written.
  */
 async function checkBatchLive(
   ctx: CheckContext,
   tasks: RankCheckTaskInput[],
 ): Promise<number> {
+  const inputs = tasks.map((task) => ({
+    keyword: task.keyword,
+    keywordId: task.keywordId,
+    locationCode: ctx.locationCode,
+    languageCode: ctx.languageCode,
+    locationName: ctx.locationName,
+    device: task.device,
+    targetDomain: ctx.domain,
+    depth: ctx.serpDepth,
+  }));
+  const { brightData } = ctx;
   let settled: PromiseSettledResult<RankCheckResult>[];
   try {
-    settled = await ctx.client.serp.rankCheckBatch(
-      tasks.map((task) => ({
-        keyword: task.keyword,
-        keywordId: task.keywordId,
-        locationCode: ctx.locationCode,
-        languageCode: ctx.languageCode,
-        locationName: ctx.locationName,
-        device: task.device,
-        targetDomain: ctx.domain,
-        depth: ctx.serpDepth,
-      })),
-    );
+    settled = brightData
+      ? await Promise.allSettled(
+          inputs.map((input) => checkRankOnBrightData(brightData, input)),
+        )
+      : await ctx.client.serp.rankCheckBatch(inputs);
   } catch (error) {
     settled = tasks.map(() => ({ status: "rejected", reason: error }));
   }
@@ -113,7 +133,7 @@ async function checkBatchLive(
     const code = reason instanceof AppError ? reason.code : "UNKNOWN";
     const message = reason instanceof Error ? reason.message : String(reason);
     firstError ??= message;
-    // DataForSEO erring on its own side is a provider flake, not our bug: the
+    // The provider erring on its own side is a flake, not our bug: the
     // keyword just misses this run and finalize reports it to the user. Every
     // other rejection (no credits, bad API key) is ours and stays at error.
     const log = code === "UPSTREAM_UNAVAILABLE" ? console.warn : console.error;
@@ -152,7 +172,7 @@ export async function runLiveCheck(
     await pgStep(
       step,
       `live-batch-${batchIndex}`,
-      SINGLE_ATTEMPT_STEP_CONFIG,
+      ctx.brightData ? BRIGHT_DATA_STEP_CONFIG : SINGLE_ATTEMPT_STEP_CONFIG,
       async () => {
         const written = await checkBatchLive(ctx, batchTasks);
         // Progress for the UI; finalize recounts from the DB anyway.

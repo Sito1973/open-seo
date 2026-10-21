@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   autumnCheck: vi.fn(),
   createDataforseoClient: vi.fn(),
   runLiveCheck: vi.fn(),
+  runQueuedCheck: vi.fn(),
+  getBrightDataSerp: vi.fn(),
   failRunIfActive: vi.fn(),
   captureServerEvent: vi.fn(),
   isHostedServerAuthMode: vi.fn(),
@@ -33,7 +35,10 @@ vi.mock("@/server/features/rank-tracking/services/rankCheckRunGuards", () => ({
 }));
 vi.mock("@/server/workflows/rankCheckPaths", () => ({
   runLiveCheck: mocks.runLiveCheck,
-  runQueuedCheck: vi.fn(),
+  runQueuedCheck: mocks.runQueuedCheck,
+}));
+vi.mock("@/server/lib/brightDataSerp", () => ({
+  getBrightDataSerp: mocks.getBrightDataSerp,
 }));
 vi.mock("@/server/workflows/pgStep", () => ({
   pgStep: (
@@ -78,7 +83,7 @@ const payload = {
   languageCode: "en",
   devices: "desktop" as const,
   serpDepth: 10,
-  trigger: "manual" as const,
+  trigger: "manual" as "manual" | "scheduled",
 };
 
 function keywords(count: number) {
@@ -103,6 +108,10 @@ function runWorkflow(
     {} as WorkflowStep,
   );
 }
+
+beforeEach(() => {
+  mocks.getBrightDataSerp.mockResolvedValue(null);
+});
 
 describe("rank check workflow credit ceiling", () => {
   beforeEach(() => {
@@ -174,5 +183,29 @@ describe("rank check finalization", () => {
       }),
     );
     expect(mocks.updateConfig).not.toHaveBeenCalled();
+  });
+});
+
+describe("rank check on Bright Data", () => {
+  const brightData = { apiKey: "bd-key", zone: "openseo_serp" };
+
+  beforeEach(() => {
+    mocks.getConfigById.mockResolvedValue({ isActive: true });
+    mocks.getRunById.mockResolvedValue(activeRun);
+    mocks.getKeywordsForConfig.mockResolvedValue(keywords(2));
+    mocks.getSnapshotsForRun.mockResolvedValue([]);
+    mocks.isHostedServerAuthMode.mockResolvedValue(false);
+    mocks.getBrightDataSerp.mockResolvedValue(brightData);
+  });
+
+  // Bright Data has no task queue, and DataForSEO's would fail without a key.
+  it("runs a scheduled check live", async () => {
+    await runWorkflow({ trigger: "scheduled" });
+
+    expect(mocks.runQueuedCheck).not.toHaveBeenCalled();
+    expect(mocks.runLiveCheck).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ brightData }),
+    );
   });
 });

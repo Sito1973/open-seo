@@ -72,6 +72,11 @@ declare namespace Cloudflare {
     // and place details. Used only on self-hosted installs without
     // DATAFORSEO_API_KEY.
     GOOGLE_PLACES_API_KEY?: string;
+    // Bright Data SERP API key and zone for the live Google SERP behind rank
+    // tracking, get_serp_results and find_serp_competitors. Used only on
+    // self-hosted installs without DATAFORSEO_API_KEY.
+    BRIGHTDATA_API_KEY?: string;
+    BRIGHTDATA_SERP_ZONE?: string;
     AI_VISIBILITY_WORKFLOW: Workflow<
       (
         | { runId: string }

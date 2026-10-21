@@ -15,6 +15,7 @@ import {
 } from "@/server/workflows/rankCheckPaths";
 import { pgStep } from "@/server/workflows/pgStep";
 import { createDataforseoClient } from "@/server/lib/dataforseo";
+import { getBrightDataSerp } from "@/server/lib/brightDataSerp";
 import { captureServerEvent } from "@/server/lib/posthog";
 import { AppError } from "@/server/lib/errors";
 import { autumn } from "@/server/billing/autumn";
@@ -340,6 +341,8 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
 
       const keywords = prepareResult.keywords;
       const client = createDataforseoClient(billingCustomer);
+      // Set only on a self-hosted install without DataForSEO.
+      const brightData = await getBrightDataSerp();
 
       console.log(`[rank-check] ${runId} loaded ${keywords.length} keywords`);
 
@@ -349,6 +352,7 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
       try {
         const checkContext = {
           client,
+          brightData,
           keywords,
           devices,
           serpDepth,
@@ -359,8 +363,9 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
           runId,
         };
         // Scheduled checks use DataForSEO's task queue (~30% of live cost);
-        // manual checks stay on the live endpoint for instant results.
-        if (trigger === "scheduled") {
+        // manual checks stay on the live endpoint for instant results. Bright
+        // Data has no queue, so every check on it is live.
+        if (trigger === "scheduled" && !brightData) {
           queueStats = await runQueuedCheck(step, checkContext);
         } else {
           await runLiveCheck(step, checkContext);

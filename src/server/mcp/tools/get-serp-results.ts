@@ -4,6 +4,13 @@ import {
   createDataforseoClient,
   SERP_ANALYSIS_DEPTH,
 } from "@/server/lib/dataforseo";
+import {
+  brightDataBudgetLine,
+  brightDataSourceNote,
+  fetchBrightDataSerp,
+  getBrightDataSerp,
+  type BrightDataSerp,
+} from "@/server/lib/brightDataSerp";
 import { buildCacheKey, getCached, setCached } from "@/server/lib/r2-cache";
 import { mcpResponse } from "@/server/mcp/formatters";
 import { buildProjectMeta } from "@/server/mcp/context";
@@ -40,6 +47,22 @@ const SERP_ITEM_COLUMNS: McpTableColumn<SerpItem>[] = [
   { header: "rank", value: (item) => item.rank },
   { header: "domain", value: (item) => item.domain },
   { header: "title", value: (item) => item.title },
+  { header: "url", value: (item) => item.url },
+];
+
+type LocalPackItem = {
+  rank: number;
+  title: string | null;
+  url: string | null;
+  rating: number | null;
+  reviews_count: number | null;
+};
+
+const LOCAL_PACK_COLUMNS: McpTableColumn<LocalPackItem>[] = [
+  { header: "rank", value: (item) => item.rank },
+  { header: "name", value: (item) => item.title },
+  { header: "rating", value: (item) => item.rating },
+  { header: "reviews", value: (item) => item.reviews_count },
   { header: "url", value: (item) => item.url },
 ];
 
@@ -114,6 +137,8 @@ export const getSerpResultsTool = {
     },
   },
   handler: withMcpProjectAuth(async (args: Args, context) => {
+    const brightData = await getBrightDataSerp();
+    if (brightData) return getBrightDataSerpResults(brightData, args, context);
     const client = createDataforseoClient(context.billing);
     const depth = args.depth ?? SERP_ANALYSIS_DEPTH;
     const results = await Promise.all(
@@ -211,3 +236,125 @@ export const getSerpResultsTool = {
     });
   }),
 };
+
+/**
+ * A self-hosted install without DataForSEO reads the live SERP from Bright
+ * Data, one request from the monthly budget per 10 rows of depth (default
+ * one page). Nothing is cached: OpenSEO keeps no copy of a live SERP.
+ */
+async function getBrightDataSerpResults(
+  config: BrightDataSerp,
+  args: Args,
+  context: {
+    baseUrl: string;
+    project: { locationCode: number; languageCode: string };
+  },
+) {
+  const depth = args.depth ?? 10;
+  const results = await Promise.all(
+    args.queries.map(async (q) => {
+      try {
+        const market = {
+          ...resolveMarket(q, context.project),
+          locationName: q.locationName,
+        };
+        if (q.locationName) {
+          await assertLocalResearchLocation(
+            market.locationCode,
+            q.locationName,
+          );
+        }
+        const serp = await fetchBrightDataSerp(config, {
+          keyword: q.keyword,
+          market,
+          device: "desktop",
+          depth,
+        });
+        const organic = serp.organic.map(({ position, ...item }) => ({
+          type: "organic",
+          rank: position,
+          ...item,
+        }));
+        const localPack: LocalPackItem[] = serp.localPack.map((item) => ({
+          rank: item.position,
+          title: item.title,
+          url: item.url,
+          rating: item.rating,
+          reviews_count: item.reviewsCount,
+        }));
+        return {
+          keyword: q.keyword,
+          ok: true as const,
+          organic,
+          localPack,
+          source: brightDataSourceNote(market),
+          usedThisMonth: serp.usedThisMonth,
+        };
+      } catch (error) {
+        return {
+          keyword: q.keyword,
+          ok: false as const,
+          error: toolErrorMessage(error),
+        };
+      }
+    }),
+  );
+
+  const succeeded = results.filter((r) => r.ok);
+  const blocks = results.map((r) => {
+    if (!r.ok) return `"${r.keyword}": FAILED — ${r.error}`;
+    const lines = [
+      r.organic.length === 0
+        ? `"${r.keyword}" (0 organic results)`
+        : `"${r.keyword}" (${r.organic.length} organic results):\n${formatMcpTable(r.organic, SERP_ITEM_COLUMNS)}`,
+    ];
+    if (r.localPack.length > 0) {
+      lines.push(
+        `Local pack:\n${formatMcpTable(r.localPack, LOCAL_PACK_COLUMNS)}`,
+      );
+    }
+    return lines.join("\n");
+  });
+  const text = [
+    ...blocks,
+    `${succeeded.length} of ${results.length} queries succeeded. rank is the position among organic results; local pack rows rank within the pack.`,
+    ...new Set(succeeded.map((r) => r.source)),
+    ...(succeeded.length > 0
+      ? [
+          brightDataBudgetLine(
+            Math.max(...succeeded.map((r) => r.usedThisMonth)),
+          ),
+        ]
+      : []),
+  ].join("\n\n");
+
+  return mcpResponse({
+    text,
+    meta: buildProjectMeta(
+      context,
+      args.projectId,
+      `/p/${args.projectId}/keywords`,
+    ),
+    structuredContent: {
+      results: results.map((r) =>
+        r.ok
+          ? {
+              keyword: r.keyword,
+              ok: r.ok,
+              items: [
+                ...r.organic,
+                ...r.localPack.map((item) => ({
+                  type: "local_pack",
+                  domain: null,
+                  description: null,
+                  ...item,
+                })),
+              ],
+              source: r.source,
+            }
+          : r,
+      ),
+      provider: "brightdata",
+    },
+  });
+}

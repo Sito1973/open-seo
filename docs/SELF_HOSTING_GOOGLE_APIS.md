@@ -1,8 +1,9 @@
 # Free Google APIs for self-hosted installs
 
-Some OpenSEO features can run on free Google APIs when your self-hosted install
-has no DataForSEO key. Each one is opt-in: set its key and leave
-`DATAFORSEO_API_KEY` unset.
+Some OpenSEO features can run on free Google APIs, or on the free tier of
+[Bright Data](#bright-data-live-google-serp-for-rank-tracking), when your
+self-hosted install has no DataForSEO key. Each one is opt-in: set its key and
+leave `DATAFORSEO_API_KEY` unset.
 
 When `DATAFORSEO_API_KEY` is set, OpenSEO keeps using DataForSEO and ignores
 these keys, except for the
@@ -63,7 +64,7 @@ On a platform that runs the image for you, set the variable in its environment
 settings and redeploy.
 
 `/api/health` confirms the key reached the app: with DataForSEO unset, the
-`dataforseo` check says that free Google APIs cover the Lighthouse checks.
+`dataforseo` check says that stand-in providers cover the Lighthouse checks.
 
 ### 4) Check your quota
 
@@ -248,7 +249,7 @@ GOOGLE_PLACES_API_KEY=your-key
 
 Recreate the container as in the PageSpeed Insights section. With DataForSEO
 unset, the `dataforseo` check in `/api/health` lists Google Places among the
-free Google APIs in use.
+stand-in providers in use.
 
 ### Accuracy
 
@@ -274,3 +275,115 @@ Google Maps link for this.
 SAM, the in-app agent, saves its chat history, which would store Places results.
 So while Google Places is in use, SAM refuses the three search tools, and it
 does not offer `get_place_details` at all. Run them from an MCP client instead.
+
+## Bright Data: live Google SERP for rank tracking
+
+Google has no API for its own search results. With `BRIGHTDATA_API_KEY` and
+`BRIGHTDATA_SERP_ZONE` set, OpenSEO reads live Google results from
+[Bright Data's SERP API](https://docs.brightdata.com/scraping-automation/serp-api/send-your-first-request)
+instead of DataForSEO. Bright Data is a paid service, not a Google API, but its
+free tier covers 5,000 requests a month, and OpenSEO stays under it.
+
+It runs:
+
+- **Rank tracking**, manual and scheduled. A keyword's position is the
+  organic position of the tracked domain or one of its subdomains, as with
+  DataForSEO, and its SERP features (local pack, People Also Ask, ads, and so
+  on) come from the same pages. Scheduled checks also run live: Bright Data has
+  no cheaper queue.
+- **`get_serp_results`**: the organic results plus the local pack (name,
+  rating, review count and link). Depth defaults to 10 here.
+- **`find_serp_competitors`**: up to 10 keywords per call, from each keyword's
+  live top 10 organic results. Each domain gets its keyword count, average and
+  median position, and its position per keyword. Visibility and traffic
+  estimates need search volumes, which a live results page does not have, so
+  they are not returned, and only organic results are counted.
+
+Each response says where its results came from, for example "Bright Data live
+Google SERP from www.google.com.co (exit country CO, language es)". The rank
+tracker says it in `get_rank_tracker` and `estimate_rank_tracker_cost`.
+
+### How a request is built
+
+Each request fetches one Google results page with about 10 organic results:
+
+- **Country:** Bright Data sends it from an IP address in the project's
+  country. For Colombia OpenSEO asks `www.google.com.co`: from a Colombian
+  address, `google.com` with `gl=co` was refused with "redirect location was
+  rejected". Other countries use `google.com` with `gl`, as Bright Data's docs
+  describe. If checks for another country fail with that error, Bright Data
+  could not follow Google's redirect for it.
+- **Language and city:** `hl` is the tracker's or query's language. A tracker
+  or query with a city adds Google's `uule` location parameter.
+- **Device:** mobile checks ask Bright Data for a mobile browser
+  (`brd_mobile=1`); `get_serp_results` and `find_serp_competitors` use desktop.
+- **Depth:** each further 10 results is one more request (`start=10`,
+  `start=20`, …). A rank check stops at the page where the tracked domain
+  appears, so a domain on page 1 costs one request whatever the tracker's
+  depth.
+
+A request takes 20 to 50 seconds. A rank check sends its keywords in batches
+of 10, both devices at once, so 20 keywords on both devices take a few minutes.
+
+OpenSEO does not ask for AI Overviews. Bright Data can request them
+(`brd_ai_overview`), but on the tested zone those requests failed with "No
+ready cookies". The `ai_overview` SERP feature appears only when Google shows
+one on a normal results page.
+
+### Built-in monthly budget
+
+| What OpenSEO sends                                                       | Bright Data free tier | OpenSEO budget |
+| ------------------------------------------------------------------------ | --------------------- | -------------- |
+| One Google results page (a rank check, query or keyword sends 1 or more) | 5,000 per month       | 4,500          |
+
+OpenSEO counts each request before sending it, and the budget resets on the
+1st of each month, UTC. When it runs out, the tool or rank check says so and
+nothing more is sent until next month. A rank check that runs out partway
+saves the keywords it finished and reports the rest as not checked. Bright
+Data does not bill failed requests, but OpenSEO still counts them, so its
+counter can run ahead of Bright Data's.
+
+For scale: four sites with 25 keywords each, checked weekly on both devices at
+depth 10, send about 870 requests a month when every domain ranks on page 1.
+A domain outside the top 10 costs one more request per 10 results of depth.
+
+There is no setting to raise the budget. The counter shares the table and the
+caveats of the [Google Places budget](#built-in-monthly-budget): it covers one
+OpenSEO database, so do not put the same Bright Data account on a second
+install, and it lives on the volume mounted at `/app/.wrangler`. If your Bright
+Data billing period does not start on the 1st, the two months do not line up;
+the 500-request margin absorbs some of that. On the free tier, Bright Data
+stops answering at its own cap. If you add a payment method, also set a
+monthly spend limit in Bright Data.
+
+### 1) Create a SERP API zone
+
+1. In the Bright Data control panel, add a **SERP API** zone.
+2. Open the zone's **Overview** tab. It shows the zone name and the API key.
+
+### 2) Set the environment variables
+
+```bash
+BRIGHTDATA_API_KEY=your-api-key
+BRIGHTDATA_SERP_ZONE=your-zone-name
+```
+
+Recreate the container as in the PageSpeed Insights section. With DataForSEO
+unset, the `dataforseo` check in `/api/health` lists Bright Data among the
+stand-in providers in use. OpenSEO sends the key only in the `Authorization`
+header.
+
+### Accuracy
+
+Google varies results by location, device, time and searcher. A Bright Data
+check shows what a new visitor in the project's country (or the tracker's
+city) sees, which can differ from what you see logged in. Compare Bright Data
+positions with other Bright Data positions; DataForSEO checks from its own
+locations.
+
+### What OpenSEO stores
+
+A rank check stores what a DataForSEO check stores: each keyword's position,
+ranking URL and the names of the SERP features on the page. OpenSEO keeps no
+copy of the results page. `get_serp_results` and `find_serp_competitors` are
+not cached on Bright Data, so repeating a call sends new requests.

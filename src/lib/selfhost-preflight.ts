@@ -147,7 +147,7 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
   const key = get(env, "DATAFORSEO_API_KEY");
 
   if (!key) {
-    // Free Google APIs that stand in for DataForSEO while it is unset.
+    // Providers that stand in for DataForSEO while it is unset.
     const replacements: string[] = [];
     if (get(env, "GOOGLE_PAGESPEED_API_KEY")) {
       replacements.push("site audit Lighthouse checks (PageSpeed Insights)");
@@ -157,8 +157,13 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
         "the Maps rank grid, local SERP, local business search and place details (Google Places)",
       );
     }
+    if (get(env, "BRIGHTDATA_API_KEY") && get(env, "BRIGHTDATA_SERP_ZONE")) {
+      replacements.push(
+        "rank tracking, get_serp_results and find_serp_competitors (Bright Data live Google SERP)",
+      );
+    }
     const impact = replacements.length
-      ? `free Google APIs cover ${replacements.join(", ")}; every other SEO data feature stays unavailable until it is set.`
+      ? `stand-in providers cover ${replacements.join(", ")}; every other SEO data feature stays unavailable until it is set.`
       : "all SEO data features will be unavailable until it is.";
     items.push({
       key: "dataforseo",
