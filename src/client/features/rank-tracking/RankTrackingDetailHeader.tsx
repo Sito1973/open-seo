@@ -1,4 +1,10 @@
-import { Monitor, Plus, Settings, Smartphone } from "lucide-react";
+import {
+  AlertTriangle,
+  Monitor,
+  Plus,
+  Settings,
+  Smartphone,
+} from "lucide-react";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import { Button } from "@/client/components/ui/button";
 import {
@@ -9,7 +15,11 @@ import {
   SelectValue,
 } from "@/client/components/ui/select";
 import { LOCATIONS } from "@/client/features/keywords/locations";
-import { devicesLabel, scheduleLabel } from "@/shared/rank-tracking";
+import {
+  devicesLabel,
+  formatRequestRange,
+  scheduleLabel,
+} from "@/shared/rank-tracking";
 import { formatNextCheck } from "./scheduleTime";
 import { formatLocationLabel } from "@/shared/keyword-locations";
 import type { RankTrackingConfig } from "@/types/schemas/rank-tracking";
@@ -39,7 +49,19 @@ export function RankTrackingDetailHeader({
 }: {
   config: RankTrackingConfig;
   run: { lastCheckedAt: string | null } | null | undefined;
-  costEstimate: { keywordCount: number; costUsd: number } | undefined;
+  costEstimate:
+    | {
+        keywordCount: number;
+        costUsd: number;
+        brightData?: {
+          minRequests: number;
+          maxRequests: number;
+          remaining: number;
+          monthlyBudget: number;
+          warning: string | null;
+        };
+      }
+    | undefined;
   hasBothDevices: boolean;
   activeDevice: "desktop" | "mobile";
   onActiveDeviceChange: (v: "desktop" | "mobile") => void;
@@ -68,9 +90,23 @@ export function RankTrackingDetailHeader({
             </>
           )}
           {costEstimate && costEstimate.keywordCount > 0 && (
-            <> &middot; ~${costEstimate.costUsd.toFixed(2)}/check</>
+            <>
+              {" "}
+              &middot;{" "}
+              {costEstimate.brightData ? (
+                <BrightDataCost {...costEstimate.brightData} />
+              ) : (
+                <>~${costEstimate.costUsd.toFixed(2)}/check</>
+              )}
+            </>
           )}
         </p>
+        {costEstimate?.brightData?.warning && (
+          <p className="mt-1 flex items-start gap-1.5 text-xs text-warning">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            {costEstimate.brightData.warning}
+          </p>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {hasBothDevices && (
@@ -126,5 +162,25 @@ export function RankTrackingDetailHeader({
         </Button>
       </div>
     </div>
+  );
+}
+
+function BrightDataCost({
+  minRequests,
+  maxRequests,
+  remaining,
+  monthlyBudget,
+}: {
+  minRequests: number;
+  maxRequests: number;
+  remaining: number;
+  monthlyBudget: number;
+}) {
+  return (
+    <span title="Each keyword and device sends one Bright Data request per page of 10 results, stopping at the page where the domain appears.">
+      {formatRequestRange(minRequests, maxRequests)} Bright Data requests/check
+      &middot; {remaining.toLocaleString("en-US")} of{" "}
+      {monthlyBudget.toLocaleString("en-US")} left this month
+    </span>
   );
 }

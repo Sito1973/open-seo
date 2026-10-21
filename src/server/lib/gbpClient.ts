@@ -198,9 +198,10 @@ export function createGbpClient(opts: {
           url.searchParams.set("orderBy", input.orderBy);
           if (pageToken) url.searchParams.set("pageToken", pageToken);
           const page = reviewsResponseSchema.parse(await get(url));
+          // Kept from an earlier page when a later one leaves them out.
           summary = {
-            averageRating: page.averageRating ?? null,
-            totalReviewCount: page.totalReviewCount ?? 0,
+            averageRating: page.averageRating ?? summary.averageRating,
+            totalReviewCount: page.totalReviewCount ?? summary.totalReviewCount,
           };
           return {
             items: (page.reviews ?? []).map(toReview),

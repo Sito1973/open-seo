@@ -71,7 +71,7 @@ it("sends backlinks to DataForSEO and keeps every other feature on its stand-in"
       locationCode: 2840,
       languageCode: "en",
     }),
-  ).rejects.toThrow("DATAFORSEO_SCOPE=backlinks");
+  ).rejects.toMatchObject({ code: "PROVIDER_NOT_CONFIGURED" });
   expect(state.fetch).toHaveBeenCalledOnce();
   expect(await getGoogleFallbackKey("GOOGLE_PAGESPEED_API_KEY")).toBe(
     "pagespeed-key",

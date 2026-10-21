@@ -1,5 +1,5 @@
 /* eslint-disable max-lines, max-lines-per-function -- one spec covers every service-backed MCP text table */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as researchTools from "./dataforseo-research-tools";
 import { getBacklinksOverviewTool } from "./get-backlinks-overview";
 import { getDomainKeywordSuggestionsTool } from "./get-domain-keyword-suggestions";
@@ -84,6 +84,10 @@ describe("MCP tool text output (service-backed tools)", () => {
       locationCode: 2840,
       languageCode: "en",
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("get_domain_keyword_suggestions renders keyword rows", async () => {
@@ -241,6 +245,7 @@ describe("MCP tool text output (service-backed tools)", () => {
   });
 
   it("get_business_updates renders each collected post as a text table", async () => {
+    vi.stubEnv("DATAFORSEO_API_KEY", "dataforseo-key");
     const updatesTaskPost = vi.fn().mockResolvedValue("task-1");
     mocks.createDataforseoClient.mockReturnValue({
       business: { updatesTaskPost },

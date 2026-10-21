@@ -18,7 +18,11 @@ import { AppError } from "@/server/lib/errors";
 import { PLACES_MAX_ROWS, searchListings } from "@/server/lib/googlePlaces";
 import { getKeywordPlannerClient } from "@/server/lib/googleAdsKeywordPlanner";
 import { KEYWORD_PLANNER_SOURCE_NOTE } from "@/server/lib/keywordPlannerConfig";
-import { getGoogleFallbackKey } from "@/server/lib/runtime-env";
+import { isPlacesBusinessType } from "@/server/lib/placesTypes";
+import {
+  getGoogleFallbackKey,
+  usesGoogleFallbacks,
+} from "@/server/lib/runtime-env";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
 import {
@@ -878,7 +882,14 @@ async function searchPlacesBusinesses(
       "Google Places does not report whether a listing is claimed. Remove isClaimed, or use DataForSEO for every feature (DATAFORSEO_API_KEY without DATAFORSEO_SCOPE).",
     );
   }
-  const textQuery = args.query ?? args.categories?.[0]?.replaceAll("_", " ");
+  // The first category is the text to search when there is no query, and the
+  // place type to filter by when Google Places has it as a type.
+  const [firstCategory, ...otherCategories] = args.categories ?? [];
+  const includedType =
+    firstCategory && isPlacesBusinessType(firstCategory)
+      ? firstCategory
+      : undefined;
+  const textQuery = args.query ?? firstCategory?.replaceAll("_", " ");
   if (!textQuery) {
     throw new AppError(
       "VALIDATION_ERROR",
@@ -913,6 +924,7 @@ async function searchPlacesBusinesses(
     // apply the exact threshold below.
     minRating:
       args.minRating == null ? undefined : Math.floor(args.minRating * 2) / 2,
+    includedType,
     ...placesLocale(context.project.languageCode, context.project),
   });
 
@@ -938,16 +950,17 @@ async function searchPlacesBusinesses(
     : matching;
   const businesses = ordered.slice(offset, offset + limit);
 
-  const ignoredCategories = args.query
-    ? (args.categories ?? [])
-    : (args.categories ?? []).slice(1);
+  const ignoredCategories =
+    args.query && firstCategory && !includedType
+      ? [firstCategory, ...otherCategories]
+      : otherCategories;
   const lines = [
-    `Found ${businesses.length} local businesses for "${textQuery}" on Google Places, within ±${args.near.radiusKm} km of the point.`,
-    "On Google Places this row is the full listing. For up to 5 reviews and whether a place offers delivery, dine-in, takeout, reservations or outdoor seating, call get_place_details with its place_id; get_business_profile and get_business_reviews need DataForSEO.",
+    `Found ${businesses.length} local businesses for "${textQuery}"${includedType ? ` of the place type ${includedType}` : ""} on Google Places, within ±${args.near.radiusKm} km of the point.`,
+    "On Google Places this row is the full listing. For up to 5 reviews and whether a place offers delivery, dine-in, takeout, reservations or outdoor seating, call get_place_details with its place_id. For the project's own listings, get_business_profile and get_business_reviews read every review through Business Profile.",
   ];
   if (ignoredCategories.length > 0) {
     lines.push(
-      `Google Places searches by text only; these categories were not used: ${ignoredCategories.join(", ")}.`,
+      `Google Places searches by text and at most one place type; these categories were not used: ${ignoredCategories.join(", ")}.`,
     );
   }
   if (listing.budgetStopped) {
@@ -1168,6 +1181,13 @@ export const getGoogleBusinessQuestionsTool = {
   },
   handler: withMcpProjectAuth(
     async (args: GetGoogleBusinessQuestionsArgs, context) => {
+      // Not listed there; this answers clients that cached the tool list.
+      if (await usesGoogleFallbacks()) {
+        throw new AppError(
+          "NOT_FOUND",
+          "Google Business Profile Q&A needs DataForSEO, which this server does not use for it. Google retired the Business Profile Q&A API on November 3, 2025, so no Google API stands in.",
+        );
+      }
       const identifier = resolveBusinessIdentifier(args);
       const client = createDataforseoClient(context.billing);
       const rows = await client.business.questionsAnswers({

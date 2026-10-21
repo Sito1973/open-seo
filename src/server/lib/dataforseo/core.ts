@@ -72,13 +72,16 @@ function createAuthenticatedFetch(
     const path = formatDataforseoRequestPath(url);
     const api = path.startsWith("/v3/backlinks/") ? "backlinks" : "other";
     // With DATAFORSEO_SCOPE=backlinks, every other API fails here as without
-    // a key, so nothing but backlinks can reach DataForSEO.
+    // a key, so nothing but backlinks can reach DataForSEO. A feature that
+    // gets here has no stand-in either: there is no source for it.
     const apiKey = await getDataforseoKey(api);
     if (!apiKey) {
-      throw new Error(
+      throw new AppError(
+        "PROVIDER_NOT_CONFIGURED",
         api === "other" && (await isDataforseoBacklinksOnly())
-          ? "DataForSEO is kept to backlinks on this server (DATAFORSEO_SCOPE=backlinks), and this feature has no stand-in provider set up. See docs/SELF_HOSTING_GOOGLE_APIS.md."
-          : "Missing required environment variable: DATAFORSEO_API_KEY",
+          ? "No source for this on this server: DataForSEO is kept to backlinks (DATAFORSEO_SCOPE=backlinks), and this feature has no stand-in provider set up. See docs/SELF_HOSTING_GOOGLE_APIS.md."
+          : "No source for this on this server: DATAFORSEO_API_KEY is not set, and this feature has no stand-in provider set up. See docs/SELF_HOSTING_GOOGLE_APIS.md.",
+        { provider: "dataforseo", providerPath: path },
       );
     }
     // With the scope set, each backlinks request took one request from the

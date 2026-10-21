@@ -314,7 +314,7 @@ export function buildBacklinksColumns(
       <span className="flex w-full justify-end">
         <HelpLabel
           label="Ahrefs DR"
-          helpText="Ahrefs Domain Rating (0-100) for the linking domain."
+          helpText="Domain Rating by Ahrefs (0-100) for the linking domain."
         />
       </span>
     ),

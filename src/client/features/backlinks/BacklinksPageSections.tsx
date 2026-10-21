@@ -237,16 +237,31 @@ export function BacklinksResultsCard({
     ),
     // Kept visible on tab errors so a failing page still offers a way back.
     footer: (
-      <TablePagination
-        page={pagination.page}
-        pageSize={pagination.pageSize}
-        pageSizes={BACKLINKS_PAGE_SIZES}
-        totalCount={pagination.totalCount}
-        hasNextPage={pagination.hasNextPage}
-        isLoading={pagination.isFetching}
-        onPageChange={onPageChange}
-        onPageSizeChange={onPageSizeChange}
-      />
+      <>
+        {/* Ahrefs' license requires this wherever its ratings show. */}
+        {domainRatings && activeTab !== "pages" ? (
+          <p className="px-4 pt-2 text-xs text-muted-foreground">
+            <a
+              href="https://ahrefs.com/"
+              target="_blank"
+              rel="noreferrer"
+              className="underline-offset-4 hover:underline"
+            >
+              Domain Rating by Ahrefs
+            </a>
+          </p>
+        ) : null}
+        <TablePagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          pageSizes={BACKLINKS_PAGE_SIZES}
+          totalCount={pagination.totalCount}
+          hasNextPage={pagination.hasNextPage}
+          isLoading={pagination.isFetching}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
+      </>
     ),
   };
 

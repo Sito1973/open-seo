@@ -1,8 +1,14 @@
 import { RankTrackingRepository } from "@/server/features/rank-tracking/repositories/RankTrackingRepository";
 import type { rankTrackingKeywords } from "@/db/schema";
+import {
+  getBrightDataBudget,
+  getBrightDataSerp,
+} from "@/server/lib/brightDataSerp";
 import { AppError } from "@/server/lib/errors";
 import {
+  type BrightDataBudget,
   devicesCount,
+  estimateBrightDataRankCheckRequests,
   estimateRankCheckCredits,
   estimateScheduledRankCheckCredits,
   isScheduledRankTrackingInterval,
@@ -166,13 +172,24 @@ async function estimateCost(
   )
     ? config.scheduleInterval
     : null;
+  const totalChecks = keywordCount * devicesCount(config.devices);
+  const brightDataBudget = await getRankCheckBudget();
   return {
     costUsd,
     costCredits,
     keywordCount,
     devicesCount: devicesCount(config.devices),
-    totalChecks: keywordCount * devicesCount(config.devices),
+    totalChecks,
     serpDepth: config.serpDepth,
+    // Where checks run on Bright Data, what they take from its monthly cap.
+    brightData: brightDataBudget
+      ? estimateBrightDataRankCheckRequests(
+          totalChecks,
+          config.serpDepth,
+          scheduleInterval,
+          brightDataBudget,
+        )
+      : undefined,
     method: "live" as const,
     existingKeywordCount,
     additionalKeywordCount: keywordCount - existingKeywordCount,
@@ -185,6 +202,14 @@ async function estimateCost(
         )
       : undefined,
   };
+}
+
+/**
+ * This server's Bright Data budget where rank checks run on Bright Data, or
+ * null where they run on DataForSEO.
+ */
+async function getRankCheckBudget(): Promise<BrightDataBudget | null> {
+  return (await getBrightDataSerp()) ? getBrightDataBudget() : null;
 }
 
 async function getValidatedConfig(configId: string, projectId: string) {
@@ -213,4 +238,5 @@ export const RankTrackingKeywordService = {
   removeKeywords,
   setKeywordsPinned,
   estimateCost,
+  getRankCheckBudget,
 };

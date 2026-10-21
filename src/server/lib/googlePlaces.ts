@@ -379,6 +379,8 @@ export async function searchListings(
       | { restriction: { low: LatLng; high: LatLng } };
     maxRows: number;
     minRating?: number;
+    /** A Table A place type; only places of that type come back. */
+    includedType?: string;
   },
 ) {
   const area =
@@ -409,6 +411,9 @@ export async function searchListings(
       regionCode: input.regionCode,
       includePureServiceAreaBusinesses: true,
       minRating: input.minRating,
+      ...(input.includedType
+        ? { includedType: input.includedType, strictTypeFiltering: true }
+        : {}),
       ...area,
       pageSize: Math.min(PAGE_SIZE, input.maxRows - places.length),
       pageToken,

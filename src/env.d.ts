@@ -97,6 +97,9 @@ declare namespace Cloudflare {
     // SerpApi key for Google AI Mode answers in AI visibility tracking. Used
     // only on self-hosted installs without DATAFORSEO_API_KEY.
     SERPAPI_API_KEY?: string;
+    // APIv3 key of a free Ahrefs account for the Backlinks tables' Domain
+    // Rating column (Ahrefs' free endpoint). Unset: the column stays empty.
+    AHREFS_API_KEY?: string;
     AI_VISIBILITY_WORKFLOW: Workflow<
       (
         | { runId: string }

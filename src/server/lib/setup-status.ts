@@ -3,7 +3,7 @@ import { version } from "../../../package.json";
 import { db } from "@/db";
 import { projects } from "@/db/schema";
 import { getAuthMode } from "@/lib/auth-mode";
-import { runSelfhostChecks } from "@/lib/selfhost-preflight";
+import { runSelfhostChecks, seoDataProviders } from "@/lib/selfhost-preflight";
 import { getOptionalEnvValue } from "@/server/lib/runtime-env";
 
 // "error" blocks core functionality; "warn" degrades a feature.
@@ -41,6 +41,7 @@ const CHECK_ENV_VARS = [
   "BETTER_AUTH_SECRET",
   "OPENROUTER_API_KEY",
   "CONTEXT_API_KEY",
+  "AHREFS_API_KEY",
 ] as const;
 
 const LEVEL_TO_STATUS = {
@@ -65,16 +66,25 @@ async function checkDatabase(): Promise<SetupCheck> {
   }
 }
 
-export async function getSelfHostSetupStatus(options?: {
-  skipDatabaseCheck?: boolean;
-}): Promise<SelfHostSetupStatus> {
-  const env = Object.fromEntries(
+async function readCheckEnv() {
+  return Object.fromEntries(
     await Promise.all(
       CHECK_ENV_VARS.map(
         async (name) => [name, await getOptionalEnvValue(name)] as const,
       ),
     ),
   );
+}
+
+/** DataForSEO and the stand-ins serving SEO data, as the preflight sees them. */
+export async function getSeoDataProviders() {
+  return seoDataProviders(await readCheckEnv());
+}
+
+export async function getSelfHostSetupStatus(options?: {
+  skipDatabaseCheck?: boolean;
+}): Promise<SelfHostSetupStatus> {
+  const env = await readCheckEnv();
 
   const checks: Record<string, SetupCheck> = {};
   for (const item of runSelfhostChecks(env)) {

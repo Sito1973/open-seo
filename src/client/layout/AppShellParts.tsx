@@ -32,8 +32,9 @@ function SeoApiStatusBanners({
     <>
       {shouldShowSeoApiWarning ? (
         <AppBanner variant="warning" icon={icon}>
-          Setup needed: add your DataForSEO API key to use OpenSEO features. See
-          the quick steps on the {helpLink}.
+          Setup needed: nothing serves SEO data on this server yet. Add a
+          DataForSEO API key or, self-hosted, the free Google and Bright Data
+          stand-ins. See the quick steps on the {helpLink}.
         </AppBanner>
       ) : null}
 
@@ -58,7 +59,9 @@ function MissingSeoSetupModal({ onClose }: { onClose: () => void }) {
           <div className="space-y-2">
             <DialogTitle>One quick setup step</DialogTitle>
             <DialogDescription>
-              Add your DataForSEO API key to start using OpenSEO.
+              Add a DataForSEO API key or, on a self-hosted server, the free
+              Google and Bright Data stand-ins to start using OpenSEO's SEO data
+              features.
             </DialogDescription>
           </div>
         </DialogHeader>

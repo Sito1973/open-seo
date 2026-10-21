@@ -393,6 +393,25 @@ it("reserves each further page before sending it and stops when refused", async 
   expect(textContent(result)).toContain("Stopped early");
 });
 
+it("filters by the first category only when Google Places has it as a place type", async () => {
+  const area = { ...near, radiusKm: 2 };
+  for (const category of ["hamburger_restaurant", "arepa_restaurant"]) {
+    await searchLocalBusinessesTool.handler(
+      { projectId: "project_1", categories: [category], near: area },
+      toolContext,
+    );
+  }
+
+  const [typed, untyped] = sentRequests().map((request) => request.body);
+  expect(typed).toMatchObject({
+    textQuery: "hamburger restaurant",
+    includedType: "hamburger_restaurant",
+    strictTypeFiltering: true,
+  });
+  expect(untyped).toMatchObject({ textQuery: "arepa restaurant" });
+  expect(untyped).not.toHaveProperty("includedType");
+});
+
 it("refuses the isClaimed filter before sending a request", async () => {
   const call = searchLocalBusinessesTool.handler(
     {

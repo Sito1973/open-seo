@@ -17,6 +17,9 @@ vi.mock("@/server/auth/repositories/AuthRepository", () => ({
   },
 }));
 
+// Only self-hosted requests read the stand-ins, through db-backed modules.
+vi.mock("@/server/mcp/stand-ins", () => ({ getMcpStandIns: vi.fn() }));
+
 vi.mock("@/server/auth/default-hosted-organization", () => ({
   resolveExistingActiveHostedOrganization: vi.fn(),
 }));

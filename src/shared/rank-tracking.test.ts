@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { computeNextCheckAt, estimateRankCheckCredits } from "./rank-tracking";
+import {
+  computeNextCheckAt,
+  estimateBrightDataRankCheckRequests,
+  estimateRankCheckCredits,
+} from "./rank-tracking";
 
 describe("rank tracking cost estimates", () => {
   it.each([
@@ -46,6 +50,30 @@ describe("rank tracking cost estimates", () => {
           method,
         ),
       ).toEqual({ costUsd, costCredits });
+    },
+  );
+});
+
+// 100 keyword-device checks at depth 30 cost 100 to 300 Bright Data requests.
+describe("Bright Data rank check requests", () => {
+  it.each([
+    ["weekly", 0, null],
+    ["daily", 0, "up to 9,000"],
+    ["manual", 4_450, "only 50"],
+  ] as const)(
+    "warns when a %s tracker cannot fit the budget (%i used)",
+    (schedule, usedThisMonth, warning) => {
+      const estimate = estimateBrightDataRankCheckRequests(
+        100,
+        30,
+        schedule === "manual" ? null : schedule,
+        { usedThisMonth, monthlyBudget: 4_500 },
+      );
+
+      expect(estimate).toMatchObject({ minRequests: 100, maxRequests: 300 });
+      expect(estimate.warning).toEqual(
+        warning ? expect.stringContaining(warning) : null,
+      );
     },
   );
 });

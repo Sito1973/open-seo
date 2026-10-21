@@ -174,6 +174,67 @@ export function scheduledChecksPerMonth(
       : 1;
 }
 
+const formatCount = (value: number) => value.toLocaleString("en-US");
+
+/** A self-hosted server's Bright Data requests this month, against its cap. */
+export type BrightDataBudget = { usedThisMonth: number; monthlyBudget: number };
+
+/**
+ * Bright Data requests behind rank checks: each keyword and device sends one
+ * request per page of 10 results, stopping at the page where the domain
+ * appears, so a check costs between one page and the full depth. The warning
+ * says when a schedule cannot fit the server's monthly cap, or one check
+ * cannot fit what is left of it this month.
+ */
+export function estimateBrightDataRankCheckRequests(
+  totalChecks: number,
+  depth: number,
+  scheduleInterval: ScheduledRankTrackingInterval | null,
+  budget: BrightDataBudget,
+) {
+  const minRequests = totalChecks;
+  const maxRequests = totalChecks * Math.ceil(depth / 10);
+  const remaining = Math.max(0, budget.monthlyBudget - budget.usedThisMonth);
+  const checksPerMonth = scheduleInterval
+    ? scheduledChecksPerMonth(scheduleInterval)
+    : 0;
+  const scheduled = scheduleInterval
+    ? {
+        scheduleInterval,
+        checksPerMonth,
+        minRequestsPerMonth: minRequests * checksPerMonth,
+        maxRequestsPerMonth: maxRequests * checksPerMonth,
+      }
+    : undefined;
+  const cap = formatCount(budget.monthlyBudget);
+  let warning: string | null = null;
+  if (scheduled && scheduled.minRequestsPerMonth > budget.monthlyBudget) {
+    warning = `A ${scheduled.scheduleInterval} schedule needs at least ${formatCount(scheduled.minRequestsPerMonth)} Bright Data requests a month, more than this server's ${cap}. Choose a longer interval, one device, or fewer keywords.`;
+  } else if (
+    scheduled &&
+    scheduled.maxRequestsPerMonth > budget.monthlyBudget
+  ) {
+    warning = `A ${scheduled.scheduleInterval} schedule can need up to ${formatCount(scheduled.maxRequestsPerMonth)} Bright Data requests a month when the domain ranks below page 1, more than this server's ${cap}. Choose a longer interval, a shallower depth, one device, or fewer keywords.`;
+  } else if (minRequests > remaining) {
+    warning = `One check needs at least ${formatCount(minRequests)} Bright Data requests, but only ${formatCount(remaining)} of this month's ${cap} are left. The budget resets on the 1st (UTC).`;
+  }
+  return {
+    ...budget,
+    remaining,
+    minRequests,
+    maxRequests,
+    scheduled,
+    warning,
+  };
+}
+
+/** A Bright Data request range for display, e.g. "120–240" or "120". */
+export function formatRequestRange(min: number, max: number): string {
+  return min === max
+    ? formatCount(min)
+    : `${formatCount(min)}–${formatCount(max)}`;
+}
+
 export function isScheduledRankTrackingInterval(
   interval: RankTrackingConfig["scheduleInterval"],
 ): interval is ScheduledRankTrackingInterval {

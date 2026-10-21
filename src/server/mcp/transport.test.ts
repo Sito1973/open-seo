@@ -1,6 +1,6 @@
 import type { CreateMcpHandlerOptions } from "agents/mcp/server";
 import { McpServer } from "@modelcontextprotocol/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createWorkersOAuthMcpProps,
   MCP_AUTH_CONTEXT_PROP,
@@ -41,6 +41,17 @@ vi.mock("@/middleware/ensure-user/cloudflareAccess", () => ({
 
 vi.mock("@/middleware/ensure-user/delegated", () => ({
   resolveLocalNoAuthContext: selfHostedAuthMocks.resolveLocalNoAuthContext,
+}));
+
+// What the transport reads from the environment and hands to the server.
+const standIns = vi.hoisted(() => ({
+  brightData: true,
+  places: false,
+  keywordPlanner: false,
+  dataforseoBacklinks: false,
+}));
+vi.mock("@/server/mcp/stand-ins", () => ({
+  getMcpStandIns: async () => standIns,
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -136,6 +147,8 @@ function hostedProps(scopes: string[] = ["mcp"]) {
 
 describe("handleSelfHostedOpenSeoMcpRequest", () => {
   beforeEach(() => {
+    vi.stubEnv("DATAFORSEO_API_KEY", "");
+    vi.stubEnv("AUTH_MODE", "");
     selfHostedAuthMocks.resolveLocalNoAuthContext.mockResolvedValue({
       userId: "local-admin",
       userEmail: "admin@localhost",
@@ -146,6 +159,10 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
       userEmail: "person@example.com",
       organizationId: "delegated-cloudflare-user",
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it.each([
@@ -183,7 +200,8 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
       );
       expect(response.headers.get("connection")).not.toBe("keep-alive");
       expect(resolver).toHaveBeenCalled();
-      // Only the self-hosted transport registers the Business Profile tools.
+      // Only the self-hosted transport registers the Business Profile tools,
+      // and without DataForSEO it hides the tools that have no stand-in.
       expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith(
         {
           [MCP_AUTH_CONTEXT_PROP]: {
@@ -191,7 +209,7 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
             baseUrl: "https://open-seo.test",
           },
         },
-        { selfHosted: true },
+        { selfHosted: true, standIns },
       );
       // Self-hosted must not pin Origins to the request's own Host — the
       // handler's localhost-class default is the rebinding-safe choice.

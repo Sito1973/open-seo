@@ -54,8 +54,8 @@ four:
   lists their locations and reads and edits the profile: categories,
   description, hours, website, phone numbers and attributes.
 - [Google My Business API](https://console.cloud.google.com/apis/library/mybusiness.googleapis.com)
-  reads reviews, posts review replies, publishes posts and edits the food
-  menu.
+  reads reviews and photo counts, posts review replies, publishes posts and
+  edits the food menu.
 - [Business Profile Performance API](https://console.cloud.google.com/apis/library/businessprofileperformance.googleapis.com)
   reads daily metrics and search terms.
 
@@ -141,6 +141,12 @@ client directly to your own server:
 - `create_google_business_profile_post`: publish an update, event or offer,
   with an optional button and photo.
 - `update_google_business_profile_food_menu`: change, add or remove menu items.
+
+On a server without DataForSEO, `get_business_profile`, `get_business_reviews`
+and `get_business_updates` also use this connection when you pass the Place ID
+or cid of one of the project's locations: the star breakdown over every review,
+photo counts, reviews with your replies and your posts. See the
+[free Google APIs guide](SELF_HOSTING_GOOGLE_APIS.md#google-places-maps-rank-grid-local-serp-business-search-and-place-details).
 
 ## How edits work
 

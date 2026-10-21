@@ -19,6 +19,22 @@ These keys work on Docker self-hosting, including platforms that run the Docker
 image for you. The Cloudflare deploy requires a DataForSEO key, so it always
 uses DataForSEO.
 
+## Features without a source
+
+On an install without DataForSEO for a feature, that feature runs on the key
+from this guide that covers it, or has no source on this server:
+
+- The app's setup banner and setup dialog appear only when nothing serves SEO
+  data at all: no DataForSEO key and none of the keys in this guide. With any
+  of them set, the app opens without them.
+- A page or MCP tool with no source says "This server has no data source for
+  this feature" (error code `PROVIDER_NOT_CONFIGURED`) instead of an unexpected
+  error. It is not reported as a bug.
+- MCP tool descriptions say which provider a call uses instead of credits,
+  such as "each keyword sends one Bright Data request per 10 results of
+  depth", or that the tool has no source on this server, so an assistant can
+  skip it. The tool list follows the keys set when the request arrives.
+
 ## DataForSEO for backlinks only
 
 No Google API reports the links that point at a site, so backlinks need
@@ -214,6 +230,32 @@ and `https://www.example.com` are different sites. A bare domain such as
 - OpenSEO stores nothing from CrUX. For trends, ask for `historyWeeks` instead
   of keeping snapshots.
 
+## Locations: Google's geo targets file
+
+Without DataForSEO, the city picker, the `search_serp_locations` MCP tool and
+every check of a city name read Google's own location list: the
+[geo targets file](https://developers.google.com/google-ads/api/data/geotargets)
+Google publishes for Google Ads. It needs no key and costs nothing. Its IDs
+and names are the ones DataForSEO uses, so a tracker saved with one works with
+the other.
+
+- The first search in a country downloads the file (about 3.5 MB) and keeps
+  that country's active cities, counties, municipalities and regions for 30
+  days. Postal codes, neighborhoods and states are left out, as with
+  DataForSEO.
+- OpenSEO reads the file Google published on 2026-10-06. Places Google adds
+  later appear with a later OpenSEO release.
+- Saving a rank tracker with a city checks the name against this list and
+  refuses a name that is not on it. If the file cannot be downloaded, the
+  tracker saves without the check. `get_serp_results` checks a query's city
+  the same way before it sends a request, and fails while the file cannot be
+  downloaded.
+
+The picker shows each location's full name. Colombia has two cities named
+Pereira: `Pereira,Risaralda,Colombia` (ID 1003665) and
+`Pereira,Pereira,Risaralda,Colombia` (ID 9198430). This guide uses 1003665;
+pick the same one for every tracker so they measure the same place.
+
 ## Google Places: Maps rank grid, local SERP, business search and place details
 
 With `GOOGLE_PLACES_API_KEY` set, three MCP tools run on the
@@ -230,8 +272,11 @@ Text Search instead of DataForSEO:
 - `get_local_serp_results`: the `maps` search type only. `local_finder` still
   needs DataForSEO.
 - `search_local_businesses`: searches by `query`, or by the first category when
-  no query is given. The `isClaimed` filter still needs DataForSEO, because
-  Places does not say whether a listing is claimed.
+  no query is given. When the first category is also a
+  [Places type](https://developers.google.com/maps/documentation/places/web-service/place-types),
+  such as `hamburger_restaurant`, Google returns only places of that type. The
+  `isClaimed` filter still needs DataForSEO, because Places does not say
+  whether a listing is claimed.
 
 The tools keep their names and output shapes. Their responses add
 `provider: "google_places"`, the Google Maps attribution and the month's budget
@@ -246,10 +291,35 @@ and up to 5 reviews with their authors. Google picks the reviews by relevance,
 so they are a sample, not the newest reviews or the full history. Pass it a
 `place_id` from the other local tools to look at a competitor.
 
-These tools still need DataForSEO: `get_business_profile` and
-`get_business_reviews` (on Places, use `get_place_details`),
-`get_business_updates`, `get_google_business_questions` and
-`list_business_categories`.
+`get_business_profile`, `get_business_reviews` and `get_business_updates`
+take a `placeId` or `cid` here, not a business name:
+
+- A place that is one of the project's own locations in its connected
+  [Business Profile](SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md) account is read
+  through Business Profile, with no Places budget: the star breakdown counted
+  over every review (the newest 3,000 at most), the owner's and customers'
+  photo and video counts, up to 200 reviews with your replies in the order you
+  ask for, and your latest posts (up to 100, each cut to 200 characters).
+- Any other business is read from Place Details, one call from the Place
+  Details budget. Places has no star breakdown, claim status, photo count or
+  additional categories, so they come back as null. Its reviews are Google's 5
+  most relevant, without owner replies, so `sortBy` and `depth` do not apply.
+  Google has no API for another business's posts, so `get_business_updates`
+  refuses it.
+
+`get_google_business_questions` is not listed. Google retired the Business
+Profile Q&A API on November 3, 2025, and OpenSEO reads Q&A only through
+DataForSEO, so the tool appears only when DataForSEO serves every feature.
+
+`list_business_categories` needs no Places key. With Google Business Profile
+connected to the project (see the
+[Business Profile guide](SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md)), it lists
+Google's Business Profile categories for the project's country, in the
+project's language, and keeps the list for 30 days. Their IDs are the category
+slugs DataForSEO uses, such as `hamburger_restaurant`. Until Business Profile
+is connected, it lists the Places types in English. Neither source counts the
+businesses in each category. Each row says whether the category is a Places
+type, the only kind that narrows `search_local_businesses`.
 
 ### Built-in monthly budget
 
@@ -257,12 +327,12 @@ Unlike PageSpeed Insights, the Places API needs a billing account. Google gives
 each billing account a free monthly allowance per SKU, and OpenSEO stays under
 it with hard-coded budgets that reset at the start of each month, Pacific time:
 
-| What OpenSEO sends                                                          | Google SKU                            | Free per month | OpenSEO budget |
-| --------------------------------------------------------------------------- | ------------------------------------- | -------------- | -------------- |
-| One rank grid point for a target with a `placeId`                           | Text Search Essentials (IDs Only)     | Unlimited      | None needed    |
-| One rank grid point for a target with only a `cid` or `name` (3x3 grid = 9) | Text Search Pro                       | 5,000          | 4,500          |
-| One page of up to 20 local SERP or business search rows (at most 3 pages)   | Text Search Enterprise                | 1,000          | 900            |
-| One `get_place_details` call                                                | Place Details Enterprise + Atmosphere | 1,000          | 900            |
+| What OpenSEO sends                                                              | Google SKU                            | Free per month | OpenSEO budget |
+| ------------------------------------------------------------------------------- | ------------------------------------- | -------------- | -------------- |
+| One rank grid point for a target with a `placeId`                               | Text Search Essentials (IDs Only)     | Unlimited      | None needed    |
+| One rank grid point for a target with only a `cid` or `name` (3x3 grid = 9)     | Text Search Pro                       | 5,000          | 4,500          |
+| One page of up to 20 local SERP or business search rows (at most 3 pages)       | Text Search Enterprise                | 1,000          | 900            |
+| One `get_place_details` call, or a profile or reviews call for another business | Place Details Enterprise + Atmosphere | 1,000          | 900            |
 
 Except for place-ID rank grids, which Google does not bill, OpenSEO counts
 each request before sending it. When the budget for a SKU runs out, the tool
@@ -350,8 +420,10 @@ review, credit its author and Google Maps and link to the review on Google Maps.
 Google Maps link for this.
 
 SAM, the in-app agent, saves its chat history, which would store Places results.
-So while Google Places is in use, SAM refuses the three search tools, and it
-does not offer `get_place_details` at all. Run them from an MCP client instead.
+So while Google Places is in use, SAM refuses the three search tools and
+`get_business_profile`, `get_business_reviews` and `get_business_updates`, and
+it does not offer `get_place_details` at all. Run them from an MCP client
+instead.
 
 ## Bright Data: live Google SERP for rank tracking
 
@@ -391,12 +463,11 @@ Each request fetches one Google results page with about 10 organic results:
   describe. If checks for another country fail with that error, Bright Data
   could not follow Google's redirect for it.
 - **Language and city:** `hl` is the tracker's or query's language. A tracker
-  or query with a city adds Google's `uule` location parameter. Without
-  DataForSEO, OpenSEO cannot look up or check city names, and
-  `search_serp_locations` does not work. Pass Google's canonical name for the
-  city, `City,Region,Country` with no spaces after the commas, for example
-  `Pereira,Risaralda,Colombia`, as a tracker's or query's `locationName`. Google
-  may ignore a name it does not recognize and return country-wide results.
+  or query with a city adds Google's `uule` location parameter. The city must
+  be a name from [Google's geo targets file](#locations-googles-geo-targets-file)
+  exactly as `search_serp_locations` returns it, for example
+  `Pereira,Risaralda,Colombia`. OpenSEO refuses any other name before it sends
+  a request.
 - **Device:** mobile checks ask Bright Data for a mobile browser
   (`brd_mobile=1`); `get_serp_results` and `find_serp_competitors` use desktop.
 - **Depth:** each further 10 results is one more request (`start=10`,
@@ -428,6 +499,17 @@ counter can run ahead of Bright Data's.
 For scale: four sites with 25 keywords each, checked weekly on both devices at
 depth 10, send about 870 requests a month when every domain ranks on page 1.
 A domain outside the top 10 costs one more request per 10 results of depth.
+
+The Rank Tracking page prices checks in requests instead of dollars. Next to a
+tracker it shows how many requests one check sends, from the minimum when
+every domain ranks on page 1 to the maximum at the tracker's depth, and how
+many of the month's 4,500 are left, for example "100–300 Bright Data
+requests/check · 3,912 of 4,500 left this month". It warns when the tracker's
+schedule can need more requests a month than the budget, or one check needs
+more than is left this month. The tracker form shows the same for 50 keywords
+before you save, and `estimate_rank_tracker_cost` returns the same numbers
+and warning to an assistant. The budget is shared: other trackers and
+`get_serp_results` take from the same 4,500.
 
 There is no setting to raise the budget. The counter shares the table and the
 caveats of the [Google Places budget](#built-in-monthly-budget): it covers one
@@ -508,9 +590,8 @@ For a city, county or region, pass Google's canonical name as `locationName`,
 for example `Pereira,Risaralda,Colombia` (geo target 1003665). OpenSEO looks
 the name up in Google Ads and rejects a name that is not a location in the
 project's country. Ideas then stay national and the volumes become local, as
-with DataForSEO. Without DataForSEO, `search_serp_locations` does not work, so
-take the name from Google's
-[geo targets table](https://developers.google.com/google-ads/api/data/geotargets).
+with DataForSEO. Without DataForSEO, `search_serp_locations` and the city
+picker search [Google's geo targets file](#locations-googles-geo-targets-file).
 
 The project's language becomes a Google Ads language (Spanish is 1003). A
 language Google Ads does not offer is left out, which Google reads as every
@@ -736,3 +817,25 @@ compare trends over several checks rather than single answers.
 What it stores for any engine: the answer text, the cited pages with where
 the answer cites them, and each brand's mention and citation. It keeps no copy
 of SerpApi's response.
+
+## Ahrefs: Domain Rating in the Backlinks tables
+
+The Backlinks tables can show each linking domain's
+[Ahrefs Domain Rating](https://docs.ahrefs.com/api/reference/public/post-domain-rating-free)
+(0–100) from **Ahrefs DR** in the table menu. Ahrefs' free endpoint needs the
+APIv3 key of a free Ahrefs account; without one the column stays empty and the
+app says the key is missing. It works with or without DataForSEO.
+
+1. Create a free Ahrefs account and an APIv3 key in its account settings.
+2. Set the environment variable and recreate the container:
+
+   ```bash
+   AHREFS_API_KEY=your-ahrefs-api-key
+   ```
+
+OpenSEO sends one request per table page of up to 100 domains, with the key
+in the `Authorization` header, and keeps each rating for 24 hours. Requests to
+this endpoint are free. Ahrefs' license requires the credit "Domain Rating by
+Ahrefs" wherever the ratings show, so the tables show it under the rows, and
+Ahrefs can withdraw the license. `/api/health` reports whether the key is set
+under `ahrefs`.

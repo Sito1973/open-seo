@@ -125,11 +125,12 @@ OpenSEO MCP exposes tools for SEO research workflows:
 - Fetch one Maps or Local Finder SERP, and read Google Business Q&A when needed.
 - Audit a Google Business Profile: categories, rating, hours, photos, and claim status.
 - Collect Google reviews (including reviews from other sites) and Google Business posts.
-- Look up valid Google Business category slugs.
+- Look up valid Google Business category slugs. On a self-hosted install without DataForSEO, they come from your Google Business Profile connection, or from the Google Places types until you connect it.
 - Check Google Maps rank at each point of a grid around a business.
-- On a self-hosted install without DataForSEO, run the rank grid, Maps SERP, and local business search on the Google Places API instead, and read a competitor's Google Maps listing with up to 5 reviews. See the [free Google APIs guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).
+- On a self-hosted install without DataForSEO, run the rank grid, Maps SERP, and local business search on the Google Places API instead, and read a competitor's Google Maps listing with up to 5 reviews. Your own listings' profile, reviews, and posts come from your Google Business Profile connection. Google Business Q&A is not available there, because Google retired it. See the [free Google APIs guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).
 - On a self-hosted install without DataForSEO, read live Google results for rank tracking, SERP results, and SERP competitors from Bright Data's SERP API, within its free monthly tier. See the same guide.
 - On a self-hosted install without DataForSEO, research keywords and hydrate keyword metrics with search volumes and ideas from your own Google Ads account's Keyword Planner, for a country or a city. See the same guide.
+- On a self-hosted install without DataForSEO, each tool's description names the provider a call uses instead of credits, or says the server has no source for it, so your assistant can skip it.
 - Hydrate keywords with search volume, difficulty, intent, CPC, and trends.
 - List saved keywords from an OpenSEO project.
 - Save useful keywords back to OpenSEO.

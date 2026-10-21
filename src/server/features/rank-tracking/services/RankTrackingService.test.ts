@@ -21,6 +21,7 @@ vi.mock("cloudflare:workers", () => ({
 }));
 vi.mock("@/server/lib/runtime-env", () => ({
   getDataforseoKey: () => Promise.resolve("basic-key"),
+  usesGoogleFallbacks: () => Promise.resolve(false),
   isHostedServerAuthMode: mocks.isHosted,
 }));
 vi.mock("@/server/billing/subscription", () => ({

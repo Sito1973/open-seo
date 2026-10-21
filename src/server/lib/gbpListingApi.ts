@@ -10,6 +10,7 @@ import {
   googleUpdatedSchema,
   listingLocationSchema,
   localPostsResponseSchema,
+  mediaCountSchema,
   type foodMenuSchema,
   type rawAttributeSchema,
 } from "@/server/lib/gbpApiSchemas";
@@ -45,6 +46,8 @@ const LISTING_READ_MASK = [
   "metadata",
 ].join(",");
 const MAX_ATTRIBUTE_METADATA = 500;
+// Google lists about 4,000 categories per region.
+const MAX_CATEGORIES = 10_000;
 const RECENT_POSTS = 10;
 const POST_SUMMARY_PREVIEW = 200;
 
@@ -53,6 +56,14 @@ export type RawFoodMenu = z.infer<typeof foodMenuSchema>;
 
 const splitMask = (mask: string | undefined) =>
   (mask ?? "").split(",").filter(Boolean);
+
+function categoriesUrl(input: { regionCode: string; languageCode: string }) {
+  const url = new URL(`${BUSINESS_INFO_API_BASE}/categories`);
+  url.searchParams.set("regionCode", input.regionCode);
+  url.searchParams.set("languageCode", input.languageCode);
+  url.searchParams.set("view", "BASIC");
+  return url;
+}
 
 export function createGbpListingApi(request: GbpRequest) {
   const get = (url: URL | string) => request("GET", url);
@@ -147,14 +158,25 @@ export function createGbpListingApi(request: GbpRequest) {
       regionCode: string;
       languageCode: string;
     }) {
-      const url = new URL(`${BUSINESS_INFO_API_BASE}/categories`);
-      url.searchParams.set("regionCode", input.regionCode);
-      url.searchParams.set("languageCode", input.languageCode);
-      url.searchParams.set("view", "BASIC");
+      const url = categoriesUrl(input);
       url.searchParams.set("filter", `displayName=${input.query}`);
       url.searchParams.set("pageSize", "25");
       const data = categoriesResponseSchema.parse(await get(url));
       return data.categories ?? [];
+    },
+
+    /** Every category Google offers businesses in the region. */
+    async listCategories(input: { regionCode: string; languageCode: string }) {
+      return collectPages(MAX_CATEGORIES, async (pageToken) => {
+        const url = categoriesUrl(input);
+        url.searchParams.set("pageSize", "100");
+        if (pageToken) url.searchParams.set("pageToken", pageToken);
+        const page = categoriesResponseSchema.parse(await get(url));
+        return {
+          items: page.categories ?? [],
+          nextPageToken: page.nextPageToken,
+        };
+      });
     },
 
     async putReviewReply(input: {
@@ -176,10 +198,15 @@ export function createGbpListingApi(request: GbpRequest) {
       await request("DELETE", `${reviewUrl(input)}/reply`);
     },
 
-    /** The most recent posts, newest first (Google leaves the order open). */
-    async listLocalPosts(input: { accountName: string; location: string }) {
+    /** The most recent posts (10 unless `max`, up to Google's 100), newest
+     *  first (Google leaves the order open). */
+    async listLocalPosts(input: {
+      accountName: string;
+      location: string;
+      max?: number;
+    }) {
       const url = new URL(`${V4_API_BASE}/${v4LocationName(input)}/localPosts`);
-      url.searchParams.set("pageSize", String(RECENT_POSTS));
+      url.searchParams.set("pageSize", String(input.max ?? RECENT_POSTS));
       const data = localPostsResponseSchema.parse(await get(url));
       const posts = (data.localPosts ?? []).map((post) => ({
         topicType: post.topicType ?? null,
@@ -189,6 +216,19 @@ export function createGbpListingApi(request: GbpRequest) {
         searchUrl: post.searchUrl ?? null,
       }));
       return sortBy(posts, [(post) => post.createTime ?? "", "desc"]);
+    },
+
+    /** Photos and videos on the listing: the owner's and customers'. */
+    async countMedia(input: { accountName: string; location: string }) {
+      const media = `${V4_API_BASE}/${v4LocationName(input)}/media`;
+      const count = async (url: string) =>
+        mediaCountSchema.parse(await get(`${url}?pageSize=1`))
+          .totalMediaItemCount;
+      const [owner, customers] = await Promise.all([
+        count(media),
+        count(`${media}/customers`),
+      ]);
+      return { owner, customers };
     },
 
     async createLocalPost(input: {
