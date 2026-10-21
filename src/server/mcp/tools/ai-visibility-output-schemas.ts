@@ -83,12 +83,13 @@ export const aiCostOutput = z.looseObject({
       perCheck: count,
       perMonth: count,
       monthlyBudget: count,
+      hourlyLimit: count,
       usedThisMonth: count,
       remaining: count,
     })
     .nullable()
     .describe(
-      "Self-hosted Google AI Mode through SerpApi only: the free searches one check and the schedule's busiest month use, against this server's monthly budget. Null otherwise.",
+      "Self-hosted Google AI Mode through SerpApi only: the free searches one check uses (at most hourlyLimit) and the schedule's busiest month uses together with the server's other AI Mode trackers, against this server's shared monthly budget. Null otherwise.",
     ),
 });
 const observation = z.looseObject({

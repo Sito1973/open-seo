@@ -1,4 +1,14 @@
-import { and, asc, desc, eq, inArray, isNull, lte, ne } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lte,
+  ne,
+} from "drizzle-orm";
 import { db } from "@/db";
 import { runBatch } from "@/db/runBatch";
 import {
@@ -242,6 +252,30 @@ async function claimDueTracker(input: {
   return claimed.length > 0;
 }
 
+/**
+ * Active prompts of every other enabled Google AI Mode tracker on this
+ * install, per schedule interval: the SerpApi budget is one counter for the
+ * whole install, so this deliberately spans every organization. Counts only.
+ */
+async function countOtherAiModePrompts(trackerId: string) {
+  return db
+    .select({ scheduleInterval: aiTrackers.scheduleInterval, prompts: count() })
+    .from(aiPrompts)
+    .innerJoin(aiTrackers, eq(aiTrackers.id, aiPrompts.trackerId))
+    .innerJoin(projects, eq(projects.id, aiTrackers.projectId))
+    .where(
+      and(
+        ne(aiTrackers.id, trackerId),
+        eq(aiTrackers.enabled, true),
+        eq(aiTrackers.googleAiMode, true),
+        isNull(projects.archivedAt),
+        eq(aiPrompts.paused, false),
+        eq(aiPrompts.archived, false),
+      ),
+    )
+    .groupBy(aiTrackers.scheduleInterval);
+}
+
 export const AiVisibilityRepository = {
   listResearchKeywords: async (projectId: string) =>
     (
@@ -260,6 +294,7 @@ export const AiVisibilityRepository = {
   updateTracker: (id: string, values: Partial<TrackerRow>) =>
     db.update(aiTrackers).set(values).where(eq(aiTrackers.id, id)),
   claimDueTracker,
+  countOtherAiModePrompts,
   /** Oldest due first; every processed tracker advances its next check. */
   listDue: (now: string) =>
     db

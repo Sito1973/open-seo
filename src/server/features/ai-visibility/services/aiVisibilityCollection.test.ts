@@ -383,11 +383,7 @@ describe("AI answer collection", () => {
     const month = new Date().toISOString().slice(0, 7);
     await testDb.db
       .insert(googlePlacesUsage)
-      .values({ month, sku: "serpapi", calls: 240 })
-      .onConflictDoUpdate({
-        target: [googlePlacesUsage.month, googlePlacesUsage.sku],
-        set: { calls: 240 },
-      });
+      .values({ month, sku: "serpapi", calls: 240 });
 
     await collectAiLiveBatch(runId, customer, market, [
       { tag: "answer-0", prompt: "Which SEO tools?", engine: "google_ai_mode" },

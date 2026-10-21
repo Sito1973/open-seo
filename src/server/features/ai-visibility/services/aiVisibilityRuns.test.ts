@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { aiObservations, aiRuns } from "@/db/schema";
+import { aiObservations, aiRuns, projects } from "@/db/schema";
 import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepository";
 import { runCheck } from "./aiVisibilityRuns";
 import { saveTracker } from "./aiVisibilitySetup";
@@ -150,15 +150,48 @@ describe("AI visibility checks", () => {
     expect(await repo.listRuns(projectId)).toEqual([]);
   });
 
-  it("refuses a weekly SerpApi schedule that could need more searches in a five-week month than the budget", async () => {
+  it("refuses a SerpApi schedule whose check needs more searches than SerpApi allows in an hour", async () => {
     serpApiOnly();
-    // 2 saved + 47 new prompts, 5 weekly checks: 245 searches, over 240.
-    const prompts = Array.from({ length: 47 }, (_, index) => ({
+    // 2 saved + 49 new prompts: 51 searches a check, over the 50 an hour.
+    const prompts = Array.from({ length: 49 }, (_, index) => ({
       text: `Best burger in Pereira ${index}?`,
     }));
 
     await expect(
       saveTracker({ projectId, engines: ["google_ai_mode"], prompts }),
+    ).rejects.toThrow("more than the 50 an hour");
+  });
+
+  it("refuses a SerpApi schedule that, with the server's other AI Mode trackers, could need more searches in a five-week month than the shared budget", async () => {
+    serpApiOnly();
+    // Another project's 40 weekly prompts: up to 200 searches a month.
+    await testDb.db.insert(projects).values({
+      id: "other-project",
+      organizationId: "organization",
+      name: "Other",
+      domain: "other.example",
+    });
+    await repo.saveConfiguration(
+      configuration(
+        {
+          engines: ["google_ai_mode"],
+          prompts: Array.from({ length: 40 }, (_, index) => ({
+            text: `Best pizza in Pereira ${index}?`,
+          })),
+        },
+        "other-project",
+      ),
+    );
+
+    // 2 saved + 7 new weekly prompts: up to 45 more, 245 in all, over 240.
+    await expect(
+      saveTracker({
+        projectId,
+        engines: ["google_ai_mode"],
+        prompts: Array.from({ length: 7 }, (_, index) => ({
+          text: `Best burger in Pereira ${index}?`,
+        })),
+      }),
     ).rejects.toMatchObject({ reason: "SEARCH_BUDGET_EXCEEDED" });
   });
 });

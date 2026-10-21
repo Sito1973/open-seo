@@ -18,10 +18,15 @@ const REQUEST_TIMEOUT_MS = 90_000;
 
 /**
  * Hard-coded below the free plan's 250 searches a month so this server never
- * needs a paid plan. There is deliberately no setting to raise it. It also
- * keeps this server under the plan's 250 searches an hour.
+ * needs a paid plan. There is deliberately no setting to raise it. Every
+ * tracker on this server shares it.
  */
 export const SERPAPI_MONTHLY_BUDGET = 240;
+/**
+ * The free plan's throughput: 50 searches an hour
+ * (https://serpapi.com/pricing). A check must fit in one hour.
+ */
+export const SERPAPI_HOURLY_LIMIT = 50;
 
 const errorBodySchema = z.object({ error: z.string().max(1_000) });
 const searchSchema = z.looseObject({
@@ -87,9 +92,12 @@ export async function fetchSerpApiAccount(apiKey: string) {
     }
     return {
       planSearchesLeft: account.data.plan_searches_left,
+      // Never above the free plan's hourly limit, whatever the account says.
       hourSearchesLeft:
-        account.data.account_rate_limit_per_hour -
-        account.data.this_hour_searches,
+        Math.min(
+          account.data.account_rate_limit_per_hour,
+          SERPAPI_HOURLY_LIMIT,
+        ) - account.data.this_hour_searches,
     };
   } catch (error) {
     // Only the error's name: a fetch error could carry the URL, and the key.

@@ -92,6 +92,7 @@ export async function estimateCost(
       ? await aiSearchBudget(
           scope.prompts.length * serpApiSearchesPerCheck(scope.engines),
           scheduleInterval,
+          config.tracker.id,
         )
       : null;
   return {
@@ -118,6 +119,11 @@ export async function estimateCost(
             `${liveEngines.map((e) => AI_ENGINE_LABELS[e]).join(" and ")} ${liveEngines.length === 1 ? "uses" : "use"} live API pricing, which costs more per answer.`,
           ]
         : []),
+      ...(searchBudget && searchBudget.perCheck > searchBudget.hourlyLimit
+        ? [
+            `A check needs ${searchBudget.perCheck} SerpApi searches, more than the ${searchBudget.hourlyLimit} an hour SerpApi's free plan allows, so it is refused. Track fewer prompts.`,
+          ]
+        : []),
       ...(searchBudget && searchBudget.perCheck > searchBudget.remaining
         ? [
             "This check needs more SerpApi searches than this month's budget has left, so it would be refused until the budget resets on the 1st.",
@@ -125,7 +131,7 @@ export async function estimateCost(
         : []),
       ...(searchBudget && searchBudget.perMonth > searchBudget.monthlyBudget
         ? [
-            `A ${scheduleInterval} schedule needs up to ${searchBudget.perMonth} SerpApi searches a month, more than the budget of ${searchBudget.monthlyBudget}, so it is refused. Track fewer prompts or choose a longer interval.`,
+            `A ${scheduleInterval} schedule, with this server's other Google AI Mode trackers, needs up to ${searchBudget.perMonth} SerpApi searches a month, more than the shared budget of ${searchBudget.monthlyBudget}, so it is refused. Track fewer prompts or choose a longer interval.`,
           ]
         : []),
       ...(unavailable.length

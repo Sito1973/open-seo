@@ -548,7 +548,7 @@ Google has no API for AI Mode answers either. With `SERPAPI_API_KEY` set, AI
 visibility tracking collects Google AI Mode answers through
 [SerpApi's Google AI Mode API](https://serpapi.com/google-ai-mode-api).
 SerpApi is a paid service, not a Google API, but its free plan includes 250
-searches a month, and OpenSEO stays under it.
+searches a month, at most 50 an hour, and OpenSEO stays under both.
 
 Without DataForSEO, Google AI Mode is the only engine a tracker can use:
 ChatGPT, Gemini, Google AI Overviews, Claude and Perplexity answers need
@@ -593,35 +593,42 @@ Overviews, and is left out of visibility rates.
 
 ### Built-in monthly budget
 
-| What OpenSEO sends                                 | SerpApi free plan | OpenSEO budget |
-| -------------------------------------------------- | ----------------- | -------------- |
-| One search per prompt in each Google AI Mode check | 250 per month     | 240            |
+| What OpenSEO sends                                 | SerpApi free plan              | OpenSEO budget                    |
+| -------------------------------------------------- | ------------------------------ | --------------------------------- |
+| One search per prompt in each Google AI Mode check | 250 per month, at most 50/hour | 240 per month, at most 50 a check |
 
 Answers cost $0, so cost estimates show $0 along with the searches a check
-uses, the most a schedule can use in one month, and the searches left this
-month. OpenSEO counts each search before sending it, failed searches included,
-and the budget resets on the 1st of each month, UTC. There is no setting to
-raise it.
+uses, the most the schedules can use in one month, and the searches left this
+month. Every tracker on the install shares the 240 searches: the monthly
+figure adds the schedule you are saving to every other enabled Google AI Mode
+tracker, in any project. OpenSEO counts each search before sending it, failed
+searches included, and the budget resets on the 1st of each month, UTC. There
+is no setting to raise it.
 
 - **Before a check,** OpenSEO checks that every prompt fits the budget left
   this month, and that SerpApi's own counts of searches left on the plan and
-  searches allowed this hour (its account endpoint, which uses no search)
-  cover them too. Otherwise the check does not start and says why. A scheduled
-  check shows the reason as the tracker's scheduling notice.
+  searches left this hour (its account endpoint, which uses no search) cover
+  them too. When SerpApi's counts cannot be read, a check may use up to 50
+  searches. Otherwise the check does not start and says why. A scheduled check
+  shows the reason as the tracker's scheduling notice. Due trackers that
+  together need more than 50 searches do not start at once: the rest wait for
+  the scheduler's next pass, which checks SerpApi's hourly count again.
 - **During a check,** an answer that would go over the budget fails with a
   message saying so, and nothing is sent for it.
 - **Schedules** must fit the budget in their busiest month: up to 31 daily
   checks, 5 weekly checks or 1 monthly check. Saving or enabling a schedule
-  that could need more than 240 searches in one month is refused. That allows
-  up to 7 prompts daily, 48 weekly, or all 100 monthly.
+  whose check needs more than 50 searches, or that, together with every other
+  enabled Google AI Mode tracker on the install, could need more than 240
+  searches in one month is refused. A single tracker can therefore have up to
+  7 prompts daily, 48 weekly, or 50 monthly, less when other trackers already
+  use part of the budget.
 
 The counter shares the table and the caveats of the
 [Google Places budget](#built-in-monthly-budget): it covers one OpenSEO
 database, so do not put the same SerpApi account on a second install. SerpApi's
 plan month starts on the date you signed up, not on the 1st; the check of
-SerpApi's own counts before each check covers that difference. The free plan
-also allows 250 searches an hour, which a 240-search budget cannot pass on its
-own; searches made by other tools with the same key count against both limits.
+SerpApi's own counts before each check covers that difference. Searches made
+by other tools with the same key count against both of SerpApi's limits.
 
 ### 1) Create a SerpApi account
 

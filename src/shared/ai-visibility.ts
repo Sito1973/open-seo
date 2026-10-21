@@ -144,10 +144,15 @@ export interface AiCostEstimate {
 export interface AiSearchBudget {
   /** SerpApi searches one check uses: one per Google AI Mode answer. */
   perCheck: number;
-  /** perCheck times the most checks the schedule can run in one month. */
+  /**
+   * perCheck times the most checks the schedule can run in one month, plus
+   * the same for every other enabled Google AI Mode tracker on this server.
+   */
   perMonth: number;
   /** This server's monthly SerpApi budget, below the free plan's searches. */
   monthlyBudget: number;
+  /** The free plan's searches an hour: the most one check can use. */
+  hourlyLimit: number;
   usedThisMonth: number;
   /** Budget left this month (UTC). */
   remaining: number;

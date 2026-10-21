@@ -1,12 +1,16 @@
 import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepository";
 import { projectAiConfiguration } from "./aiVisibilityConfiguration";
 import { normalizeAiSuggestion } from "@/shared/ai-prompt-suggestions";
-import { aiEnginesWithoutLocation } from "@/shared/ai-visibility";
+import {
+  aiEnginesWithoutLocation,
+  type AiEngine,
+} from "@/shared/ai-visibility";
 import { DEFAULT_LOCATION_CODE } from "@/shared/keyword-locations";
 import type { SaveProjectWebsiteSetup } from "@/types/schemas/projectWebsite";
 import { AppError } from "@/server/lib/errors";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
 import { startRun } from "./aiVisibilityRuns";
+import { aiCollectionProvider } from "./aiVisibilityProvider";
 
 /** Seeds weekly tracking from website setup's first three suggested topics. */
 export async function prepareWebsiteTracking(
@@ -42,14 +46,18 @@ export async function prepareWebsiteTracking(
       return { text, topic: topic.name };
     });
   });
+  // A SerpApi-only server collects Google AI Mode only.
+  const engines: AiEngine[] =
+    (await aiCollectionProvider()) === "serpapi"
+      ? ["google_ai_mode"]
+      : ["chatgpt"];
   return projectAiConfiguration({
     previous: null,
     projectId: input.projectId,
-    projectMarket: aiEnginesWithoutLocation(["chatgpt"], market.locationCode)
-      .length
+    projectMarket: aiEnginesWithoutLocation(engines, market.locationCode).length
       ? { locationCode: DEFAULT_LOCATION_CODE, languageCode: "en" }
       : market,
-    patch: { engines: ["chatgpt"], prompts },
+    patch: { engines, prompts },
     now: new Date().toISOString(),
   }).rows;
 }

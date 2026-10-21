@@ -3,7 +3,9 @@ import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepo
 import { AiVisibilityError } from "./aiVisibilityErrors";
 import { activeAiPrompts, trackerEngines } from "./aiVisibilityConfiguration";
 import { startRun } from "./aiVisibilityRuns";
+import { serpApiSearchesPerCheck } from "./aiVisibilityProvider";
 import { computeNextCheckAt } from "@/shared/rank-tracking";
+import { SERPAPI_HOURLY_LIMIT } from "@/server/lib/serpApiAiMode";
 
 // Answers admitted per tick. Like rank tracking's task-unit budget, it keeps
 // task_get polling under DataForSEO's 2,000 requests a minute; the first start
@@ -22,6 +24,10 @@ export async function runScheduledAiVisibility() {
   const deadline = Date.now() + TICK_DEADLINE_MS;
   let started = 0;
   let answersStarted = 0;
+  // SerpApi searches started this tick. Each check's pre-check reads
+  // SerpApi's hourly count before earlier checks have searched, so checks
+  // past the free plan's hour wait for a later tick instead.
+  let searchesStarted = 0;
   for (const { tracker, organizationId } of await repo.listDue(
     new Date().toISOString(),
   )) {
@@ -32,9 +38,15 @@ export async function runScheduledAiVisibility() {
     try {
       const config = await repo.getConfiguration(tracker.projectId);
       if (!config) continue;
-      const answers =
-        activeAiPrompts(config).length * trackerEngines(tracker).length;
-      if (started > 0 && answersStarted + answers > SCHEDULED_ANSWER_BUDGET)
+      const prompts = activeAiPrompts(config).length;
+      const engines = trackerEngines(tracker);
+      const answers = prompts * engines.length;
+      const searches = prompts * serpApiSearchesPerCheck(engines);
+      if (
+        started > 0 &&
+        (answersStarted + answers > SCHEDULED_ANSWER_BUDGET ||
+          searchesStarted + searches > SERPAPI_HOURLY_LIMIT)
+      )
         break;
       // Advance the schedule before starting, so a tracker that fails or is
       // busy moves on instead of staying due and crowding out the rest.
@@ -59,6 +71,7 @@ export async function runScheduledAiVisibility() {
       });
       started++;
       answersStarted += answers;
+      searchesStarted += searches;
     } catch (error) {
       if (!(error instanceof AiVisibilityError))
         console.error("[ai-visibility] scheduled check failed to start", {

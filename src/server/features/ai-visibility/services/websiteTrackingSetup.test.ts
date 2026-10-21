@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getConfiguration, startRun } = vi.hoisted(() => ({
+const { getConfiguration, startRun, aiCollectionProvider } = vi.hoisted(() => ({
   getConfiguration: vi.fn(),
   startRun: vi.fn(),
+  aiCollectionProvider: vi.fn(),
 }));
 vi.mock("../repositories/AiVisibilityRepository", () => ({
   AiVisibilityRepository: { getConfiguration },
 }));
 vi.mock("./aiVisibilityRuns", () => ({ startRun }));
+vi.mock("./aiVisibilityProvider", () => ({ aiCollectionProvider }));
 
 import {
   prepareWebsiteTracking,
@@ -17,6 +19,7 @@ import { configuration, customer } from "./aiVisibilityTestFixtures";
 
 beforeEach(() => {
   getConfiguration.mockResolvedValue(null);
+  aiCollectionProvider.mockResolvedValue("dataforseo");
 });
 
 const topic = (name: string) => ({
@@ -46,6 +49,21 @@ describe("prepareWebsiteTracking", () => {
       "backlink checker",
     ]);
     expect(tracking?.prompts).toHaveLength(15);
+  });
+
+  it("seeds Google AI Mode on a SerpApi-only server, which collects nothing else", async () => {
+    aiCollectionProvider.mockResolvedValue("serpapi");
+
+    const tracking = await prepareWebsiteTracking(
+      { projectId: "project", suggestedTopics: [topic("burgers")] },
+      { locationCode: 2840, languageCode: "en" },
+    );
+
+    expect(tracking?.tracker).toMatchObject({
+      googleAiMode: true,
+      chatgpt: false,
+      gemini: false,
+    });
   });
 });
 

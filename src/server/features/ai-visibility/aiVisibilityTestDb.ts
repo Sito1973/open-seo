@@ -33,6 +33,7 @@ export async function createAiVisibilityTestDb() {
   const seedProject = () =>
     client.executeMultiple(`
       DELETE FROM organization;
+      DELETE FROM google_places_usage;
       INSERT INTO organization (id, name, slug, created_at)
         VALUES ('organization', 'Organization', 'organization', 0);
       INSERT INTO projects (id, organization_id, name, domain)

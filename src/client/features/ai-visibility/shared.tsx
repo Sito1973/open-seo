@@ -188,12 +188,16 @@ export function aiMoney(value: number) {
   }).format(value);
 }
 
-/** Whether a SerpApi check or schedule needs more searches than the budget allows. */
+/**
+ * Whether a SerpApi check or schedule needs more searches than the budget, or
+ * than SerpApi allows in an hour, permits.
+ */
 export function aiSearchBudgetExceeded(
   budget: AiSearchBudget | null,
   mode: "check" | "schedule",
 ) {
   if (!budget) return false;
+  if (budget.perCheck > budget.hourlyLimit) return true;
   return mode === "check"
     ? budget.perCheck > budget.remaining
     : budget.perMonth > budget.monthlyBudget;
@@ -217,11 +221,13 @@ export function AiSearchBudgetNote({
     >
       {mode === "check"
         ? `Uses ${budget.perCheck} of the ${budget.remaining} SerpApi searches left this month (budget ${budget.monthlyBudget}).`
-        : `Uses ${budget.perCheck} SerpApi ${budget.perCheck === 1 ? "search" : "searches"} per run, up to ${budget.perMonth} a month, against a budget of ${budget.monthlyBudget} (${budget.remaining} left this month).`}
+        : `Uses ${budget.perCheck} SerpApi ${budget.perCheck === 1 ? "search" : "searches"} per run. With this server's other Google AI Mode trackers, schedules use up to ${budget.perMonth} a month of a shared budget of ${budget.monthlyBudget} (${budget.remaining} left this month).`}
       {over &&
-        (mode === "check"
-          ? " Not enough are left; the budget resets on the 1st (UTC)."
-          : " That is more than the budget: track fewer prompts or choose a longer interval.")}
+        (budget.perCheck > budget.hourlyLimit
+          ? ` SerpApi's free plan allows ${budget.hourlyLimit} searches an hour, so a run can use at most that many: track fewer prompts.`
+          : mode === "check"
+            ? " Not enough are left; the budget resets on the 1st (UTC)."
+            : " That is more than the budget: track fewer prompts or choose a longer interval.")}
     </p>
   );
 }

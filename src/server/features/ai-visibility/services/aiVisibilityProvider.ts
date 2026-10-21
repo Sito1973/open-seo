@@ -1,10 +1,15 @@
-import type { ConfigurationRows } from "../repositories/AiVisibilityRepository";
+import { sumBy } from "remeda";
+import {
+  AiVisibilityRepository as repo,
+  type ConfigurationRows,
+} from "../repositories/AiVisibilityRepository";
 import { AiVisibilityError } from "./aiVisibilityErrors";
 import { activeAiPrompts, trackerEngines } from "./aiVisibilityConfiguration";
 import { getOptionalEnvValue } from "@/server/lib/runtime-env";
 import {
   fetchSerpApiAccount,
   getSerpApiKey,
+  SERPAPI_HOURLY_LIMIT,
   SERPAPI_MONTHLY_BUDGET,
   serpApiSearchesUsed,
 } from "@/server/lib/serpApiAiMode";
@@ -70,34 +75,64 @@ export function serpApiSearchesPerCheck(engines: readonly AiEngine[]) {
   return engines.filter((engine) => engine === "google_ai_mode").length;
 }
 
+/**
+ * The searches a tracker's checks use. perMonth adds the busiest month of
+ * every other enabled Google AI Mode tracker on this server, which shares the
+ * budget.
+ */
 export async function aiSearchBudget(
   perCheck: number,
   interval: AiScheduleInterval,
+  trackerId: string,
 ): Promise<AiSearchBudget> {
-  const usedThisMonth = await serpApiSearchesUsed();
+  const [usedThisMonth, others] = await Promise.all([
+    serpApiSearchesUsed(),
+    repo.countOtherAiModePrompts(trackerId),
+  ]);
   return {
     perCheck,
-    perMonth: perCheck * MAX_CHECKS_PER_MONTH[interval],
+    perMonth:
+      perCheck * MAX_CHECKS_PER_MONTH[interval] +
+      sumBy(
+        others,
+        (row) => row.prompts * MAX_CHECKS_PER_MONTH[row.scheduleInterval],
+      ),
     monthlyBudget: SERPAPI_MONTHLY_BUDGET,
+    hourlyLimit: SERPAPI_HOURLY_LIMIT,
     usedThisMonth,
     remaining: Math.max(0, SERPAPI_MONTHLY_BUDGET - usedThisMonth),
   };
 }
 
-/** Refuses a SerpApi schedule that needs more searches a month than the budget. */
+/**
+ * Refuses a SerpApi schedule whose check needs more searches than SerpApi
+ * allows in an hour, or which, with every other enabled Google AI Mode
+ * tracker on this server, could need more a month than the shared budget.
+ */
 export async function requireAiScheduleBudget(
   config: ConfigurationRows,
   interval: AiScheduleInterval,
 ) {
   if ((await aiCollectionProvider()) !== "serpapi") return;
-  const perMonth =
+  const perCheck =
     activeAiPrompts(config).length *
-    serpApiSearchesPerCheck(trackerEngines(config.tracker)) *
-    MAX_CHECKS_PER_MONTH[interval];
+    serpApiSearchesPerCheck(trackerEngines(config.tracker));
+  if (!perCheck) return;
+  if (perCheck > SERPAPI_HOURLY_LIMIT)
+    throw new AiVisibilityError(
+      "SEARCH_BUDGET_EXCEEDED",
+      `A check of these prompts needs ${perCheck} SerpApi searches, more than the ${SERPAPI_HOURLY_LIMIT} an hour SerpApi's free plan allows. Track fewer prompts or pause tracking.`,
+    );
+  const { perMonth } = await aiSearchBudget(
+    perCheck,
+    interval,
+    config.tracker.id,
+  );
+  const own = perCheck * MAX_CHECKS_PER_MONTH[interval];
   if (perMonth > SERPAPI_MONTHLY_BUDGET)
     throw new AiVisibilityError(
       "SEARCH_BUDGET_EXCEEDED",
-      `A ${interval} schedule of these prompts needs up to ${perMonth} SerpApi searches a month, more than this server's budget of ${SERPAPI_MONTHLY_BUDGET}. Track fewer prompts, choose a longer interval, or pause tracking.`,
+      `A ${interval} schedule of these prompts needs up to ${own} SerpApi searches a month${perMonth > own ? `, and this server's other Google AI Mode trackers up to ${perMonth - own}` : ""}: more than this server's budget of ${SERPAPI_MONTHLY_BUDGET}. Track fewer prompts, choose a longer interval, or pause tracking.`,
     );
 }
 
@@ -111,13 +146,15 @@ export async function requireSerpApiSearches(searches: number) {
   if (!apiKey || !searches) return;
   const remaining = SERPAPI_MONTHLY_BUDGET - (await serpApiSearchesUsed());
   const account = await fetchSerpApiAccount(apiKey);
+  // Without SerpApi's count, assume the free plan's whole hour is left.
+  const hourSearchesLeft = account?.hourSearchesLeft ?? SERPAPI_HOURLY_LIMIT;
   const shortfall =
     searches > remaining
       ? `this server's monthly SerpApi budget has ${Math.max(0, remaining)} of ${SERPAPI_MONTHLY_BUDGET} searches left (it resets on the 1st, UTC)`
       : account && searches > account.planSearchesLeft
         ? `SerpApi reports ${account.planSearchesLeft} searches left on the plan until it renews`
-        : account && searches > account.hourSearchesLeft
-          ? `SerpApi allows ${account.hourSearchesLeft} more searches this hour`
+        : searches > hourSearchesLeft
+          ? `SerpApi allows ${Math.max(0, hourSearchesLeft)} more searches this hour (the free plan allows ${SERPAPI_HOURLY_LIMIT} an hour)`
           : null;
   if (shortfall)
     throw new AiVisibilityError(
