@@ -361,6 +361,8 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
           languageCode,
           locationName,
           runId,
+          organizationId: billingCustomer.organizationId,
+          trigger,
         };
         // Scheduled checks use DataForSEO's task queue (~30% of live cost);
         // manual checks stay on the live endpoint for instant results. Bright

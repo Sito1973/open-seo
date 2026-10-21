@@ -12,3 +12,4 @@ export * from "./telemetry.schema";
 export * from "./ai-visibility.schema";
 export * from "./google-places.schema";
 export * from "./gbp.schema";
+export * from "./serp.schema";

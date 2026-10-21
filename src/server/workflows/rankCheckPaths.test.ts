@@ -3,7 +3,8 @@ import type { WorkflowStep } from "cloudflare:workers";
 import { runLiveCheck } from "./rankCheckPaths";
 
 // Rank checks on Bright Data's live Google SERP: a self-hosted install with
-// BRIGHTDATA_API_KEY and BRIGHTDATA_SERP_ZONE and no DataForSEO key.
+// BRIGHTDATA_API_KEY and BRIGHTDATA_SERP_ZONE and no DataForSEO key. First
+// pages go to the real SERP observation store in an in-memory SQLite.
 
 const mocks = vi.hoisted(() => ({
   insertSnapshots: vi.fn(),
@@ -12,7 +13,15 @@ const mocks = vi.hoisted(() => ({
   reserveCalls: vi.fn(),
   fetch: vi.fn<typeof fetch>(),
 }));
+const testDb = await vi.hoisted(async () => {
+  const { createAiVisibilityTestDb } =
+    await import("@/server/features/ai-visibility/aiVisibilityTestDb");
+  return createAiVisibilityTestDb();
+});
 
+vi.mock("cloudflare:workers", () => ({ env: { DATABASE_PROVIDER: "d1" } }));
+vi.mock("@/db", () => ({ db: testDb.db }));
+vi.mock("@/db/runBatch", () => ({ runBatch: testDb.runBatch }));
 vi.mock(
   "@/server/features/rank-tracking/repositories/RankTrackingRepository",
   () => ({ RankTrackingRepository: mocks }),
@@ -49,6 +58,8 @@ const context: Context = {
   locationCode: 2170,
   languageCode: "es",
   runId: "run_1",
+  organizationId: "organization",
+  trigger: "manual",
 };
 
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- steps run directly through the pgStep mock
@@ -78,14 +89,21 @@ function sentRequests() {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubGlobal("fetch", mocks.fetch);
   // A fresh month: every reservation fits.
   mocks.reserveCalls.mockResolvedValue(1);
+  await testDb.seedProject();
+  await testDb.client.executeMultiple(`
+    DELETE FROM serp_observations;
+    INSERT INTO organization (id, name, slug, created_at)
+      VALUES ('other_organization', 'Other', 'other', 0);
+  `);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 it("stores the domain's organic position from the country's Google page", async () => {
@@ -174,3 +192,71 @@ it("sends nothing once the monthly budget is used up", async () => {
     expect.stringContaining("monthly Bright Data budget"),
   );
 });
+
+it("lets a scheduled check reuse the organization's recent first page and pay only for later pages", async () => {
+  mocks.fetch.mockImplementation(async (_url, init) => {
+    const body = typeof init?.body === "string" ? init.body : "";
+    return body.includes("start=10")
+      ? page(["https://deep.co/"])
+      : page(["https://other.co/", "https://www.example.com/"], {
+          snack_pack: [{ name: "Burger Place" }],
+        });
+  });
+
+  await runLiveCheck(step, context);
+  await runLiveCheck(step, {
+    ...context,
+    domain: "other.co",
+    trigger: "scheduled",
+  });
+  await runLiveCheck(step, {
+    ...context,
+    domain: "deep.co",
+    serpDepth: 20,
+    trigger: "scheduled",
+  });
+
+  const sent = sentRequests().map((request) => JSON.stringify(request.body));
+  expect(sent).toHaveLength(2);
+  expect(sent[0]).not.toContain("start=");
+  expect(sent[1]).toContain("&start=10");
+  expect(mocks.insertSnapshots).toHaveBeenNthCalledWith(2, [
+    expect.objectContaining({
+      position: 1,
+      url: "https://other.co/",
+      serpFeatures: JSON.stringify(["organic", "local_pack"]),
+    }),
+  ]);
+  expect(mocks.insertSnapshots).toHaveBeenNthCalledWith(3, [
+    expect.objectContaining({ position: 3, url: "https://deep.co/" }),
+  ]);
+});
+
+it.each([
+  {
+    stored: "belongs to another organization",
+    first: { organizationId: "other_organization" },
+    second: {},
+    daysLater: 0,
+  },
+  { stored: "is older than 3 days", first: {}, second: {}, daysLater: 4 },
+  {
+    stored: "would answer a manual check",
+    first: {},
+    second: { trigger: "manual" as const },
+    daysLater: 0,
+  },
+])(
+  "fetches page 1 live when the stored one $stored",
+  async ({ first, second, daysLater }) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
+    mocks.fetch.mockImplementation(async () => page(["https://example.com/"]));
+
+    await runLiveCheck(step, { ...context, trigger: "scheduled", ...first });
+    vi.setSystemTime(new Date(Date.UTC(2026, 9, 1 + daysLater, 12)));
+    await runLiveCheck(step, { ...context, trigger: "scheduled", ...second });
+
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  },
+);

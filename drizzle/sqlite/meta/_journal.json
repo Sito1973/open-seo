@@ -414,6 +414,13 @@
       "when": 1792570935154,
       "tag": "0058_ai_mode_citation_placement",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1792586859850,
+      "tag": "0059_serp_observations",
+      "breakpoints": true
     }
   ]
 }

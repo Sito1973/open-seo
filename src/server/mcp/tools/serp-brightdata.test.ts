@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   createDataforseoClient: vi.fn(),
   getProjectForOrganization: vi.fn(),
   reserveCalls: vi.fn(),
+  recordObservation: vi.fn(),
   getCached: vi.fn(),
   setCached: vi.fn(),
   fetch: vi.fn<typeof fetch>(),
@@ -38,6 +39,13 @@ vi.mock(
   "@/server/features/google-places/repositories/GooglePlacesUsageRepository",
   () => ({
     GooglePlacesUsageRepository: { reserveCalls: mocks.reserveCalls },
+  }),
+);
+
+vi.mock(
+  "@/server/features/serp/repositories/SerpObservationRepository",
+  () => ({
+    SerpObservationRepository: { record: mocks.recordObservation },
   }),
 );
 
@@ -135,6 +143,34 @@ it("reads one live page per query with its local pack and source", async () => {
   const text = textContent(result);
   expect(text).toContain("Bright Data live Google SERP from www.google.com.co");
   expect(text).toContain("7 of 4500 SERP requests used this month");
+  expect(mocks.recordObservation).toHaveBeenCalledWith({
+    organizationId: "org_123",
+    origin: "serp_tool",
+    keyword: "hamburguesas pereira",
+    locationCode: 2170,
+    languageCode: "es",
+    locationName: undefined,
+    device: "desktop",
+    results: [
+      {
+        section: "organic",
+        position: 1,
+        domain: "example.com",
+        url: "https://www.example.com/",
+        title: "Example",
+      },
+      {
+        section: "local_pack",
+        position: 1,
+        domain: "burger.co",
+        url: "https://burger.co/",
+        title: "Burger Place",
+        rating: 4.6,
+        reviewsCount: 120,
+      },
+    ],
+    features: ["organic", "local_pack"],
+  });
 });
 
 it("returns the page's other sections as typed rows ranked within each section", async () => {

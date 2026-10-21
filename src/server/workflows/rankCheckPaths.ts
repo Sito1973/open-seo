@@ -65,6 +65,8 @@ interface CheckContext {
   languageCode: string;
   locationName?: string;
   runId: string;
+  organizationId: string;
+  trigger: "manual" | "scheduled";
 }
 
 /** Expand keywords into one task input per keyword/device pair. */
@@ -116,7 +118,15 @@ async function checkBatchLive(
   try {
     settled = brightData
       ? await Promise.allSettled(
-          inputs.map((input) => checkRankOnBrightData(brightData, input)),
+          inputs.map((input) =>
+            checkRankOnBrightData(brightData, {
+              ...input,
+              organizationId: ctx.organizationId,
+              // A manual check always fetches live; a scheduled check may reuse a
+              // first page another site's check or a SERP tool just fetched.
+              reuseFirstPage: ctx.trigger === "scheduled",
+            }),
+          ),
         )
       : await ctx.client.serp.rankCheckBatch(inputs);
   } catch (error) {

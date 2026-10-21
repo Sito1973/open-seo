@@ -303,6 +303,10 @@ async function getBrightDataSerpResults(
           market,
           device: "desktop",
           depth,
+          observation: {
+            organizationId: context.billing.organizationId,
+            origin: "serp_tool",
+          },
         });
         const organic = serp.organic.map(({ position, ...item }) => ({
           type: "organic",

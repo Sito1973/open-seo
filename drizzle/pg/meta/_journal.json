@@ -260,6 +260,13 @@
       "when": 1792570936986,
       "tag": "0036_ai_mode_citation_placement",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792586861606,
+      "tag": "0037_serp_observations",
+      "breakpoints": true
     }
   ]
 }

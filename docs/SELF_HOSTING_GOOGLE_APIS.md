@@ -367,7 +367,8 @@ It runs:
   organic position of the tracked domain or one of its subdomains, as with
   DataForSEO, and its SERP features (local pack, People Also Ask, ads, and so
   on) come from the same pages. Scheduled checks also run live: Bright Data has
-  no cheaper queue.
+  no cheaper queue, but they can reuse a first page OpenSEO already has (see
+  [Saved first pages](#saved-first-pages)).
 - **`get_serp_results`**: the organic results plus the local pack (name,
   rating, review count and link). Depth defaults to 10 here. From the first
   results page it also returns the featured snippet, People Also Ask (question,
@@ -422,6 +423,30 @@ one on a normal results page. Google loads some AI Overviews after the page,
 so `get_serp_results` reports a page without one as "not detected", not as
 proof that Google shows none for that query.
 
+### Saved first pages
+
+OpenSEO saves the first results page of every Bright Data request, from rank
+checks, `get_serp_results` and `find_serp_competitors`: the keyword, market
+(country, language and city), device and time, the organic results and the
+local pack (position, domain, link, title, and the pack's rating and review
+count), and the page's SERP features. Later pages are not saved. The pages
+belong to the organization that asked for them and are deleted with it.
+
+A scheduled rank check first looks for a saved first page of the same search
+(same keyword, market and device) from the last 3 days. If the tracked domain
+is on it, the check sends no request; if not, it sends requests only for
+pages 2 onward. So when two of your sites track "hamburguesas pereira" on
+mobile in the same city and their weekly checks run within 3 days of each
+other, the second check reuses the first one's page. The check's date is the day it ran, even when its page 1 is up to 3
+days older. A manual check ("Check rankings" or `run_rank_tracker`) always
+fetches live, and saves the page it gets.
+
+`get_serp_results` does not answer from saved pages, because they keep only
+the organic results and the local pack, not People Also Ask, ads or the AI
+Overview. It keeps its own 12-hour cache. Desktop and mobile pages are never
+mixed: `get_serp_results` and `find_serp_competitors` ask for desktop, so only
+a desktop tracker can reuse their pages.
+
 ### Built-in monthly budget
 
 | What OpenSEO sends                                                       | Bright Data free tier | OpenSEO budget |
@@ -438,6 +463,8 @@ counter can run ahead of Bright Data's.
 For scale: four sites with 25 keywords each, checked weekly on both devices at
 depth 10, send about 870 requests a month when every domain ranks on page 1.
 A domain outside the top 10 costs one more request per 10 results of depth.
+Keywords that several sites track cost less, because scheduled checks reuse
+saved first pages.
 
 There is no setting to raise the budget. The counter shares the table and the
 caveats of the [Google Places budget](#built-in-monthly-budget): it covers one

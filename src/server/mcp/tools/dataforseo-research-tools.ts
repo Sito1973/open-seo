@@ -1206,6 +1206,7 @@ async function findBrightDataSerpCompetitors(
   args: FindSerpCompetitorsArgs,
   context: {
     baseUrl: string;
+    billing: { organizationId: string };
     project: { locationCode: number; languageCode: string };
   },
 ) {
@@ -1236,6 +1237,10 @@ async function findBrightDataSerpCompetitors(
         market,
         device: "desktop",
         depth: 10,
+        observation: {
+          organizationId: context.billing.organizationId,
+          origin: "serp_tool",
+        },
       }),
     ),
   );
