@@ -10,7 +10,7 @@ import {
 import { AppError } from "@/server/lib/errors";
 import { getKeywordPlannerConfig } from "@/server/lib/keywordPlannerConfig";
 import {
-  getOptionalEnvValue,
+  getDataforseoKey,
   isHostedServerAuthMode,
 } from "@/server/lib/runtime-env";
 
@@ -31,13 +31,14 @@ async function getStatus(userId: string) {
   await requireSelfHosted();
   const [dataforseoKey, plannerConfig, oauthConfigured, grant] =
     await Promise.all([
-      getOptionalEnvValue("DATAFORSEO_API_KEY"),
+      getDataforseoKey("other"),
       getKeywordPlannerConfig(),
       getGoogleOAuthClientConfig("ads").then(hasGoogleOAuthConfig),
       GoogleAdsGrantRepository.getLatestGrant(userId),
     ]);
   return {
-    // DataForSEO always serves keyword data when its key is set.
+    // DataForSEO serves keyword data whenever this server uses it beyond
+    // backlinks.
     available: !dataforseoKey,
     plannerActive: plannerConfig !== null,
     oauthConfigured,

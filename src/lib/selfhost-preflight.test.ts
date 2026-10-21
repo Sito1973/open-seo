@@ -57,6 +57,19 @@ describe("runSelfhostPreflight", () => {
     },
   );
 
+  // The runtime treats any other value as unset, which would spend on DataForSEO
+  // for every feature.
+  it("fails a DATAFORSEO_SCOPE typo", () => {
+    const result = runSelfhostPreflight({
+      AUTH_MODE: "local_noauth",
+      DATAFORSEO_API_KEY: btoa("user@example.com:secret"),
+      DATAFORSEO_SCOPE: "backlink",
+    });
+
+    expect(result.failed).toBe(true);
+    expect(itemFor(result, "DATAFORSEO_SCOPE")?.level).toBe("fail");
+  });
+
   it("warns that GSC stays disabled on a short BETTER_AUTH_SECRET", () => {
     const result = runSelfhostPreflight({
       AUTH_MODE: "local_noauth",

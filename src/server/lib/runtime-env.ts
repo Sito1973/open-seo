@@ -42,11 +42,38 @@ export async function isHostedServerAuthMode(): Promise<boolean> {
 }
 
 /**
+ * DATAFORSEO_SCOPE=backlinks keeps DataForSEO to its Backlinks API on a
+ * self-hosted install, under a monthly request budget (see
+ * meterBacklinks in dataforseo/client.ts). Hosted ignores it and always uses
+ * DataForSEO for everything.
+ */
+export async function isDataforseoBacklinksOnly(): Promise<boolean> {
+  const scope = await getOptionalEnvValue("DATAFORSEO_SCOPE");
+  if (scope?.trim() !== "backlinks") return false;
+  return !(await isHostedServerAuthMode());
+}
+
+/**
+ * DATAFORSEO_API_KEY for requests to the Backlinks API or to any other
+ * DataForSEO API, or null when this server does not use DataForSEO for them:
+ * the key is unset, or DATAFORSEO_SCOPE=backlinks keeps the other APIs off
+ * DataForSEO. A feature without a key behaves as on an install without
+ * DataForSEO, so its stand-in provider applies.
+ */
+export async function getDataforseoKey(
+  api: "backlinks" | "other",
+): Promise<string | null> {
+  if (api === "other" && (await isDataforseoBacklinksOnly())) return null;
+  return (await getOptionalEnvValue("DATAFORSEO_API_KEY")) ?? null;
+}
+
+/**
  * A key for a provider of Google data that stands in for DataForSEO: a free
  * Google API, the Google Ads Keyword Planner, Bright Data's live Google SERP,
- * or SerpApi's Google AI Mode. It applies only on self-hosted installs without
- * a DataForSEO key, so hosted billing and every install that already uses
- * DataForSEO keep their exact behavior.
+ * or SerpApi's Google AI Mode. It applies only on self-hosted installs that do
+ * not use DataForSEO for that feature (no key, or a key kept to backlinks by
+ * DATAFORSEO_SCOPE), so hosted billing and every install that uses DataForSEO
+ * for it keep their exact behavior.
  */
 export async function getGoogleFallbackKey(
   name:
@@ -56,7 +83,7 @@ export async function getGoogleFallbackKey(
     | "BRIGHTDATA_API_KEY"
     | "SERPAPI_API_KEY",
 ): Promise<string | null> {
-  if (await getOptionalEnvValue("DATAFORSEO_API_KEY")) return null;
+  if (await getDataforseoKey("other")) return null;
   if (await isHostedServerAuthMode()) return null;
   return (await getOptionalEnvValue(name)) ?? null;
 }

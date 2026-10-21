@@ -1,7 +1,10 @@
 import { AUTH_MODES } from "@/lib/auth-mode";
 import {
+  BACKLINKS_MAX_ROWS_PER_REQUEST,
+  DEFAULT_BACKLINKS_MONTHLY_REQUESTS,
   looksLikeDataForSeoKey,
   MIN_BETTER_AUTH_SECRET_LENGTH,
+  parseBacklinksMonthlyRequests,
   validateTeamDomain,
 } from "@/shared/selfhost-checks";
 
@@ -143,37 +146,72 @@ function checkAuthMode(env: EnvRecord, items: PreflightItem[]): void {
   });
 }
 
+// Providers that stand in for DataForSEO while it is unset or kept to
+// backlinks.
+function standInProviders(env: EnvRecord): string[] {
+  const replacements: string[] = [];
+  if (get(env, "GOOGLE_PAGESPEED_API_KEY")) {
+    replacements.push("site audit Lighthouse checks (PageSpeed Insights)");
+  }
+  if (get(env, "GOOGLE_PLACES_API_KEY")) {
+    replacements.push(
+      "the Maps rank grid, local SERP, local business search and place details (Google Places)",
+    );
+  }
+  if (get(env, "BRIGHTDATA_API_KEY") && get(env, "BRIGHTDATA_SERP_ZONE")) {
+    replacements.push(
+      "rank tracking, get_serp_results and find_serp_competitors (Bright Data live Google SERP)",
+    );
+  }
+  if (
+    get(env, "GOOGLE_ADS_CLIENT_ID") &&
+    get(env, "GOOGLE_ADS_CLIENT_SECRET") &&
+    get(env, "GOOGLE_ADS_CUSTOMER_ID")
+  ) {
+    replacements.push(
+      "keyword volumes and ideas once Google Ads is connected in Settings → Integrations (Google Ads Keyword Planner)",
+    );
+  }
+  if (get(env, "SERPAPI_API_KEY")) {
+    replacements.push("Google AI Mode answers in AI visibility (SerpApi)");
+  }
+  return replacements;
+}
+
 function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
   const key = get(env, "DATAFORSEO_API_KEY");
+  // Hosted always uses DataForSEO for everything and ignores the scope.
+  const scope =
+    get(env, "AUTH_MODE") === "hosted"
+      ? undefined
+      : get(env, "DATAFORSEO_SCOPE");
+  const monthlyRequests = parseBacklinksMonthlyRequests(
+    get(env, "DATAFORSEO_BACKLINKS_MONTHLY_REQUESTS"),
+  );
+
+  if (scope && scope !== "backlinks") {
+    items.push({
+      key: "dataforseo",
+      name: "DATAFORSEO_SCOPE",
+      level: "fail",
+      message: `"${scope}" is not a valid DATAFORSEO_SCOPE. Set it to backlinks to use DataForSEO for backlinks only, or leave it unset to use DataForSEO for every feature.`,
+    });
+    return;
+  }
+
+  if (scope && monthlyRequests === null) {
+    items.push({
+      key: "dataforseo",
+      name: "DATAFORSEO_BACKLINKS_MONTHLY_REQUESTS",
+      level: "fail",
+      message: `Must be a whole number of requests above 0, or unset for the default of ${DEFAULT_BACKLINKS_MONTHLY_REQUESTS}.`,
+    });
+    return;
+  }
+
+  const replacements = standInProviders(env);
 
   if (!key) {
-    // Providers that stand in for DataForSEO while it is unset.
-    const replacements: string[] = [];
-    if (get(env, "GOOGLE_PAGESPEED_API_KEY")) {
-      replacements.push("site audit Lighthouse checks (PageSpeed Insights)");
-    }
-    if (get(env, "GOOGLE_PLACES_API_KEY")) {
-      replacements.push(
-        "the Maps rank grid, local SERP, local business search and place details (Google Places)",
-      );
-    }
-    if (get(env, "BRIGHTDATA_API_KEY") && get(env, "BRIGHTDATA_SERP_ZONE")) {
-      replacements.push(
-        "rank tracking, get_serp_results and find_serp_competitors (Bright Data live Google SERP)",
-      );
-    }
-    if (
-      get(env, "GOOGLE_ADS_CLIENT_ID") &&
-      get(env, "GOOGLE_ADS_CLIENT_SECRET") &&
-      get(env, "GOOGLE_ADS_CUSTOMER_ID")
-    ) {
-      replacements.push(
-        "keyword volumes and ideas once Google Ads is connected in Settings → Integrations (Google Ads Keyword Planner)",
-      );
-    }
-    if (get(env, "SERPAPI_API_KEY")) {
-      replacements.push("Google AI Mode answers in AI visibility (SerpApi)");
-    }
     const impact = replacements.length
       ? `stand-in providers cover ${replacements.join(", ")}; every other SEO data feature stays unavailable until it is set.`
       : "all SEO data features will be unavailable until it is.";
@@ -193,6 +231,19 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
       level: "warn",
       message:
         "Set, but does not decode as base64 of login:password. If DataForSEO rejects it, encode your account email and API password: printf 'email:password' | base64.",
+    });
+    return;
+  }
+
+  if (scope) {
+    const others = replacements.length
+      ? `Stand-in providers cover ${replacements.join(", ")}; every other SEO data feature stays unavailable.`
+      : "Every other SEO data feature stays unavailable.";
+    items.push({
+      key: "dataforseo",
+      name: "DATAFORSEO_API_KEY",
+      level: "ok",
+      message: `Set, for backlinks only (DATAFORSEO_SCOPE=backlinks): at most ${monthlyRequests} requests a month (UTC), up to ${BACKLINKS_MAX_ROWS_PER_REQUEST.toLocaleString("en-US")} rows each. ${others}`,
     });
     return;
   }

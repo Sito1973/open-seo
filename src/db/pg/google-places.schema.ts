@@ -12,6 +12,7 @@ export const googlePlacesUsage = pgTable(
         "place_details_enterprise_atmosphere",
         "brightdata_serp",
         "serpapi",
+        "dataforseo_backlinks",
       ],
     }).notNull(),
     calls: integer("calls").notNull().default(0),

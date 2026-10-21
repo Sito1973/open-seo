@@ -1,5 +1,5 @@
 import { AppError } from "@/server/lib/errors";
-import { getRequiredEnvValue } from "@/server/lib/runtime-env";
+import { getDataforseoKey } from "@/server/lib/runtime-env";
 import type { ErrorCode } from "@/shared/error-codes";
 // Type-only: erased at compile, so no runtime cycle with envelope.ts (which
 // imports DataforseoErrorClassifier from here the same way).
@@ -66,7 +66,18 @@ function createAuthenticatedFetch(
   maxServerErrorRetries = DATAFORSEO_MAX_RETRIES,
 ) {
   return async (url: RequestInfo, init?: RequestInit): Promise<Response> => {
-    const apiKey = await getRequiredEnvValue("DATAFORSEO_API_KEY");
+    // With DATAFORSEO_SCOPE=backlinks, every other API fails here exactly as
+    // without a key, so nothing but backlinks can reach DataForSEO.
+    const apiKey = await getDataforseoKey(
+      formatDataforseoRequestPath(url).startsWith("/v3/backlinks/")
+        ? "backlinks"
+        : "other",
+    );
+    if (!apiKey) {
+      throw new Error(
+        "Missing required environment variable: DATAFORSEO_API_KEY",
+      );
+    }
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Basic ${apiKey}`);
     // Resolve the signal once so retries share the overall request timeout

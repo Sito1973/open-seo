@@ -26,7 +26,7 @@ import {
 // transport, and not in SAM, which saves its chat history.
 
 const NOT_CONFIGURED =
-  "Place details need GOOGLE_PLACES_API_KEY on a self-hosted install without DATAFORSEO_API_KEY. With DataForSEO, use get_business_profile and get_business_reviews. See docs/SELF_HOSTING_GOOGLE_APIS.md.";
+  "Place details need GOOGLE_PLACES_API_KEY on a self-hosted install without DATAFORSEO_API_KEY, or with DATAFORSEO_SCOPE=backlinks. With DataForSEO, use get_business_profile and get_business_reviews. See docs/SELF_HOSTING_GOOGLE_APIS.md.";
 
 const SOURCE_NOTE =
   "Source: Google Maps (Places API Place Details), fetched live for this call.";

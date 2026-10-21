@@ -64,6 +64,14 @@ declare namespace Cloudflare {
 
     // DataForSEO API Basic auth value (base64 of login:password)
     DATAFORSEO_API_KEY: string;
+    // "backlinks" keeps DataForSEO to its Backlinks API on a self-hosted
+    // install: every other feature then runs as without DATAFORSEO_API_KEY
+    // (the stand-in keys below apply). Unset: DataForSEO serves everything.
+    // Hosted ignores it.
+    DATAFORSEO_SCOPE?: string;
+    // With DATAFORSEO_SCOPE=backlinks, the Backlinks API requests allowed per
+    // month (UTC), each of at most 1,000 rows. Defaults to 300.
+    DATAFORSEO_BACKLINKS_MONTHLY_REQUESTS?: string;
     // Free PageSpeed Insights key, self-hosted only: the site audit's
     // Lighthouse checks while DATAFORSEO_API_KEY is unset, and the Chrome UX
     // Report (get_core_web_vitals) with or without DATAFORSEO_API_KEY.

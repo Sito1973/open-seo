@@ -65,6 +65,7 @@ vi.mock("@/server/billing/subscription", async (importOriginal) => {
 
 vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: isHostedServerAuthModeMock,
+  isDataforseoBacklinksOnly: async () => false,
 }));
 
 vi.mock("@/server/lib/posthog", () => ({

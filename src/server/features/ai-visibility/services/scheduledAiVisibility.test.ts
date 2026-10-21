@@ -17,7 +17,7 @@ vi.mock("cloudflare:workers", () => ({
 vi.mock("@/db", () => ({ db: testDb.db }));
 vi.mock("@/db/runBatch", () => ({ runBatch: testDb.runBatch }));
 vi.mock("@/server/lib/runtime-env", () => ({
-  getOptionalEnvValue: async () => "dataforseo-key",
+  getDataforseoKey: async () => "dataforseo-key",
   isHostedServerAuthMode: async () => false,
 }));
 vi.mock("./aiVisibilityRetention", () => ({ pruneAiVisibility: vi.fn() }));

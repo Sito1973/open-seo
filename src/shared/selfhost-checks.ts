@@ -42,6 +42,22 @@ export function looksLikeDataForSeoKey(value: string): boolean {
   }
 }
 
+// DATAFORSEO_SCOPE=backlinks: each Backlinks API request takes one request of
+// a monthly budget and may ask for at most 1,000 rows (DataForSEO's own
+// maximum), so the budget bounds what a month can cost.
+export const DEFAULT_BACKLINKS_MONTHLY_REQUESTS = 300;
+export const BACKLINKS_MAX_ROWS_PER_REQUEST = 1000;
+
+// DATAFORSEO_BACKLINKS_MONTHLY_REQUESTS: the default when unset, null when it
+// is not a whole number above 0.
+export function parseBacklinksMonthlyRequests(
+  value: string | undefined,
+): number | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return DEFAULT_BACKLINKS_MONTHLY_REQUESTS;
+  return /^[1-9]\d{0,6}$/.test(trimmed) ? Number(trimmed) : null;
+}
+
 // OPENSEO_TELEMETRY_DISABLED / DO_NOT_TRACK semantics: any value except an
 // explicit "off" string disables telemetry (fail toward privacy), but
 // "0"/"false"/"no"/"off" mean what the operator wrote — telemetry stays on.
