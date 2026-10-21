@@ -14,6 +14,12 @@ const BUSINESS_DATA_MIN_RADIUS_M = 200;
 const BUSINESS_DATA_MAX_RADIUS_M = 199999;
 const BUSINESS_DATA_DEFAULT_RADIUS_KM = 10;
 
+// Kilometres per degree. Longitude degrees shrink with latitude; the cosine is
+// floored so a near-polar center can't blow a longitude span up.
+export const KM_PER_DEGREE_LATITUDE = 110.574;
+export const KM_PER_DEGREE_LONGITUDE = 111.32;
+export const MIN_LONGITUDE_COSINE = 0.01;
+
 export function formatCoordinate(value: number): string {
   return Number(value.toFixed(7)).toString();
 }

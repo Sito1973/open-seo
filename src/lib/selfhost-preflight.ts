@@ -148,9 +148,15 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
 
   if (!key) {
     // Free Google APIs that stand in for DataForSEO while it is unset.
-    const replacements = get(env, "GOOGLE_PAGESPEED_API_KEY")
-      ? ["site audit Lighthouse checks (PageSpeed Insights)"]
-      : [];
+    const replacements: string[] = [];
+    if (get(env, "GOOGLE_PAGESPEED_API_KEY")) {
+      replacements.push("site audit Lighthouse checks (PageSpeed Insights)");
+    }
+    if (get(env, "GOOGLE_PLACES_API_KEY")) {
+      replacements.push(
+        "the Maps rank grid, local SERP and local business search (Google Places)",
+      );
+    }
     const impact = replacements.length
       ? `free Google APIs cover ${replacements.join(", ")}; every other SEO data feature stays unavailable until it is set.`
       : "all SEO data features will be unavailable until it is.";

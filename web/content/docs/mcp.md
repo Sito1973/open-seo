@@ -127,6 +127,7 @@ OpenSEO MCP exposes tools for SEO research workflows:
 - Collect Google reviews (including reviews from other sites) and Google Business posts.
 - Look up valid Google Business category slugs.
 - Check Google Maps rank at each point of a grid around a business.
+- On a self-hosted install without DataForSEO, run the rank grid, Maps SERP, and local business search on the Google Places API instead. See the [free Google APIs guide on GitHub](https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).
 - Hydrate keywords with search volume, difficulty, intent, CPC, and trends.
 - List saved keywords from an OpenSEO project.
 - Save useful keywords back to OpenSEO.

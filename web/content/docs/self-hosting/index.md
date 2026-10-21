@@ -32,4 +32,6 @@ Search Console is optional and works in self-hosted deployments using your own G
 
 ### Free Google APIs
 
-A Docker install without a DataForSEO key can run the site audit's Lighthouse checks through Google's free PageSpeed Insights API instead. Set `GOOGLE_PAGESPEED_API_KEY` and leave `DATAFORSEO_API_KEY` unset. When both are set, OpenSEO uses DataForSEO. See the [free Google APIs guide on GitHub](https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).
+A Docker install without a DataForSEO key can run the site audit's Lighthouse checks through Google's free PageSpeed Insights API instead. Set `GOOGLE_PAGESPEED_API_KEY` and leave `DATAFORSEO_API_KEY` unset. When both are set, OpenSEO uses DataForSEO.
+
+The same install can run the Maps rank grid, local SERP and local business search MCP tools on the Google Places API. Set `GOOGLE_PLACES_API_KEY`. The Places API needs a billing account, and OpenSEO keeps usage under Google's free monthly allowance with built-in budgets. See the [free Google APIs guide on GitHub](https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).
