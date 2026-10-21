@@ -369,7 +369,15 @@ It runs:
   on) come from the same pages. Scheduled checks also run live: Bright Data has
   no cheaper queue.
 - **`get_serp_results`**: the organic results plus the local pack (name,
-  rating, review count and link). Depth defaults to 10 here.
+  rating, review count and link). Depth defaults to 10 here. From the first
+  results page it also returns the featured snippet, People Also Ask (question,
+  answer and source), the AI Overview (its text and cited sources), the
+  knowledge panel, ads (top and bottom) and related searches, as rows typed
+  with DataForSEO's names (`featured_snippet`, `people_also_ask`,
+  `ai_overview`, `ai_overview_reference`, `knowledge_graph`, `paid`,
+  `related_searches`). These rows rank within their own section. If Bright
+  Data changes the shape of one section, that section is left out and the rest
+  of the page still comes back.
 - **`find_serp_competitors`**: up to 10 keywords per call, from each keyword's
   live top 10 organic results. Each domain gets its keyword count, average and
   median position, and its position per keyword. Visibility and traffic
@@ -410,7 +418,9 @@ of 10, both devices at once, so 20 keywords on both devices take a few minutes.
 OpenSEO does not ask for AI Overviews. Bright Data can request them
 (`brd_ai_overview`), but on the tested zone those requests failed with "No
 ready cookies". The `ai_overview` SERP feature appears only when Google shows
-one on a normal results page.
+one on a normal results page. Google loads some AI Overviews after the page,
+so `get_serp_results` reports a page without one as "not detected", not as
+proof that Google shows none for that query.
 
 ### Built-in monthly budget
 

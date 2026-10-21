@@ -137,6 +137,110 @@ it("reads one live page per query with its local pack and source", async () => {
   expect(text).toContain("7 of 4500 SERP requests used this month");
 });
 
+it("returns the page's other sections as typed rows ranked within each section", async () => {
+  answerPages({
+    cafe: {
+      organic: organic("https://a.com/"),
+      featured_snippets: [
+        {
+          title: "Top cafés",
+          link: "https://www.guia.co/top",
+          items: [{ text: "Café A" }, { text: "Café B" }],
+        },
+      ],
+      people_also_ask: [
+        {
+          question: "¿Dónde tomar café?",
+          answer: "En el centro",
+          link: "https://blog.co/x",
+        },
+      ],
+      ai_overview: {
+        texts: [{ snippet: "Hay muchos cafés." }, { list: [{ snippet: "A" }] }],
+        references: [{ href: "https://www.tripadvisor.co/x", title: "TA" }],
+      },
+      knowledge: { title: "Café A", subtitle: "Cafetería" },
+      top_ads: [{ title: "Pide ya", link: "https://rappi.com.co/" }],
+      bottom_ads: [{ title: "Domicilio", link: "https://ifood.co/" }],
+      related: [
+        { text: "cafe cerca", items: [{ text: "cafe 24 horas" }] },
+        { text: "cafe 24 horas" },
+      ],
+    },
+  });
+
+  const result = await getSerpResultsTool.handler(
+    { projectId: "project_1", queries: [{ keyword: "cafe" }] },
+    toolContext,
+  );
+
+  expect(result.structuredContent).toMatchObject({
+    results: [
+      {
+        ai_overview: "detected",
+        items: [
+          { type: "organic", rank: 1, domain: "a.com" },
+          {
+            type: "featured_snippet",
+            rank: 1,
+            domain: "guia.co",
+            description: "Café A; Café B",
+          },
+          {
+            type: "people_also_ask",
+            rank: 1,
+            title: "¿Dónde tomar café?",
+            description: "En el centro",
+            domain: "blog.co",
+          },
+          {
+            type: "ai_overview",
+            rank: 1,
+            description: "Hay muchos cafés.\nA",
+          },
+          { type: "ai_overview_reference", rank: 1, domain: "tripadvisor.co" },
+          {
+            type: "knowledge_graph",
+            rank: 1,
+            title: "Café A",
+            description: "Cafetería",
+          },
+          { type: "paid", rank: 1, placement: "top", domain: "rappi.com.co" },
+          { type: "paid", rank: 2, placement: "bottom", domain: "ifood.co" },
+          { type: "related_searches", rank: 1, title: "cafe cerca" },
+          { type: "related_searches", rank: 2, title: "cafe 24 horas" },
+        ],
+      },
+    ],
+  });
+});
+
+it("drops a section Bright Data reshapes and reports the AI Overview as not detected", async () => {
+  answerPages({
+    cafe: {
+      organic: organic("https://a.com/"),
+      people_also_ask: "unexpected",
+      ai_overview: ["unexpected"],
+    },
+  });
+
+  const result = await getSerpResultsTool.handler(
+    { projectId: "project_1", queries: [{ keyword: "cafe" }] },
+    toolContext,
+  );
+
+  expect(result.structuredContent).toMatchObject({
+    results: [
+      {
+        ok: true,
+        ai_overview: "not_detected",
+        items: [{ type: "organic", domain: "a.com" }],
+      },
+    ],
+  });
+  expect(textContent(result)).toContain("AI Overview: not detected.");
+});
+
 it("answers a repeat within 12 hours from the cache without a request", async () => {
   answerPages({ cafe: { organic: organic("https://a.com/") } });
   const args = { projectId: "project_1", queries: [{ keyword: "cafe" }] };

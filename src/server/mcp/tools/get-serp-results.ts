@@ -21,6 +21,13 @@ import { assertLocalResearchLocation } from "@/server/features/keywords/services
 import { toolErrorMessage } from "@/server/mcp/tool-error-message";
 import { formatMcpTable, type McpTableColumn } from "@/server/mcp/table";
 import {
+  AI_OVERVIEW_NOT_DETECTED_NOTE,
+  formatSerpSectionRows,
+  hasAiOverview,
+  serpSectionRowSchema,
+  serpSectionRows,
+} from "@/server/mcp/tools/serp-sections";
+import {
   languageCodeSchema,
   locationCodeSchema,
   projectIdSchema,
@@ -63,6 +70,7 @@ type LocalPackItem = z.infer<typeof localPackItemSchema>;
 const brightDataCacheSchema = z.object({
   organic: z.array(serpItemSchema),
   localPack: z.array(localPackItemSchema),
+  sections: z.array(serpSectionRowSchema),
 });
 
 const LOCAL_PACK_COLUMNS: McpTableColumn<LocalPackItem>[] = [
@@ -308,11 +316,12 @@ async function getBrightDataSerpResults(
           rating: item.rating,
           reviews_count: item.reviewsCount,
         }));
+        const sections = serpSectionRows(serp);
         if (organic.length > 0 || localPack.length > 0) {
           waitUntil(
             setCached(
               cacheKey,
-              { organic, localPack },
+              { organic, localPack, sections },
               SERP_RESULTS_CACHE_TTL_SECONDS,
             ).catch((error) => {
               console.error("mcp.serp-results.cache-write failed:", error);
@@ -324,6 +333,7 @@ async function getBrightDataSerpResults(
           ok: true as const,
           organic,
           localPack,
+          sections,
           source,
           usedThisMonth: serp.usedThisMonth,
         };
@@ -351,11 +361,15 @@ async function getBrightDataSerpResults(
         `Local pack:\n${formatMcpTable(r.localPack, LOCAL_PACK_COLUMNS)}`,
       );
     }
+    lines.push(...formatSerpSectionRows(r.sections));
     return lines.join("\n");
   });
   const text = [
     ...blocks,
-    `${succeeded.length} of ${results.length} queries succeeded. rank is the position among organic results; local pack rows rank within the pack.`,
+    `${succeeded.length} of ${results.length} queries succeeded. rank is the position among organic results; rows of the local pack and every other section rank within that section, which comes from the first results page.`,
+    ...(succeeded.some((r) => !hasAiOverview(r.sections))
+      ? [AI_OVERVIEW_NOT_DETECTED_NOTE]
+      : []),
     ...new Set(succeeded.map((r) => r.source)),
     ...(fresh.length > 0 ? [brightDataBudgetLine(Math.max(...fresh))] : []),
     ...(fresh.length < succeeded.length
@@ -386,7 +400,11 @@ async function getBrightDataSerpResults(
                   description: null,
                   ...item,
                 })),
+                ...r.sections,
               ],
+              ai_overview: hasAiOverview(r.sections)
+                ? "detected"
+                : "not_detected",
               source: r.source,
             }
           : r,

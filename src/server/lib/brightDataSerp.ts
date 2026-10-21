@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { GooglePlacesUsageRepository } from "@/server/features/google-places/repositories/GooglePlacesUsageRepository";
 import type { RankCheckResult } from "@/server/lib/dataforseo";
+import {
+  domainOf,
+  readSerpSections,
+  serpSectionsShape,
+} from "@/server/lib/brightDataSerpSections";
 import { AppError } from "@/server/lib/errors";
 import {
   getGoogleFallbackKey,
@@ -80,6 +85,7 @@ const serpPageSchema = z.looseObject({
       }),
     )
     .default([]),
+  ...serpSectionsShape,
 });
 
 const serpPageCodec = jsonCodec(serpPageSchema);
@@ -272,7 +278,8 @@ async function fetchSerpPage(
  * The live Google SERP to `depth` results, one request per page of about 10.
  * With `targetDomain`, paging stops at the page where that domain ranks, so a
  * page-1 ranking costs one request. Positions count organic results only, in
- * Google's order across pages. The local pack comes from the first page.
+ * Google's order across pages. The local pack and the other sections (People
+ * Also Ask, ads, AI Overview...) come from the first page.
  */
 export async function fetchBrightDataSerp(
   config: BrightDataSerp,
@@ -296,7 +303,7 @@ export async function fetchBrightDataSerp(
     description: string | null;
   }> = [];
   const features = new Set<string>();
-  let localPack: SerpPage["snack_pack"] = [];
+  let firstPage: SerpPage = { organic: [], snack_pack: [] };
   let usedThisMonth = 0;
 
   for (let index = 0; index < pages; index++) {
@@ -306,14 +313,14 @@ export async function fetchBrightDataSerp(
     });
     usedThisMonth = result.usedThisMonth;
     for (const feature of serpFeatures(result.page)) features.add(feature);
-    if (index === 0) localPack = result.page.snack_pack;
+    if (index === 0) firstPage = result.page;
     const before = organic.length;
     organic.push(
       ...result.page.organic.map((item, offset) => ({
         position: before + offset + 1,
         title: item.title ?? null,
         url: item.link ?? null,
-        domain: hostOf(item.link)?.replace(/^www\./, "") ?? null,
+        domain: domainOf(item.link),
         description: item.description ?? null,
       })),
     );
@@ -331,13 +338,14 @@ export async function fetchBrightDataSerp(
 
   return {
     organic,
-    localPack: localPack.map((item, index) => ({
+    localPack: firstPage.snack_pack.map((item, index) => ({
       position: index + 1,
       title: item.name ?? null,
       url: item.link ?? null,
       rating: item.rating ?? null,
       reviewsCount: item.reviews_cnt ?? null,
     })),
+    ...readSerpSections(firstPage),
     features: [...features],
     usedThisMonth,
   };
