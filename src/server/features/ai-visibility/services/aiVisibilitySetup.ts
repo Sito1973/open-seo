@@ -2,6 +2,7 @@ import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepo
 import type { SaveAiTrackerInput } from "@/types/schemas/ai-visibility";
 import { projectPatch } from "./aiVisibilityMutation";
 import { getTracker } from "./aiVisibilityState";
+import { requireAiScheduleBudget } from "./aiVisibilityProvider";
 
 /** Creates or edits tracking. A new tracker starts weekly, first check a week out. */
 export async function saveTracker(input: SaveAiTrackerInput) {
@@ -12,6 +13,8 @@ export async function saveTracker(input: SaveAiTrackerInput) {
     patch,
     current,
   );
+  if (rows.tracker.enabled)
+    await requireAiScheduleBudget(rows, rows.tracker.scheduleInterval);
   await repo.saveConfiguration(rows);
   return { state: await getTracker({ projectId }), created, updated, skipped };
 }

@@ -1,7 +1,6 @@
 import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepository";
 import { AiVisibilityError } from "./aiVisibilityErrors";
-import { activeAiPrompts } from "./aiVisibilityConfiguration";
-import { getOptionalEnvValue } from "@/server/lib/runtime-env";
+import { activeAiPrompts, trackerEngines } from "./aiVisibilityConfiguration";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
 import type { AiRun } from "@/shared/ai-visibility";
 import type { SetAiScheduleInput } from "@/types/schemas/ai-visibility";
@@ -9,6 +8,11 @@ import { computeNextCheckAt } from "@/shared/rank-tracking";
 import { requireConfiguration } from "./aiVisibilityMutation";
 import { getTracker } from "./aiVisibilityState";
 import { startRun } from "./aiVisibilityRuns";
+import {
+  aiCollectionProvider,
+  requireAiEngines,
+  requireAiScheduleBudget,
+} from "./aiVisibilityProvider";
 
 /**
  * Enables, reschedules or pauses tracking. The first enable also collects a
@@ -32,12 +36,15 @@ export async function setSchedule(
       "NO_ACTIVE_PROMPTS",
       "Add active prompts before enabling scheduled tracking.",
     );
-  if (!(await getOptionalEnvValue("DATAFORSEO_API_KEY")))
+  const provider = await aiCollectionProvider();
+  if (!provider)
     throw new AiVisibilityError(
       "PROVIDER_NOT_CONFIGURED",
-      "Configure DataForSEO before enabling collection. Setup remains available.",
+      "Configure DataForSEO (or, self-hosted, SerpApi for Google AI Mode) before enabling collection. Setup remains available.",
     );
+  requireAiEngines(trackerEngines(tracker), provider);
   const scheduleInterval = input.scheduleInterval ?? tracker.scheduleInterval;
+  await requireAiScheduleBudget(config, scheduleInterval);
   // The stored next check is the chosen slot. An unchanged schedule keeps it.
   const nextCheckAt =
     input.scheduleTime ||

@@ -27,6 +27,9 @@ export const aiTrackers = sqliteTable(
     googleAiOverview: integer("google_ai_overview", { mode: "boolean" })
       .notNull()
       .default(false),
+    googleAiMode: integer("google_ai_mode", { mode: "boolean" })
+      .notNull()
+      .default(false),
     locationCode: integer("location_code").notNull().default(2840),
     languageCode: text("language_code").notNull().default("en"),
     scheduleInterval: text("schedule_interval", {
@@ -108,7 +111,14 @@ export const aiObservations = sqliteTable(
       .notNull()
       .references(() => aiPrompts.id, { onDelete: "cascade" }),
     engine: text("engine", {
-      enum: ["chatgpt", "gemini", "google_ai_overview", "claude", "perplexity"],
+      enum: [
+        "chatgpt",
+        "gemini",
+        "google_ai_overview",
+        "google_ai_mode",
+        "claude",
+        "perplexity",
+      ],
     }).notNull(),
     // Whether the prompt names the project's own brand when the run started.
     branded: integer("branded", { mode: "boolean" }).notNull(),
@@ -130,7 +140,8 @@ export const aiObservations = sqliteTable(
   ],
 );
 
-// Pages an answer cites, in the engine's order.
+// Pages an answer cites, in the engine's order, with where a Google AI Mode
+// answer links them.
 export const aiSources = sqliteTable(
   "ai_sources",
   {
@@ -142,6 +153,9 @@ export const aiSources = sqliteTable(
     domain: text("domain").notNull(),
     title: text("title"),
     position: integer("position").notNull(),
+    // Google AI Mode only; null when not recorded. See AiSource.
+    placement: text("placement", { enum: ["inline", "reference"] }),
+    inlineOrder: integer("inline_order"),
   },
   (t) => [index("ai_sources_observation_idx").on(t.observationId)],
 );

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { aiObservations, projectCompetitors } from "@/db/schema";
+import {
+  aiObservations,
+  googlePlacesUsage,
+  projectCompetitors,
+} from "@/db/schema";
 import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepository";
 import {
   collectAiLiveBatch,
@@ -28,6 +32,8 @@ vi.mock("@/db", () => ({ db: testDb.db }));
 vi.mock("@/db/runBatch", () => ({ runBatch: testDb.runBatch }));
 vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: async () => false,
+  // SERPAPI_API_KEY, for Google AI Mode answers.
+  getGoogleFallbackKey: async () => "serpapi-key",
 }));
 vi.mock("@/server/lib/dataforseo", () => ({
   MAX_TASKS_PER_POST: 100,
@@ -46,6 +52,29 @@ vi.mock("@/server/lib/dataforseo/llm-models", () => ({
 
 const runId = "run";
 const market = { locationCode: 2840, languageCode: "en" };
+
+/**
+ * Trimmed from a real SerpApi Google AI Mode response. The text links
+ * references 1 then 0; reference 2 is only in the sources list.
+ */
+const aiModeAnswer = {
+  search_metadata: { status: "Success" },
+  text_blocks: [
+    {
+      snippet: "Los más premiados son Z Burger y Bandidos.",
+      reference_indexes: [1, 0, 1],
+    },
+    { list: [{ local_result: { title: "Z Burger" }, snippet: "Destacado." }] },
+  ],
+  references: [
+    { index: 0, link: "https://www.eldiario.com.co/burger-master-2024/" },
+    {
+      index: 1,
+      link: "https://www.instagram.com/p/DJkvxJLzj7d/?utm_source=ig",
+    },
+    { index: 2, link: "https://www.google.com/searchviewer/10?svid=CAwSHRIb" },
+  ],
+};
 
 beforeEach(async () => {
   await testDb.seedProject();
@@ -296,6 +325,78 @@ describe("AI answer collection", () => {
     expect(await repo.getObservation("answer-1")).toMatchObject({
       status: "completed",
     });
+  });
+
+  it("saves a Google AI Mode answer from SerpApi with where its text links each cited page", async () => {
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(Response.json(aiModeAnswer));
+    await testDb.db.insert(projectCompetitors).values({
+      id: "bandidos",
+      projectId: "project",
+      domain: "bandidos.com.co",
+      name: "Bandidos",
+      updatedBy: "user",
+    });
+
+    await collectAiLiveBatch(
+      runId,
+      customer,
+      { locationCode: 2170, languageCode: "es" },
+      [
+        {
+          tag: "answer-0",
+          prompt: "Mejor hamburguesa",
+          engine: "google_ai_mode",
+        },
+      ],
+    );
+
+    const [input] = fetch.mock.calls[0];
+    const sent = new URL(input instanceof Request ? input.url : input);
+    expect(Object.fromEntries(sent.searchParams)).toMatchObject({
+      engine: "google_ai_mode",
+      location: "Colombia",
+      gl: "co",
+      hl: "es",
+    });
+    const evidence = await repo.getEvidence(["answer-0"]);
+    expect(evidence.sources).toMatchObject([
+      { position: 1, placement: "inline", inlineOrder: 2 },
+      {
+        url: "https://www.instagram.com/p/DJkvxJLzj7d/",
+        placement: "inline",
+        inlineOrder: 1,
+      },
+      { position: 3, placement: "reference", inlineOrder: null },
+    ]);
+    expect(evidence.matches).toContainEqual(
+      expect.objectContaining({ domain: "bandidos.com.co", mentioned: true }),
+    );
+    expect((await repo.getObservation("answer-0"))?.answerMarkdown).toContain(
+      "- **Z Burger**: Destacado.",
+    );
+  });
+
+  it("fails a Google AI Mode answer without searching once the month's SerpApi budget is used", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch");
+    const month = new Date().toISOString().slice(0, 7);
+    await testDb.db
+      .insert(googlePlacesUsage)
+      .values({ month, sku: "serpapi", calls: 240 })
+      .onConflictDoUpdate({
+        target: [googlePlacesUsage.month, googlePlacesUsage.sku],
+        set: { calls: 240 },
+      });
+
+    await collectAiLiveBatch(runId, customer, market, [
+      { tag: "answer-0", prompt: "Which SEO tools?", engine: "google_ai_mode" },
+    ]);
+
+    expect(fetch).not.toHaveBeenCalled();
+    const answer = await repo.getObservation("answer-0");
+    expect(answer?.status).toBe("failed");
+    expect(answer?.error).toContain("monthly SerpApi budget");
   });
 
   it("fails answers that never arrived and finishes the run as partial", async () => {

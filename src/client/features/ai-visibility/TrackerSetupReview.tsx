@@ -4,7 +4,7 @@ import { DialogFooter } from "@/client/components/ui/dialog";
 import { aiMarketLabel, type AiCostEstimate } from "@/shared/ai-visibility";
 import { EngineLabel } from "./EngineLabel";
 import type { AiTrackerPatch } from "@/types/schemas/ai-visibility";
-import { AiQueryError, aiMoney } from "./shared";
+import { AiQueryError, AiSearchBudgetNote, aiMoney } from "./shared";
 
 export type TrackerSetupReviewData = {
   patch: AiTrackerPatch;
@@ -107,6 +107,12 @@ export function TrackerSetupReview({
           <strong>{aiMoney(review.estimate.monthlyCostUsd)}</strong> estimated
           per month if it runs {review.estimate.scheduleInterval}.
         </p>
+        {review.estimate.searchBudget && (
+          <AiSearchBudgetNote
+            budget={review.estimate.searchBudget}
+            mode="schedule"
+          />
+        )}
       </div>
       {!!error && <AiQueryError error={error} />}
       <DialogFooter>

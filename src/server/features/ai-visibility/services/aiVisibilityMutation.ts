@@ -5,6 +5,7 @@ import {
 import { AiVisibilityError } from "./aiVisibilityErrors";
 import type { AiTrackerPatch } from "@/types/schemas/ai-visibility";
 import { projectAiConfiguration } from "./aiVisibilityConfiguration";
+import { aiCollectionProvider, requireAiEngines } from "./aiVisibilityProvider";
 
 export async function requireConfiguration(projectId: string) {
   const config = await repo.getConfiguration(projectId);
@@ -16,12 +17,22 @@ export async function requireConfiguration(projectId: string) {
   return config;
 }
 
-/** Applies a patch to the saved tracker, or to a new one in the project's market. */
+/**
+ * Applies a patch to the saved tracker, or to a new one in the project's
+ * market. Engines must be ones this server can collect; a new tracker on a
+ * SerpApi-only server starts on Google AI Mode.
+ */
 export async function projectPatch(
   projectId: string,
-  patch: AiTrackerPatch,
+  rawPatch: AiTrackerPatch,
   previous: ConfigurationRows | null,
 ) {
+  const provider = await aiCollectionProvider();
+  const patch =
+    !previous && !rawPatch.engines && provider === "serpapi"
+      ? { ...rawPatch, engines: ["google_ai_mode" as const] }
+      : rawPatch;
+  if (patch.engines) requireAiEngines(patch.engines, provider);
   const project = await repo.getProject(projectId);
   if (!project)
     throw new AiVisibilityError(

@@ -5,6 +5,7 @@ export const aiEngineSchema = z.enum([
   "chatgpt",
   "gemini",
   "google_ai_overview",
+  "google_ai_mode",
   "claude",
   "perplexity",
 ]);
@@ -97,10 +98,10 @@ export const setAiScheduleSchema = aiProjectSchema.extend({
 export const runAiCheckSchema = aiProjectSchema.extend({
   maxCostUsd: z
     .number()
-    .positive()
+    .min(0)
     .max(100)
     .describe(
-      "The most the user approved for this one check: runNowCostUsd from estimate_ai_visibility_cost. The check is refused if its current cost is higher.",
+      "The most the user approved for this one check: runNowCostUsd from estimate_ai_visibility_cost (0 for a free Google AI Mode check through SerpApi). The check is refused if its current cost is higher.",
     ),
   promptIds: z.array(z.string().uuid()).min(1).max(100).optional(),
 });

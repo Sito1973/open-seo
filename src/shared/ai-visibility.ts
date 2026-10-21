@@ -9,12 +9,14 @@ export type AiEngine =
   | "chatgpt"
   | "gemini"
   | "google_ai_overview"
+  | "google_ai_mode"
   | "claude"
   | "perplexity";
 export const AI_ENGINE_LABELS: Record<AiEngine, string> = {
   chatgpt: "ChatGPT",
   gemini: "Gemini",
   google_ai_overview: "Google AI Overviews",
+  google_ai_mode: "Google AI Mode",
   claude: "Claude",
   perplexity: "Perplexity",
 };
@@ -136,6 +138,19 @@ export interface AiCostEstimate {
   monthlyCostUsd: number;
   currency: "USD";
   warnings: string[];
+  /** Self-hosted Google AI Mode through SerpApi: free, but searches are limited. */
+  searchBudget: AiSearchBudget | null;
+}
+export interface AiSearchBudget {
+  /** SerpApi searches one check uses: one per Google AI Mode answer. */
+  perCheck: number;
+  /** perCheck times the most checks the schedule can run in one month. */
+  perMonth: number;
+  /** This server's monthly SerpApi budget, below the free plan's searches. */
+  monthlyBudget: number;
+  usedThisMonth: number;
+  /** Budget left this month (UTC). */
+  remaining: number;
 }
 export interface AiBrandResult {
   name: string;
@@ -200,6 +215,14 @@ export interface AiSource {
   domain: string;
   title: string | null;
   position: number;
+  /**
+   * Google AI Mode only: "inline" when the answer text links the page,
+   * "reference" when only its sources list does. Null when not recorded
+   * (other engines, or an answer whose text linked no source).
+   */
+  placement: "inline" | "reference" | null;
+  /** 1 = the first cited page the answer text links; null unless inline. */
+  inlineOrder: number | null;
 }
 export interface AiAnswer {
   observation: AiObservationRow;
@@ -302,6 +325,9 @@ export const AI_UNSUPPORTED_LOCATIONS: Record<AiEngine, readonly number[]> = {
   chatgpt: [2275],
   gemini: [],
   google_ai_overview: [],
+  // SerpApi asks Google from the project's country. Where Google shows no AI
+  // Mode, the answer is a no-answer result, excluded from rates.
+  google_ai_mode: [],
   claude: liveUnsupportedLocations("claude"),
   perplexity: liveUnsupportedLocations("perplexity"),
 };
@@ -322,11 +348,11 @@ export function aiObservationStatusLabel(status: AiObservationStatus): string {
   return status === "pending" ? "In progress" : status;
 }
 
-/** An empty AI Overviews result means Google showed no overview. */
+/** An empty Google result means Google showed no AI answer. */
 export function aiNoAnswerLabel(engine: AiEngine): string {
-  return engine === "google_ai_overview"
-    ? "No AI Overview shown"
-    : "No substantive answer";
+  if (engine === "google_ai_overview") return "No AI Overview shown";
+  if (engine === "google_ai_mode") return "No AI Mode answer shown";
+  return "No substantive answer";
 }
 
 /** The selected engines that cannot collect in this country. */

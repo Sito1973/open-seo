@@ -3,14 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { aiObservations, aiRuns } from "@/db/schema";
 import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepository";
 import { runCheck } from "./aiVisibilityRuns";
+import { saveTracker } from "./aiVisibilitySetup";
 import { getTracker } from "./aiVisibilityState";
 import { configuration, customer } from "./aiVisibilityTestFixtures";
 
-const { testDb, workflow } = await vi.hoisted(async () => {
+const { testDb, workflow, keys } = await vi.hoisted(async () => {
   const { createAiVisibilityTestDb } = await import("../aiVisibilityTestDb");
   return {
     testDb: await createAiVisibilityTestDb(),
     workflow: { create: vi.fn(), get: vi.fn() },
+    keys: { dataforseo: vi.fn(), serpApi: vi.fn() },
   };
 });
 vi.mock("cloudflare:workers", () => ({
@@ -19,7 +21,10 @@ vi.mock("cloudflare:workers", () => ({
 vi.mock("@/db", () => ({ db: testDb.db }));
 vi.mock("@/db/runBatch", () => ({ runBatch: testDb.runBatch }));
 vi.mock("@/server/lib/runtime-env", () => ({
-  getOptionalEnvValue: async () => "dataforseo-key",
+  // DATAFORSEO_API_KEY
+  getOptionalEnvValue: keys.dataforseo,
+  // SERPAPI_API_KEY, which applies only without DATAFORSEO_API_KEY.
+  getGoogleFallbackKey: keys.serpApi,
   isHostedServerAuthMode: async () => false,
 }));
 
@@ -27,7 +32,15 @@ const projectId = "project";
 const workflowStatus = (status: string) =>
   workflow.get.mockResolvedValue({ status: async () => ({ status }) });
 
+/** A self-hosted server with SERPAPI_API_KEY and no DataForSEO key. */
+function serpApiOnly() {
+  keys.dataforseo.mockResolvedValue(undefined);
+  keys.serpApi.mockResolvedValue("serpapi-key");
+}
+
 beforeEach(async () => {
+  keys.dataforseo.mockResolvedValue("dataforseo-key");
+  keys.serpApi.mockResolvedValue(null);
   await testDb.seedProject();
   await repo.saveConfiguration(
     configuration({
@@ -101,5 +114,51 @@ describe("AI visibility checks", () => {
       runCheck({ projectId, maxCostUsd: 0.001 }, customer),
     ).rejects.toMatchObject({ reason: "COST_LIMIT_EXCEEDED" });
     expect(await repo.listRuns(projectId)).toEqual([]);
+  });
+
+  it("moves a tracker to Google AI Mode on a SerpApi-only server, which collects nothing else", async () => {
+    serpApiOnly();
+
+    const { state } = await saveTracker({
+      projectId,
+      engines: ["google_ai_mode"],
+    });
+
+    expect(state.engines).toEqual(["google_ai_mode"]);
+    expect(state.capabilities.map((c) => c.engine)).toEqual(["google_ai_mode"]);
+    await expect(
+      saveTracker({ projectId, engines: ["chatgpt"] }),
+    ).rejects.toMatchObject({ reason: "ENGINE_UNAVAILABLE" });
+  });
+
+  it("refuses a SerpApi check that needs more searches than SerpApi has left, before any search", async () => {
+    serpApiOnly();
+    await saveTracker({ projectId, engines: ["google_ai_mode"] });
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({
+        plan_searches_left: 1,
+        account_rate_limit_per_hour: 250,
+        this_hour_searches: 0,
+      }),
+    );
+
+    await expect(
+      runCheck({ projectId, maxCostUsd: 0 }, customer),
+    ).rejects.toMatchObject({ reason: "SEARCH_BUDGET_EXHAUSTED" });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0][0]).toMatch(/\/account\.json\?/);
+    expect(await repo.listRuns(projectId)).toEqual([]);
+  });
+
+  it("refuses a weekly SerpApi schedule that could need more searches in a five-week month than the budget", async () => {
+    serpApiOnly();
+    // 2 saved + 47 new prompts, 5 weekly checks: 245 searches, over 240.
+    const prompts = Array.from({ length: 47 }, (_, index) => ({
+      text: `Best burger in Pereira ${index}?`,
+    }));
+
+    await expect(
+      saveTracker({ projectId, engines: ["google_ai_mode"], prompts }),
+    ).rejects.toMatchObject({ reason: "SEARCH_BUDGET_EXCEEDED" });
   });
 });

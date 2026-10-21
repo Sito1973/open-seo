@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { googlePlacesUsage } from "@/db/schema";
 
@@ -30,4 +30,21 @@ async function reserveCalls(input: {
   return row?.calls ?? null;
 }
 
-export const GooglePlacesUsageRepository = { reserveCalls };
+/** The month's counter for one SKU, without reserving anything. */
+async function usedCalls(input: {
+  month: string;
+  sku: GooglePlacesSku;
+}): Promise<number> {
+  const [row] = await db
+    .select({ calls: googlePlacesUsage.calls })
+    .from(googlePlacesUsage)
+    .where(
+      and(
+        eq(googlePlacesUsage.month, input.month),
+        eq(googlePlacesUsage.sku, input.sku),
+      ),
+    );
+  return row?.calls ?? 0;
+}
+
+export const GooglePlacesUsageRepository = { reserveCalls, usedCalls };

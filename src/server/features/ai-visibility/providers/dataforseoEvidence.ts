@@ -32,6 +32,9 @@ export interface AiCitation {
   domain: string;
   title: string | null;
   position: number;
+  /** Google AI Mode only; see AiSource. */
+  placement: "inline" | "reference" | null;
+  inlineOrder: number | null;
 }
 
 export interface ParsedAiAnswer {
@@ -148,22 +151,29 @@ function citationPill(label: string, url: string): boolean {
   }
 }
 
+/** A cited URL as stored: safe, without fragment or tracking parameters. */
+export function citationUrl(value: string): URL | null {
+  const safe = safeHttpUrl(value);
+  if (!safe) return null;
+  const url = new URL(safe);
+  url.hash = "";
+  // Snapshot keys before deleting: the URLSearchParams iterator is live.
+  for (const key of Array.from(url.searchParams.keys()))
+    if (
+      /^utm_/i.test(key) ||
+      ["gclid", "fbclid", "msclkid"].includes(key.toLowerCase())
+    )
+      url.searchParams.delete(key);
+  return url;
+}
+
 /** Safe, de-duplicated cited URLs with tracking parameters removed. */
-function citationsFrom(list: unknown[]): AiCitation[] {
+export function citationsFrom(list: unknown[]): AiCitation[] {
   const citations = new Map<string, AiCitation>();
   for (const item of list) {
     const source = sourceSchema.safeParse(item);
-    const safe = source.success ? safeHttpUrl(source.data.url) : null;
-    if (!source.success || !safe) continue;
-    const url = new URL(safe);
-    url.hash = "";
-    // Snapshot keys before deleting: the URLSearchParams iterator is live.
-    for (const key of Array.from(url.searchParams.keys()))
-      if (
-        /^utm_/i.test(key) ||
-        ["gclid", "fbclid", "msclkid"].includes(key.toLowerCase())
-      )
-        url.searchParams.delete(key);
+    const url = source.success ? citationUrl(source.data.url) : null;
+    if (!source.success || !url) continue;
     const normalized = url.toString();
     const existing = citations.get(normalized);
     if (existing) {
@@ -175,6 +185,8 @@ function citationsFrom(list: unknown[]): AiCitation[] {
       domain: url.hostname,
       title: source.data.title ?? null,
       position: citations.size + 1,
+      placement: null,
+      inlineOrder: null,
     });
   }
   return [...citations.values()];

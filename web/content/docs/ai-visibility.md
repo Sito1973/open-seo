@@ -13,8 +13,8 @@ Add your website, then complete the setup shown on the AI visibility pages. Rese
 
 - **Prompt Research:** analyze a keyword to find the questions people ask about it, with ChatGPT's answers and cited sources. Research currently covers US English. The questions come from DataForSEO's dataset, built mostly from Google "People also ask" questions; they are not logged ChatGPT prompts, and OpenSEO does not estimate how often they are asked in AI.
 - **Prompt Explorer:** try one prompt in ChatGPT, or add Claude, Gemini, and Perplexity to compare answers and available citations. These are API model answers and can differ from consumer-site answers collected by tracking.
-- **Prompt Tracking:** save exact questions under topics, select engines and a market, then run a check or enable daily, weekly, or monthly tracking. Editing a question's wording starts a new question, so earlier answers keep the wording they were collected for. ChatGPT and Gemini are selected by default; Google AI Overviews, Claude, and Perplexity are also supported. Enabling tracking starts an initial check.
-- **Competitors and Citations:** open these tabs in Prompt Tracking to review saved brand mentions, competitor appearances, and cited pages. Competitors come from shared Project context. Your brand counts as mentioned when its name or domain appears in an answer, and as cited when the answer links to your site. A failed check is not evidence that your brand was absent.
+- **Prompt Tracking:** save exact questions under topics, select engines and a market, then run a check or enable daily, weekly, or monthly tracking. Editing a question's wording starts a new question, so earlier answers keep the wording they were collected for. ChatGPT and Gemini are selected by default; Google AI Overviews, Claude, and Perplexity are also supported. A self-hosted install without DataForSEO can track Google AI Mode instead, through SerpApi. Enabling tracking starts an initial check.
+- **Competitors and Citations:** open these tabs in Prompt Tracking to review saved brand mentions, competitor appearances, and cited pages. Competitors come from shared Project context. Your brand counts as mentioned when its name or domain appears in an answer, and as cited when the answer links to your site. For Google AI Mode, each cited page also shows whether the answer text links it (and which page it links first) or only lists it among its sources. A failed check is not evidence that your brand was absent.
 
 The trend chart includes manual and scheduled checks, using the latest finished run per day. Review and export saved results without using credits.
 
@@ -26,7 +26,7 @@ Tracking collects ChatGPT and Gemini answers from their consumer sites. Claude a
 
 On hosted OpenSEO, Prompt Research and Prompt Explorer require the paid plan; prompt tracking only needs credits. Setup research uses available credits and is billed after completion.
 
-Self-hosted users pay providers directly: set `DATAFORSEO_API_KEY` for research and answer collection, and `OPENROUTER_API_KEY` for setup research and generated prompt suggestions. See the [self-hosting guides](/docs/self-hosting).
+Self-hosted users pay providers directly: set `DATAFORSEO_API_KEY` for research and answer collection, and `OPENROUTER_API_KEY` for setup research and generated prompt suggestions. Without DataForSEO, `SERPAPI_API_KEY` collects Google AI Mode answers on SerpApi's free plan: each answer costs $0 but uses one of a monthly budget of 240 searches, and the estimate shows how many a check and a schedule use. See the [self-hosting guides](/docs/self-hosting).
 
 ## Use your assistant
 

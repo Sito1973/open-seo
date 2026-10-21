@@ -253,6 +253,13 @@
       "when": 1792566954371,
       "tag": "0035_google_ads_grant",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792570936986,
+      "tag": "0036_ai_mode_citation_placement",
+      "breakpoints": true
     }
   ]
 }

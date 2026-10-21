@@ -171,6 +171,9 @@ function checkDataForSeo(env: EnvRecord, items: PreflightItem[]): void {
         "keyword volumes and ideas once Google Ads is connected in Settings → Integrations (Google Ads Keyword Planner)",
       );
     }
+    if (get(env, "SERPAPI_API_KEY")) {
+      replacements.push("Google AI Mode answers in AI visibility (SerpApi)");
+    }
     const impact = replacements.length
       ? `stand-in providers cover ${replacements.join(", ")}; every other SEO data feature stays unavailable until it is set.`
       : "all SEO data features will be unavailable until it is.";

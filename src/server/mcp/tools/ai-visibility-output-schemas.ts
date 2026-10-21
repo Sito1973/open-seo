@@ -78,6 +78,18 @@ export const aiCostOutput = z.looseObject({
   monthlyCostUsd: money,
   currency: z.literal("USD"),
   warnings: z.array(text),
+  searchBudget: z
+    .looseObject({
+      perCheck: count,
+      perMonth: count,
+      monthlyBudget: count,
+      usedThisMonth: count,
+      remaining: count,
+    })
+    .nullable()
+    .describe(
+      "Self-hosted Google AI Mode through SerpApi only: the free searches one check and the schedule's busiest month use, against this server's monthly budget. Null otherwise.",
+    ),
 });
 const observation = z.looseObject({
   id: text,
@@ -140,6 +152,8 @@ export const aiAnswerOutput = z.looseObject({
       domain: text,
       title: nullableText,
       position: count,
+      placement: z.enum(["inline", "reference"]).nullable(),
+      inlineOrder: count.nullable(),
     }),
   ),
   mentions: z.array(

@@ -70,8 +70,12 @@ export function TrackerEditor({
     ) ??
     state.topics[0] ??
     "";
-  const engines = state.engines.length
-    ? state.engines
+  // Only engines this server offers; a saved engine it cannot collect is dropped.
+  const offered = state.engines.filter((engine) =>
+    state.capabilities.some((capability) => capability.engine === engine),
+  );
+  const engines = offered.length
+    ? offered
     : state.capabilities.slice(0, 1).map((capability) => capability.engine);
   const defaultDraft: TrackerDraft = {
     engines,

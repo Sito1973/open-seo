@@ -11,6 +11,7 @@ export const googlePlacesUsage = pgTable(
         "text_search_enterprise",
         "place_details_enterprise_atmosphere",
         "brightdata_serp",
+        "serpapi",
       ],
     }).notNull(),
     calls: integer("calls").notNull().default(0),

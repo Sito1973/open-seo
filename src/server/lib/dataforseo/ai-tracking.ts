@@ -19,7 +19,7 @@ import {
 // https://docs.dataforseo.com/v3/ai_optimization/chat_gpt/llm_scraper/overview/
 // https://docs.dataforseo.com/v3/serp/google/organic/overview/
 const AI_TRACKING_ENDPOINTS: Record<
-  Exclude<AiEngine, AiModelApiEngine>,
+  Exclude<AiEngine, AiModelApiEngine | "google_ai_mode">,
   string
 > = {
   chatgpt: "/v3/ai_optimization/chat_gpt/llm_scraper",
@@ -27,10 +27,16 @@ const AI_TRACKING_ENDPOINTS: Record<
   google_ai_overview: "/v3/serp/google/organic",
 };
 
-/** Live engines have no LLM Scraper: their answers come from the live API. */
+/**
+ * Live engines have no LLM Scraper: their answers come from the live API.
+ * Google AI Mode answers come from SerpApi, never DataForSEO.
+ */
 function trackingEndpoint(engine: AiEngine): string {
-  if (aiEngineUsesModelApi(engine))
-    throw new AppError("INTERNAL_ERROR", `${engine} answers cannot be queued`);
+  if (aiEngineUsesModelApi(engine) || engine === "google_ai_mode")
+    throw new AppError(
+      "INTERNAL_ERROR",
+      `${engine} answers cannot be collected here`,
+    );
   return AI_TRACKING_ENDPOINTS[engine];
 }
 

@@ -213,7 +213,7 @@ export function PromptInventory({
                         </p>
                       </TableCell>
                       <TableCell className={dim}>
-                        <div className="flex min-w-64 items-center gap-3">
+                        <div className="flex min-w-64 flex-wrap items-center gap-3 gap-y-1">
                           {engines.map((engine) => (
                             <EngineResult
                               key={engine}

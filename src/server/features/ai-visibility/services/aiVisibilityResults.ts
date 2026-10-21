@@ -254,12 +254,16 @@ function answerView(
     observation: row,
     answerText: answerText?.slice(0, limit) ?? null,
     answerMarkdown: markdown?.slice(0, limit) ?? null,
-    sources: evidence.sources.map(({ url, domain, title, position }) => ({
-      url,
-      domain,
-      title,
-      position,
-    })),
+    sources: evidence.sources.map(
+      ({ url, domain, title, position, placement, inlineOrder }) => ({
+        url,
+        domain,
+        title,
+        position,
+        placement,
+        inlineOrder,
+      }),
+    ),
     // Highlights are worked out for the open answer, not stored.
     mentions: answerText
       ? row.brands

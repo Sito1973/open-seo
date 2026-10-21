@@ -10,6 +10,7 @@ import {
 import { resolveLatestLlmModelName } from "@/server/lib/dataforseo/llm-models";
 import { AppError } from "@/server/lib/errors";
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import { fetchSerpApiAiMode, getSerpApiKey } from "@/server/lib/serpApiAiMode";
 import { getIsoCountryCode } from "@/shared/keyword-locations";
 import {
   aiEngineUsesModelApi,
@@ -22,6 +23,7 @@ import {
   parseLlmResponseAnswer,
   type ParsedAiAnswer,
 } from "../providers/dataforseoEvidence";
+import { parseSerpApiAiModeAnswer } from "../providers/serpApiEvidence";
 import { aiBrands } from "./aiVisibilityConfiguration";
 import { aiCostForAnswers } from "./aiVisibilityCost";
 import { matchAiBrand } from "./aiVisibilityMatching";
@@ -56,9 +58,10 @@ const LIVE_ANSWERS_PER_STEP = 6;
 /**
  * Marks the run running and groups its answers into batches. Manual and
  * baseline runs collect live answers so the user sees results sooner.
- * Scheduled runs use the cheaper standard queue. Claude and Perplexity have no
- * LLM Scraper, so every run asks their model API (`modelBatches`). Hosted runs
- * first check that credits cover the whole check, like rank checks.
+ * Scheduled runs use the cheaper standard queue, except Google AI Mode:
+ * SerpApi has no queue, so its answers are always live. Claude and Perplexity
+ * have no LLM Scraper, so every run asks their model API (`modelBatches`).
+ * Hosted runs first check that credits cover the whole check, like rank checks.
  */
 export async function prepareAiRun(
   runId: string,
@@ -75,7 +78,9 @@ export async function prepareAiRun(
   const pending = (await repo.getObservations([runId])).filter(
     (row) => row.status === "pending",
   );
-  const live = run.trigger !== "scheduled";
+  const live =
+    run.trigger !== "scheduled" ||
+    pending.some((row) => row.engine === "google_ai_mode");
   if (await isHostedServerAuthMode()) {
     const required = aiCostForAnswers(
       pending.map((row) => row.engine),
@@ -165,8 +170,10 @@ export async function postAiBatch(
 }
 
 /**
- * Collects one batch of live answers through the metered client, which bills
- * them, and saves each one. Answers that fail now are not retried.
+ * Collects one batch of live answers and saves each one: Google AI Mode from
+ * SerpApi, which reserves each search from its monthly budget, and the other
+ * engines through the metered DataForSEO client, which bills them. Answers
+ * that fail now are not retried.
  */
 export async function collectAiLiveBatch(
   runId: string,
@@ -178,9 +185,11 @@ export async function collectAiLiveBatch(
   if (!brands) return;
   let settled: PromiseSettledResult<AiTrackingAnswer>[];
   try {
-    settled = await createDataforseoClient(customer).aiSearch.trackingLiveBatch(
-      tasks.map((task) => ({ engine: task.engine, task, ...market })),
-    );
+    settled = tasks.every((task) => task.engine === "google_ai_mode")
+      ? await askSerpApi(market, tasks)
+      : await createDataforseoClient(customer).aiSearch.trackingLiveBatch(
+          tasks.map((task) => ({ engine: task.engine, task, ...market })),
+        );
   } catch (error) {
     settled = tasks.map(() => ({ status: "rejected", reason: error }));
   }
@@ -207,6 +216,28 @@ export async function collectAiLiveBatch(
       );
     }
   }
+}
+
+/** Google AI Mode answers from SerpApi, all at once like a live batch. */
+async function askSerpApi(
+  market: AiRunMarket,
+  tasks: AiLiveTask[],
+): Promise<PromiseSettledResult<AiTrackingAnswer>[]> {
+  const apiKey = await getSerpApiKey();
+  if (!apiKey)
+    throw new AppError(
+      "AUTH_CONFIG_MISSING",
+      "SERPAPI_API_KEY is no longer configured, or DataForSEO now is.",
+    );
+  return Promise.allSettled(
+    tasks.map(async (task) => ({
+      status: "completed" as const,
+      result: await fetchSerpApiAiMode(apiKey, {
+        prompt: task.prompt,
+        ...market,
+      }),
+    })),
+  );
 }
 
 /**
@@ -311,11 +342,14 @@ async function saveAiOutcome(
     await repo.failPendingObservations(runId, outcome.message, [task.tag]);
     return;
   }
-  const answer = parseDataforseoAnswer(outcome.result, task.engine);
+  const serpApi = task.engine === "google_ai_mode";
+  const answer = serpApi
+    ? parseSerpApiAiModeAnswer(outcome.result)
+    : parseDataforseoAnswer(outcome.result, task.engine);
   if (!answer) {
     await repo.failPendingObservations(
       runId,
-      "DataForSEO returned an answer we could not read.",
+      `${serpApi ? "SerpApi" : "DataForSEO"} returned an answer we could not read.`,
       [task.tag],
     );
     return;

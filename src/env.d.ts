@@ -86,6 +86,9 @@ declare namespace Cloudflare {
     GOOGLE_ADS_CLIENT_SECRET?: string;
     GOOGLE_ADS_CUSTOMER_ID?: string;
     GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
+    // SerpApi key for Google AI Mode answers in AI visibility tracking. Used
+    // only on self-hosted installs without DATAFORSEO_API_KEY.
+    SERPAPI_API_KEY?: string;
     AI_VISIBILITY_WORKFLOW: Workflow<
       (
         | { runId: string }

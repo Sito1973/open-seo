@@ -2,10 +2,11 @@
 
 Some OpenSEO features can run on free Google APIs, including your own
 [Google Ads account's Keyword Planner](#google-ads-keyword-planner-search-volume-and-keyword-ideas),
-or on the free tier of
-[Bright Data](#bright-data-live-google-serp-for-rank-tracking), when your
-self-hosted install has no DataForSEO key. Each one is opt-in: set its key and
-leave `DATAFORSEO_API_KEY` unset.
+or on the free tiers of
+[Bright Data](#bright-data-live-google-serp-for-rank-tracking) and
+[SerpApi](#serpapi-google-ai-mode-for-ai-visibility), when your self-hosted
+install has no DataForSEO key. Each one is opt-in: set its key and leave
+`DATAFORSEO_API_KEY` unset.
 
 When `DATAFORSEO_API_KEY` is set, OpenSEO keeps using DataForSEO and ignores
 these keys, except for the
@@ -540,3 +541,117 @@ little or no spend; Google does not document a threshold for the API.
 The Google grant, encrypted like the Search Console grant. Keyword metrics are
 stored in the project exactly as DataForSEO's are, so saved keywords show them.
 The cached Keyword Planner answers expire after the month.
+
+## SerpApi: Google AI Mode for AI visibility
+
+Google has no API for AI Mode answers either. With `SERPAPI_API_KEY` set, AI
+visibility tracking collects Google AI Mode answers through
+[SerpApi's Google AI Mode API](https://serpapi.com/google-ai-mode-api).
+SerpApi is a paid service, not a Google API, but its free plan includes 250
+searches a month, and OpenSEO stays under it.
+
+Without DataForSEO, Google AI Mode is the only engine a tracker can use:
+ChatGPT, Gemini, Google AI Overviews, Claude and Perplexity answers need
+DataForSEO. Tracking settings offer only Google AI Mode, and a new tracker
+starts on it. A tracker saved earlier with other engines does not run, and its
+scheduling notice says why, until you switch it to Google AI Mode. With
+`DATAFORSEO_API_KEY` set, Google AI Mode is not offered.
+
+Run now and scheduled checks both work. Each prompt is one SerpApi search, and
+an answer takes about 8 seconds. SerpApi has no cheaper queue, so scheduled
+checks are collected the same way as Run now.
+
+### How a search is built
+
+- **Prompt:** the tracked prompt, exactly as saved.
+- **Country and language:** `location` is the tracker's country name, for
+  example `Colombia`, `gl` its country code and `hl` its language. AI
+  visibility trackers are set per country, so there is no city: to ask about
+  a city, name it in the prompt, for example "mejor hamburguesa en Pereira".
+- **Device:** desktop, SerpApi's default.
+- **Cache:** SerpApi answers a repeat of the same search within an hour from
+  its cache and does not charge it. OpenSEO counts it anyway.
+
+SerpApi takes the key only as a URL parameter. OpenSEO never logs those URLs
+and removes the key from any error it reports.
+
+### What an answer records
+
+- **Answer text:** paragraphs, headings, lists (including the names of the
+  businesses an answer lists) and tables. Brand mentions and citations are
+  matched as for the other engines.
+- **Cited pages,** in the order Google lists them.
+- **Where each page is cited.** A page is _linked in the answer_ when the
+  answer text links it, numbered by the order of the first links: #1 is the
+  first cited page the text links. Otherwise it is in the _sources list only_.
+  The answer page shows this on each citation, and `get_ai_visibility_answer`
+  returns it as `placement` (`inline` or `reference`) and `inlineOrder`. When
+  the answer text links no page at all, placement is not recorded.
+
+A search where Google shows no AI Mode answer counts as no answer, as for AI
+Overviews, and is left out of visibility rates.
+
+### Built-in monthly budget
+
+| What OpenSEO sends                                 | SerpApi free plan | OpenSEO budget |
+| -------------------------------------------------- | ----------------- | -------------- |
+| One search per prompt in each Google AI Mode check | 250 per month     | 240            |
+
+Answers cost $0, so cost estimates show $0 along with the searches a check
+uses, the most a schedule can use in one month, and the searches left this
+month. OpenSEO counts each search before sending it, failed searches included,
+and the budget resets on the 1st of each month, UTC. There is no setting to
+raise it.
+
+- **Before a check,** OpenSEO checks that every prompt fits the budget left
+  this month, and that SerpApi's own counts of searches left on the plan and
+  searches allowed this hour (its account endpoint, which uses no search)
+  cover them too. Otherwise the check does not start and says why. A scheduled
+  check shows the reason as the tracker's scheduling notice.
+- **During a check,** an answer that would go over the budget fails with a
+  message saying so, and nothing is sent for it.
+- **Schedules** must fit the budget in their busiest month: up to 31 daily
+  checks, 5 weekly checks or 1 monthly check. Saving or enabling a schedule
+  that could need more than 240 searches in one month is refused. That allows
+  up to 7 prompts daily, 48 weekly, or all 100 monthly.
+
+The counter shares the table and the caveats of the
+[Google Places budget](#built-in-monthly-budget): it covers one OpenSEO
+database, so do not put the same SerpApi account on a second install. SerpApi's
+plan month starts on the date you signed up, not on the 1st; the check of
+SerpApi's own counts before each check covers that difference. The free plan
+also allows 250 searches an hour, which a 240-search budget cannot pass on its
+own; searches made by other tools with the same key count against both limits.
+
+### 1) Create a SerpApi account
+
+Sign up at [serpapi.com](https://serpapi.com/) on the free plan and copy the
+API key from your account page.
+
+### 2) Set the environment variable
+
+```bash
+SERPAPI_API_KEY=your-api-key
+```
+
+Recreate the container as in the PageSpeed Insights section. With DataForSEO
+unset, the `dataforseo` check in `/api/health` lists SerpApi among the
+stand-in providers.
+
+### 3) Switch tracking to Google AI Mode
+
+Open **Prompt Tracking → Tracking settings** and select **Google AI Mode**,
+the only engine offered. Review the estimate, which shows the searches, then
+save and use **Run now** for a first answer.
+
+### Accuracy
+
+An answer shows what Google AI Mode told a new desktop visitor in the
+tracker's country at that time. AI Mode answers change between searches, so
+compare trends over several checks rather than single answers.
+
+### What OpenSEO stores
+
+What it stores for any engine: the answer text, the cited pages with where
+the answer cites them, and each brand's mention and citation. It keeps no copy
+of SerpApi's response.

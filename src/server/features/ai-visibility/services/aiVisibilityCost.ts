@@ -1,10 +1,7 @@
 import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepository";
 import { AiVisibilityError } from "./aiVisibilityErrors";
 import { aiScope } from "./aiVisibilityConfiguration";
-import {
-  getOptionalEnvValue,
-  isHostedServerAuthMode,
-} from "@/server/lib/runtime-env";
+import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import {
   aiEngineUsesModelApi,
   AI_ENGINE_LABELS,
@@ -21,12 +18,20 @@ import {
 import { scheduledChecksPerMonth } from "@/shared/rank-tracking";
 import type { EstimateAiCostInput } from "@/types/schemas/ai-visibility";
 import { projectPatch } from "./aiVisibilityMutation";
+import {
+  aiCollectionProvider,
+  aiProviderEngines,
+  aiSearchBudget,
+  serpApiSearchesPerCheck,
+} from "./aiVisibilityProvider";
 
 /**
- * Raw DataForSEO USD for one answer. Claude and Perplexity always use the
- * model API. The other engines are live on Run now and queued otherwise.
+ * Raw provider USD for one answer. Google AI Mode is a SerpApi search on the
+ * free plan. Claude and Perplexity always use DataForSEO's model API. The other
+ * engines are live on Run now and queued otherwise.
  */
 function aiAnswerUsd(engine: AiEngine, mode: "live" | "queued") {
+  if (engine === "google_ai_mode") return 0;
   if (aiEngineUsesModelApi(engine)) return llmResponseUsd(engine, true);
   return mode === "live" ? AI_LIVE_RECORD_COST_USD : AI_RECORD_COST_USD;
 }
@@ -78,6 +83,17 @@ export async function estimateCost(
   const scheduleInterval =
     input.scheduleInterval ?? current?.tracker.scheduleInterval ?? "weekly";
   const checksPerMonth = scheduledChecksPerMonth(scheduleInterval);
+  const provider = await aiCollectionProvider();
+  const unavailable = scope.engines.filter(
+    (engine) => !aiProviderEngines(provider).includes(engine),
+  );
+  const searchBudget =
+    provider === "serpapi"
+      ? await aiSearchBudget(
+          scope.prompts.length * serpApiSearchesPerCheck(scope.engines),
+          scheduleInterval,
+        )
+      : null;
   return {
     promptCount: scope.prompts.length,
     engineCount: scope.engines.length,
@@ -89,17 +105,35 @@ export async function estimateCost(
     checksPerMonth,
     monthlyCostUsd: Math.round(cost.costUsd * checksPerMonth * 1e6) / 1e6,
     currency: "USD",
+    searchBudget,
     warnings: [
       hosted
         ? "Customer cost uses OpenSEO data credits, including the service markup."
-        : "Self-hosted: cost estimates your own DataForSEO account charges. OpenSEO credits are not used.",
+        : searchBudget
+          ? `Self-hosted: Google AI Mode answers come from SerpApi's free plan, so they cost $0, but each one uses a search. A check uses ${searchBudget.perCheck}; this server's budget has ${searchBudget.remaining} of ${searchBudget.monthlyBudget} left this month (UTC).`
+          : "Self-hosted: cost estimates your own DataForSEO account charges. OpenSEO credits are not used.",
       `One fresh answer per prompt and engine. The ${scheduleInterval} estimate assumes ${checksPerMonth} ${checksPerMonth === 1 ? "check" : "checks"} per month.`,
       ...(liveEngines.length
         ? [
             `${liveEngines.map((e) => AI_ENGINE_LABELS[e]).join(" and ")} ${liveEngines.length === 1 ? "uses" : "use"} live API pricing, which costs more per answer.`,
           ]
         : []),
-      ...(!(await getOptionalEnvValue("DATAFORSEO_API_KEY"))
+      ...(searchBudget && searchBudget.perCheck > searchBudget.remaining
+        ? [
+            "This check needs more SerpApi searches than this month's budget has left, so it would be refused until the budget resets on the 1st.",
+          ]
+        : []),
+      ...(searchBudget && searchBudget.perMonth > searchBudget.monthlyBudget
+        ? [
+            `A ${scheduleInterval} schedule needs up to ${searchBudget.perMonth} SerpApi searches a month, more than the budget of ${searchBudget.monthlyBudget}, so it is refused. Track fewer prompts or choose a longer interval.`,
+          ]
+        : []),
+      ...(unavailable.length
+        ? [
+            `${unavailable.map((e) => AI_ENGINE_LABELS[e]).join(" and ")} cannot collect answers on this server.`,
+          ]
+        : []),
+      ...(!provider
         ? [
             "DataForSEO is not configured on this server. Setup is available; collection needs an operator to add its API key.",
           ]

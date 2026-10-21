@@ -14,7 +14,7 @@ import {
   getAiVisibilityResults,
   listAiResearchKeywords,
 } from "@/serverFunctions/ai-visibility";
-import type { AiRun } from "@/shared/ai-visibility";
+import type { AiRun, AiSearchBudget } from "@/shared/ai-visibility";
 
 export const aiVisibilityKey = (projectId: string) => [
   "aiVisibility",
@@ -186,6 +186,44 @@ export function aiMoney(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: value > 0 && value < 1 ? 4 : 2,
   }).format(value);
+}
+
+/** Whether a SerpApi check or schedule needs more searches than the budget allows. */
+export function aiSearchBudgetExceeded(
+  budget: AiSearchBudget | null,
+  mode: "check" | "schedule",
+) {
+  if (!budget) return false;
+  return mode === "check"
+    ? budget.perCheck > budget.remaining
+    : budget.perMonth > budget.monthlyBudget;
+}
+
+/**
+ * Google AI Mode answers through SerpApi cost nothing but use searches from
+ * this server's monthly budget.
+ */
+export function AiSearchBudgetNote({
+  budget,
+  mode,
+}: {
+  budget: AiSearchBudget;
+  mode: "check" | "schedule";
+}) {
+  const over = aiSearchBudgetExceeded(budget, mode);
+  return (
+    <p
+      className={`text-sm ${over ? "text-destructive" : "text-muted-foreground"}`}
+    >
+      {mode === "check"
+        ? `Uses ${budget.perCheck} of the ${budget.remaining} SerpApi searches left this month (budget ${budget.monthlyBudget}).`
+        : `Uses ${budget.perCheck} SerpApi ${budget.perCheck === 1 ? "search" : "searches"} per run, up to ${budget.perMonth} a month, against a budget of ${budget.monthlyBudget} (${budget.remaining} left this month).`}
+      {over &&
+        (mode === "check"
+          ? " Not enough are left; the budget resets on the 1st (UTC)."
+          : " That is more than the budget: track fewer prompts or choose a longer interval.")}
+    </p>
+  );
 }
 
 export function AiRunStatus({ run }: { run: AiRun }) {

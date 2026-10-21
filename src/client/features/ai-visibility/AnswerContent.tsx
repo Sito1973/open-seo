@@ -20,6 +20,7 @@ import {
 } from "@/client/components/ui/tabs";
 import { getAiVisibilityAnswer } from "@/serverFunctions/ai-visibility";
 import {
+  aiNoAnswerLabel,
   aiObservationStatusLabel,
   type AiAnswer,
 } from "@/shared/ai-visibility";
@@ -66,10 +67,8 @@ function AnswerEvidence({ answer }: { answer: AiAnswer }) {
     <div>
       {answer.observation.answerStatus === "no_answer" && (
         <p className="border-b px-5 py-3 text-sm text-warning border-border">
-          {answer.observation.engine === "google_ai_overview"
-            ? "Google showed no AI Overview for this search."
-            : "No substantive answer was returned."}{" "}
-          This collection is excluded from visibility rates.
+          {aiNoAnswerLabel(answer.observation.engine)}. This collection is
+          excluded from visibility rates.
         </p>
       )}
       {answer.observation.error && (
@@ -169,6 +168,16 @@ function AnswerEvidence({ answer }: { answer: AiAnswer }) {
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <DomainFavicon domain={source.domain} />
                     <span className="truncate">{source.domain}</span>
+                    {source.placement === "inline" && (
+                      <Badge variant="secondary" size="sm">
+                        Linked in answer #{source.inlineOrder}
+                      </Badge>
+                    )}
+                    {source.placement === "reference" && (
+                      <Badge variant="outline" size="sm">
+                        Sources list only
+                      </Badge>
+                    )}
                   </div>
                   <SafeExternalLink
                     url={source.url}

@@ -30,7 +30,14 @@ import {
   randomScheduleDate,
   withBrowserTimeZone,
 } from "@/client/features/rank-tracking/scheduleTime";
-import { AiLoading, AiQueryError, aiMoney, aiVisibilityKey } from "./shared";
+import {
+  AiLoading,
+  AiQueryError,
+  AiSearchBudgetNote,
+  aiMoney,
+  aiSearchBudgetExceeded,
+  aiVisibilityKey,
+} from "./shared";
 
 const costEstimateQueryOptions = ({
   projectId,
@@ -178,7 +185,8 @@ export function TrackingCostReview({
               // still being refreshed.
               estimate.isFetching ||
               start.isPending ||
-              cost.observations === 0
+              cost.observations === 0 ||
+              aiSearchBudgetExceeded(cost.searchBudget, mode)
             }
             onClick={() => start.mutate()}
           >
@@ -230,6 +238,9 @@ export function TrackingCostReview({
                 {`${cost.observations} ${cost.observations === 1 ? "answer" : "answers"}${mode === "schedule" ? ` · about ${aiMoney(cost.monthlyCostUsd)} a month (${cost.checksPerMonth} ${cost.checksPerMonth === 1 ? "run" : "runs"})` : " · live answers, ready in a few minutes"}`}
               </FieldDescription>
             </Field>
+            {cost.searchBudget && (
+              <AiSearchBudgetNote budget={cost.searchBudget} mode={mode} />
+            )}
             {start.error && <AiQueryError error={start.error} />}
           </>
         )

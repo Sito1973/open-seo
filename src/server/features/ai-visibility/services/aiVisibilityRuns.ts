@@ -6,10 +6,7 @@ import {
 } from "../repositories/AiVisibilityRepository";
 import { AiVisibilityError } from "./aiVisibilityErrors";
 import { aiScope } from "./aiVisibilityConfiguration";
-import {
-  getOptionalEnvValue,
-  isHostedServerAuthMode,
-} from "@/server/lib/runtime-env";
+import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
 import type { AiRun } from "@/shared/ai-visibility";
 import type { RunAiCheckInput } from "@/types/schemas/ai-visibility";
@@ -17,6 +14,12 @@ import { requireConfiguration } from "./aiVisibilityMutation";
 import { aiPromptIsBranded } from "./aiVisibilityMatching";
 import { aiRunView } from "./aiVisibilityResults";
 import { aiCostForAnswers } from "./aiVisibilityCost";
+import {
+  aiCollectionProvider,
+  requireAiEngines,
+  requireSerpApiSearches,
+  serpApiSearchesPerCheck,
+} from "./aiVisibilityProvider";
 
 const ACTIVE_WORKFLOW_STATUSES = new Set([
   "queued",
@@ -68,10 +71,11 @@ export async function startRun(
   billing: BillingCustomerContext,
   promptIds?: string[],
 ): Promise<AiRun> {
-  if (!(await getOptionalEnvValue("DATAFORSEO_API_KEY")))
+  const provider = await aiCollectionProvider();
+  if (!provider)
     throw new AiVisibilityError(
       "PROVIDER_NOT_CONFIGURED",
-      "An operator must configure DATAFORSEO_API_KEY before collection. Your saved tracker remains available.",
+      "An operator must configure DATAFORSEO_API_KEY (or, self-hosted, SERPAPI_API_KEY for Google AI Mode) before collection. Your saved tracker remains available.",
     );
   const project = await repo.getProject(config.tracker.projectId);
   if (
@@ -88,6 +92,11 @@ export async function startRun(
     throw new AiVisibilityError(
       "NO_ACTIVE_PROMPTS",
       "Add or unpause prompts before starting a check.",
+    );
+  requireAiEngines(scope.engines, provider);
+  if (provider === "serpapi")
+    await requireSerpApiSearches(
+      scope.prompts.length * serpApiSearchesPerCheck(scope.engines),
     );
   const own = { name: project.name, domain: project.domain };
   // Two attempts: once normally, once after failing a stale blocker.

@@ -62,69 +62,71 @@ export function TrackerTrackingFields({
   const countryOptions = LOCATION_OPTIONS.filter(
     (option) => !aiEnginesWithoutLocation(value.engines, option.code).length,
   );
+  // A server that collects only some engines offers only those.
   const engineGroup = (
     title: string,
     help: string,
     capabilities: AiCapability[],
-  ) => (
-    <div className="space-y-3">
-      <div className="flex items-center gap-1.5">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                aria-label={`About ${title.toLowerCase()}`}
-                className="text-muted-foreground"
-              />
-            }
-          >
-            <Info className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipContent>{help}</TooltipContent>
-        </Tooltip>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {capabilities.map((capability) => (
-          <label
-            key={capability.engine}
-            className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 border-border"
-          >
-            <Checkbox
-              checked={value.engines.includes(capability.engine)}
-              disabled={disabled}
-              onCheckedChange={(checked) => {
-                const engines = checked
-                  ? [...value.engines, capability.engine]
-                  : value.engines.filter(
-                      (engine) => engine !== capability.engine,
-                    );
-                onChange({
-                  ...value,
-                  engines,
-                  ...collectableMarket(
+  ) =>
+    capabilities.length > 0 && (
+      <div className="space-y-3">
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`About ${title.toLowerCase()}`}
+                  className="text-muted-foreground"
+                />
+              }
+            >
+              <Info className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>{help}</TooltipContent>
+          </Tooltip>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {capabilities.map((capability) => (
+            <label
+              key={capability.engine}
+              className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 border-border"
+            >
+              <Checkbox
+                checked={value.engines.includes(capability.engine)}
+                disabled={disabled}
+                onCheckedChange={(checked) => {
+                  const engines = checked
+                    ? [...value.engines, capability.engine]
+                    : value.engines.filter(
+                        (engine) => engine !== capability.engine,
+                      );
+                  onChange({
+                    ...value,
                     engines,
-                    {
-                      locationCode: value.locationCode,
-                      languageCode: value.languageCode,
-                    },
-                    defaultMarket,
-                  ),
-                });
-              }}
-            />
-            <span className="text-sm font-medium">
-              <EngineLabel
-                engine={capability.engine}
-                label={capability.label}
+                    ...collectableMarket(
+                      engines,
+                      {
+                        locationCode: value.locationCode,
+                        languageCode: value.languageCode,
+                      },
+                      defaultMarket,
+                    ),
+                  });
+                }}
               />
-            </span>
-          </label>
-        ))}
+              <span className="text-sm font-medium">
+                <EngineLabel
+                  engine={capability.engine}
+                  label={capability.label}
+                />
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
   return (
     <section className="space-y-5">
       {engineGroup(
