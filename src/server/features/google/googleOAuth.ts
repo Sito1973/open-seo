@@ -9,6 +9,7 @@ import { AppError } from "@/server/lib/errors";
 import { responseForAppError } from "@/server/lib/http-errors";
 import { getPublicOrigin } from "@/server/mcp/public-origin";
 import { GA4_OAUTH_PROVIDER_ID, GA4_OAUTH_SCOPES } from "@/shared/ga4";
+import { GBP_OAUTH_PROVIDER_ID, GBP_OAUTH_SCOPES } from "@/shared/gbp";
 import {
   GOOGLE_LINK_ERROR_PARAM,
   type GoogleLinkProvider,
@@ -27,17 +28,17 @@ import {
 } from "./googleOAuthState";
 
 /**
- * Google data grants (Search Console, Analytics) are linked here rather than
- * through Better Auth's generic-oauth plugin. Better Auth treats every linked
- * provider account as a login identity and refuses to link one Google account
- * to a second user, which blocked agencies and multi-member orgs from each
- * connecting the same client Google account. Grants live in the Better Auth
- * `account` table, encrypted with its secret, but are keyed per user so the
- * same Google identity may back several users. This module owns the whole
- * lifecycle: consent redirect, callback, and access-token refresh. The state
- * is a single-use nonce bound to the session user and provider, stored in
- * Better Auth's verification table and deleted by the first callback that
- * presents it. The PKCE verifier is an HMAC of that nonce.
+ * Google data grants (Search Console, Analytics, Business Profile) are linked
+ * here rather than through Better Auth's generic-oauth plugin. Better Auth
+ * treats every linked provider account as a login identity and refuses to link
+ * one Google account to a second user, which blocked agencies and multi-member
+ * orgs from each connecting the same client Google account. Grants live in the
+ * Better Auth `account` table, encrypted with its secret, but are keyed per
+ * user so the same Google identity may back several users. This module owns
+ * the whole lifecycle: consent redirect, callback, and access-token refresh.
+ * The state is a single-use nonce bound to the session user and provider,
+ * stored in Better Auth's verification table and deleted by the first callback
+ * that presents it. The PKCE verifier is an HMAC of that nonce.
  */
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -67,6 +68,15 @@ export const GA4_INTEGRATION: GoogleOAuthIntegration = {
   displayName: "Google Analytics",
   callbackPath: "/api/ga4/oauth/callback",
   scopes: GA4_OAUTH_SCOPES,
+};
+
+// Self-hosted only: the callback route and GbpService refuse hosted mode.
+export const GBP_INTEGRATION: GoogleOAuthIntegration = {
+  provider: "gbp",
+  providerId: GBP_OAUTH_PROVIDER_ID,
+  displayName: "Google Business Profile",
+  callbackPath: "/api/gbp/oauth/callback",
+  scopes: GBP_OAUTH_SCOPES,
 };
 
 const googleTokenResponseSchema = z.object({
@@ -152,7 +162,7 @@ async function upsertGrant(input: {
     })
     .onConflictDoUpdate({
       target: [account.userId, account.providerId, account.accountId],
-      targetWhere: sql`${account.providerId} in ('google-search-console', 'google-analytics')`,
+      targetWhere: sql`${account.providerId} in ('google-search-console', 'google-analytics', 'google-business-profile')`,
       set: {
         ...accountValues,
         // Google may omit the refresh token on a later consent. Keep the

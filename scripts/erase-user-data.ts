@@ -31,6 +31,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { z } from "zod";
 import { GA4_OAUTH_PROVIDER_ID } from "../src/shared/ga4";
+import { GBP_OAUTH_PROVIDER_ID } from "../src/shared/gbp";
 import {
   GDPR_STORAGE_ERASURE_PATH,
   signGdprErasureRequest,
@@ -208,17 +209,23 @@ async function buildInventory(db: Db, user: UserRow) {
         inArray(schema.account.providerId, [
           GSC_OAUTH_PROVIDER_ID,
           GA4_OAUTH_PROVIDER_ID,
+          GBP_OAUTH_PROVIDER_ID,
         ]),
       ),
     )
     .orderBy(schema.account.providerId, schema.account.accountId);
-  // The where clause already restricts providerId to the two Google
+  // The where clause already restricts providerId to the Google data
   // providers; the predicate narrows the column's string type to match the
   // erasure payload's enum.
   const isGoogleProviderId = (
     value: string,
-  ): value is typeof GSC_OAUTH_PROVIDER_ID | typeof GA4_OAUTH_PROVIDER_ID =>
-    value === GSC_OAUTH_PROVIDER_ID || value === GA4_OAUTH_PROVIDER_ID;
+  ): value is
+    | typeof GSC_OAUTH_PROVIDER_ID
+    | typeof GA4_OAUTH_PROVIDER_ID
+    | typeof GBP_OAUTH_PROVIDER_ID =>
+    value === GSC_OAUTH_PROVIDER_ID ||
+    value === GA4_OAUTH_PROVIDER_ID ||
+    value === GBP_OAUTH_PROVIDER_ID;
   const googleAccounts = googleAccountRows.flatMap((row) =>
     isGoogleProviderId(row.providerId)
       ? [{ providerId: row.providerId, accountId: row.accountId }]
@@ -330,6 +337,10 @@ async function buildInventory(db: Db, user: UserRow) {
     ga4_connections: await db.$count(
       schema.ga4Connections,
       eq(schema.ga4Connections.connectedByUserId, user.id),
+    ),
+    gbp_connections: await db.$count(
+      schema.gbpConnections,
+      eq(schema.gbpConnections.connectedByUserId, user.id),
     ),
     api_keys: await db.$count(
       schema.apikey,
@@ -519,6 +530,9 @@ async function erasePostgres(db: Db, user: UserRow, organizationIds: string[]) {
     await tx
       .delete(schema.ga4Connections)
       .where(eq(schema.ga4Connections.connectedByUserId, user.id));
+    await tx
+      .delete(schema.gbpConnections)
+      .where(eq(schema.gbpConnections.connectedByUserId, user.id));
     // apikey.reference_id mirrors the plugin's polymorphic schema and has no
     // user FK, so keys don't cascade with the user row.
     await tx

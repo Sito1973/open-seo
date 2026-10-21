@@ -140,6 +140,7 @@ OpenSEO MCP exposes tools for SEO research workflows:
 - Configure AI prompt tracking, preview cost, and start or pause scheduled checks.
 - Read and export saved AI answers, trends, citations, and competitor appearances without using credits.
 - Read first-party Google Search Console performance (clicks, impressions, CTR, position).
+- Self-hosted only: read your own Google Business Profile locations, reviews with your replies, daily performance and search terms. See the [Google Business Profile guide on GitHub](https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md).
 - Inspect index status, crawl, and canonical for specific URLs (up to 10 per call).
 - Read and update a project's shared context: business, goal, positioning, writing preferences, competitors, key pages, and a research log (free, no credits).
 - Save and read HTML reports on a project (free, no credits). New reports are private. On hosted OpenSEO, explicitly ask the agent to publish with `set_report_sharing` (`public: true`) or revoke the link (`public: false`). `get_report` returns `report.shareUrl` for an existing public link, or `null` when unavailable.

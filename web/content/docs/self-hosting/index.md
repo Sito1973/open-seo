@@ -30,6 +30,10 @@ New DataForSEO accounts include $1 of free credit to test with, and the minimum 
 
 Search Console is optional and works in self-hosted deployments using your own Google OAuth client. It takes about 10 minutes of one-time setup. See the [Google Search Console guide on GitHub](https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md).
 
+### Google Business Profile
+
+A self-hosted install can connect your own Google Business Profile account so MCP clients can read your locations, reviews, daily performance and search terms. It reuses the Search Console OAuth client and needs Google to approve Business Profile API access for your Cloud project first. It is not available on hosted OpenSEO. See the [Google Business Profile guide on GitHub](https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md).
+
 ### Free Google APIs
 
 A Docker install without a DataForSEO key can run the site audit's Lighthouse checks through Google's free PageSpeed Insights API instead. Set `GOOGLE_PAGESPEED_API_KEY` and leave `DATAFORSEO_API_KEY` unset. When both are set, OpenSEO uses DataForSEO.

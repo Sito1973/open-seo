@@ -3,6 +3,7 @@ import type {
   GooglePickerAccount,
   GooglePickerSelection,
 } from "@/client/features/integrations/GooglePropertyPicker";
+import { GoogleGlyph } from "@/client/features/gsc/GoogleGlyph";
 import {
   GoogleAnalyticsLogo,
   GoogleSearchConsoleLogo,
@@ -14,17 +15,25 @@ import {
   setGa4Property,
 } from "@/serverFunctions/ga4";
 import {
+  disconnectGbp,
+  getGbpConnection,
+  listGbpAccounts,
+  setGbpAccount,
+} from "@/serverFunctions/gbp";
+import {
   disconnectGsc,
   getGscConnection,
   listGscSites,
   setGscSite,
 } from "@/serverFunctions/gsc";
 import { GA4_SELF_HOSTED_SETUP_DOCS_URL } from "@/shared/ga4";
+import { GBP_SELF_HOSTED_SETUP_DOCS_URL } from "@/shared/gbp";
+import type { GoogleLinkProvider } from "@/shared/google-link";
 import { GSC_SELF_HOSTED_SETUP_DOCS_URL } from "@/shared/gsc";
 
-export type GoogleProvider = "gsc" | "ga4";
+export type GoogleProvider = GoogleLinkProvider;
 
-/** One project's connection to a Google product, in the same shape for both. */
+/** One project's connection to a Google product, in the same shape for each. */
 export type GoogleConnection = {
   connected: boolean;
   canManage: boolean;
@@ -59,6 +68,14 @@ type ProviderConfig = {
 
 type GscAccounts = Awaited<ReturnType<typeof listGscSites>>["accounts"];
 type Ga4Accounts = Awaited<ReturnType<typeof listGa4Properties>>["accounts"];
+type GbpAccounts = Awaited<ReturnType<typeof listGbpAccounts>>["accounts"];
+
+const GBP_ACCOUNT_TYPES: Record<string, string> = {
+  PERSONAL: "Personal account",
+  LOCATION_GROUP: "Business group",
+  USER_GROUP: "User group",
+  ORGANIZATION: "Organization",
+};
 
 /** The saved property is preselected when the user reopens the picker. */
 function pickerOptions(accounts: GooglePickerAccount[]): PickerOptions {
@@ -99,6 +116,22 @@ function ga4PickerOptions(accounts: Ga4Accounts): PickerOptions {
         detail: `${property.accountDisplayName} · ${property.propertyId.replace(/^properties\//, "")}`,
         selectable: true,
         isSelected: property.isSelected,
+      })),
+    })),
+  );
+}
+
+/** A project binds one Business Profile account; tools read its locations. */
+function gbpPickerOptions(accounts: GbpAccounts): PickerOptions {
+  return pickerOptions(
+    accounts.map((account) => ({
+      ...account,
+      properties: account.businessAccounts.map((businessAccount) => ({
+        id: businessAccount.name,
+        name: businessAccount.accountName || businessAccount.name,
+        detail: GBP_ACCOUNT_TYPES[businessAccount.type ?? ""],
+        selectable: true,
+        isSelected: businessAccount.isSelected,
       })),
     })),
   );
@@ -176,6 +209,43 @@ export const googleProviders: Record<GoogleProvider, ProviderConfig> = {
       ["dashboardActivation", projectId],
       ["dashboardGa4Report", projectId],
     ],
+  },
+  gbp: {
+    title: "Google Business Profile",
+    name: "Business Profile",
+    Logo: GoogleGlyph,
+    docsUrl: GBP_SELF_HOSTED_SETUP_DOCS_URL,
+    getConnection: async (projectId) => {
+      const connection = await getGbpConnection({ data: { projectId } });
+      return {
+        ...connection,
+        property: connection.accountDisplayName,
+        propertyDetail: connection.accountName,
+      };
+    },
+    accountsKey: "gbpAccounts",
+    listAccounts: async (projectId) =>
+      gbpPickerOptions(
+        (await listGbpAccounts({ data: { projectId } })).accounts,
+      ),
+    save: async (projectId, selection) => {
+      const saved = await setGbpAccount({
+        data: {
+          projectId,
+          accountId: selection.accountId,
+          accountName: selection.propertyId,
+        },
+      });
+      return {
+        connected: true,
+        connectedByEmail: saved.connectedByEmail,
+        property: saved.accountDisplayName,
+        propertyDetail: saved.accountName,
+      };
+    },
+    disconnect: (projectId) => disconnectGbp({ data: { projectId } }),
+    // Only the MCP tools read Business Profile data.
+    dependentKeys: () => [],
   },
 };
 

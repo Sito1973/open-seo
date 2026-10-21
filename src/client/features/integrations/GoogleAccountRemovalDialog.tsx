@@ -14,6 +14,33 @@ import {
   getGoogleAccountRemovalImpact,
   removeGoogleAccount,
 } from "@/serverFunctions/googleAccounts";
+import type { GoogleLinkProvider } from "@/shared/google-link";
+
+/** Queries showing a provider's connection, refetched after a removal. */
+const REMOVAL_QUERY_KEYS: Record<GoogleLinkProvider, string[]> = {
+  gsc: [
+    "gscConnection",
+    "gscSites",
+    "gscGrantStatus",
+    "searchPerformance",
+    "searchPerformanceTable",
+    "dashboardGscReport",
+    "dashboardActivation",
+  ],
+  ga4: [
+    "ga4Connection",
+    "ga4Properties",
+    "dashboardGa4Report",
+    "dashboardActivation",
+  ],
+  gbp: ["gbpConnection", "gbpAccounts"],
+};
+
+const PROVIDER_NAMES: Record<GoogleLinkProvider, string> = {
+  gsc: "Search Console",
+  ga4: "Google Analytics",
+  gbp: "Business Profile",
+};
 
 export function GoogleAccountRemovalDialog({
   provider,
@@ -22,7 +49,7 @@ export function GoogleAccountRemovalDialog({
   onClose,
   onRemoved,
 }: {
-  provider: "gsc" | "ga4";
+  provider: GoogleLinkProvider;
   accountId: string;
   label: string;
   onClose: () => void;
@@ -41,31 +68,16 @@ export function GoogleAccountRemovalDialog({
     mutationFn: () =>
       removeGoogleAccount({ data: { provider, accountId, confirmed: true } }),
     onSuccess: async () => {
-      const keys =
-        provider === "gsc"
-          ? [
-              "gscConnection",
-              "gscSites",
-              "gscGrantStatus",
-              "searchPerformance",
-              "searchPerformanceTable",
-              "dashboardGscReport",
-              "dashboardActivation",
-            ]
-          : [
-              "ga4Connection",
-              "ga4Properties",
-              "dashboardGa4Report",
-              "dashboardActivation",
-            ];
       await Promise.all(
-        keys.map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+        REMOVAL_QUERY_KEYS[provider].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key] }),
+        ),
       );
       toast.success("Google account removed");
       onRemoved();
     },
   });
-  const name = provider === "gsc" ? "Search Console" : "Google Analytics";
+  const name = PROVIDER_NAMES[provider];
   return (
     <Dialog
       open

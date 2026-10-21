@@ -3,18 +3,24 @@ import { googleConnectionOptions } from "@/client/features/integrations/googlePr
 import { createFileRoute } from "@tanstack/react-router";
 import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
 import { CrawlerAccessSettings } from "@/client/features/settings/CrawlerAccessSettings";
+import { isHostedClientAuthMode } from "@/lib/auth-mode";
 
 export const Route = createFileRoute(
   "/_app/p/$projectId/settings/integrations",
 )({
   loader: ({ params }) => {
-    // Start both database checks on link intent without holding up navigation.
+    // Start the database checks on link intent without holding up navigation.
     void queryClient.prefetchQuery(
       googleConnectionOptions("gsc", params.projectId),
     );
     void queryClient.prefetchQuery(
       googleConnectionOptions("ga4", params.projectId),
     );
+    if (!isHostedClientAuthMode()) {
+      void queryClient.prefetchQuery(
+        googleConnectionOptions("gbp", params.projectId),
+      );
+    }
   },
   component: ProjectIntegrationsRoute,
 });
@@ -34,6 +40,13 @@ function ProjectIntegrationsRoute() {
       <section id="google-analytics" className="scroll-mt-6">
         <GoogleConnectionCard provider="ga4" projectId={projectId} />
       </section>
+
+      {/* Self-hosted only: the MCP tools link here (#business-profile). */}
+      {isHostedClientAuthMode() ? null : (
+        <section id="business-profile" className="scroll-mt-6">
+          <GoogleConnectionCard provider="gbp" projectId={projectId} />
+        </section>
+      )}
 
       <CrawlerAccessSettings projectId={projectId} />
     </div>

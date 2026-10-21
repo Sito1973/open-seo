@@ -71,6 +71,12 @@ beforeAll(async () => {
       sql.includes("CREATE UNIQUE INDEX"),
     ),
   );
+  // 0056 widens the grant index to the Business Profile provider.
+  await client.executeMultiple(
+    migrationStatements("drizzle/sqlite/0056_gbp_connections.sql", (sql) =>
+      sql.includes("account_google_grant_owner_idx"),
+    ),
+  );
   oauth = await import("./googleOAuth");
 });
 
@@ -283,6 +289,39 @@ describe("Google OAuth grants", () => {
         account_id: "shared-google-account",
         access_token: "second",
         refresh_token: null,
+      },
+    ]);
+  });
+
+  it("updates a reconnected Business Profile grant in place", async () => {
+    mocks.fetch.mockResolvedValueOnce(
+      tokenResponse({
+        access_token: "first",
+        refresh_token: "refresh-1",
+        id_token: idToken,
+      }),
+    );
+    await callback(
+      oauth.GBP_INTEGRATION,
+      await authorizationState(oauth.GBP_INTEGRATION),
+      { code: "code-1" },
+    );
+    mocks.fetch.mockResolvedValueOnce(
+      tokenResponse({ access_token: "second", id_token: idToken }),
+    );
+    await callback(
+      oauth.GBP_INTEGRATION,
+      await authorizationState(oauth.GBP_INTEGRATION),
+      { code: "code-2" },
+    );
+
+    expect(await grants()).toEqual([
+      {
+        user_id: "user-1",
+        provider_id: "google-business-profile",
+        account_id: "google-account-1",
+        access_token: "second",
+        refresh_token: "refresh-1",
       },
     ]);
   });

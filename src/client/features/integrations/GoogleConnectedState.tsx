@@ -29,7 +29,7 @@ export function GoogleConnectedState({
         </p>
         {detail ? (
           <p className="mt-1 text-xs text-muted-foreground">
-            ID {detail.replace(/^properties\//, "")}
+            ID {detail.replace(/^(properties|accounts)\//, "")}
           </p>
         ) : null}
         {email ? (

@@ -1,8 +1,9 @@
+import type { GoogleLinkProvider } from "@/shared/google-link";
 import { GoogleAccountRepository } from "./GoogleAccountRepository";
 
 type AccountInput = {
   userId: string;
-  provider: "gsc" | "ga4";
+  provider: GoogleLinkProvider;
   accountId: string;
 };
 

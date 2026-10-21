@@ -22,7 +22,9 @@ function captureLinkErrorFromLocation(): CapturedLinkError | null {
   if (typeof window === "undefined") return null;
   const url = new URL(window.location.href);
   const provider = url.searchParams.get(GOOGLE_LINK_ERROR_PARAM);
-  if (provider !== "gsc" && provider !== "ga4") return null;
+  if (provider !== "gsc" && provider !== "ga4" && provider !== "gbp") {
+    return null;
+  }
   const code = url.searchParams.get("error") ?? "unknown";
   url.searchParams.delete(GOOGLE_LINK_ERROR_PARAM);
   url.searchParams.delete("error");

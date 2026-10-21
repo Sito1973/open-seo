@@ -75,6 +75,8 @@ describe("published MCP output schemas", () => {
         clientId: "client_test",
         scopes: ["mcp"],
       }),
+      // Includes the self-hosted-only tools so their schemas are checked too.
+      { selfHosted: true },
     );
     const client = new Client({ name: "output-schema-contract", version: "1" });
     const [clientTransport, serverTransport] =

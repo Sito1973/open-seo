@@ -1,4 +1,5 @@
 import { GoogleAccountRemovalDialog } from "@/client/features/integrations/GoogleAccountRemovalDialog";
+import type { GoogleLinkProvider } from "@/shared/google-link";
 import { QueryError } from "@/client/components/QueryState";
 import { Spinner } from "@/client/components/Spinner";
 import { Button } from "@/client/components/ui/button";
@@ -25,6 +26,8 @@ export type GooglePickerAccount = {
   email: string | null;
   requiresReconnect: boolean;
   unavailable?: boolean;
+  /** Why the properties couldn't load, when there is more to say. */
+  unavailableMessage?: string | null;
   properties: Property[];
 };
 type SecondaryAction = {
@@ -54,7 +57,7 @@ export function GooglePropertyPicker({
   secondaryAction,
   renderActions,
 }: {
-  provider: "gsc" | "ga4";
+  provider: GoogleLinkProvider;
   readOnly?: boolean;
   loading: boolean;
   linking?: boolean;
@@ -230,7 +233,8 @@ export function GooglePropertyPicker({
                       ) : account.unavailable ? (
                         <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2 text-sm">
                           <span className="text-muted-foreground">
-                            Couldn't load properties
+                            {account.unavailableMessage ??
+                              "Couldn't load properties"}
                           </span>
                           <Button variant="ghost" size="xs" onClick={onRetry}>
                             Try again

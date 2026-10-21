@@ -26,8 +26,9 @@ import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { captureClientEvent } from "@/client/lib/posthog";
 
 /**
- * Connects one project to Search Console or Google Analytics: link a Google
- * account, pick a property, change it, or disconnect.
+ * Connects one project to Search Console, Google Analytics or (self-hosted)
+ * Business Profile: link a Google account, pick a property, change it, or
+ * disconnect.
  */
 export function GoogleConnectionCard({
   provider,

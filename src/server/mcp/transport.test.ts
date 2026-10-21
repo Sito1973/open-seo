@@ -48,8 +48,8 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/server/mcp/server", () => ({
-  createOpenSeoMcpServer: (props?: unknown) => {
-    selfHostedAuthMocks.createOpenSeoMcpServer(props);
+  createOpenSeoMcpServer: (props?: unknown, options?: unknown) => {
+    selfHostedAuthMocks.createOpenSeoMcpServer(props, options);
     return new McpServer({
       name: "OpenSEO MCP",
       title: "OpenSEO",
@@ -183,12 +183,16 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
       );
       expect(response.headers.get("connection")).not.toBe("keep-alive");
       expect(resolver).toHaveBeenCalled();
-      expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith({
-        [MCP_AUTH_CONTEXT_PROP]: {
-          ...identity,
-          baseUrl: "https://open-seo.test",
+      // Only the self-hosted transport registers the Business Profile tools.
+      expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith(
+        {
+          [MCP_AUTH_CONTEXT_PROP]: {
+            ...identity,
+            baseUrl: "https://open-seo.test",
+          },
         },
-      });
+        { selfHosted: true },
+      );
       // Self-hosted must not pin Origins to the request's own Host — the
       // handler's localhost-class default is the rebinding-safe choice.
       expect(selfHostedAuthMocks.createMcpHandler).toHaveBeenCalledWith(
@@ -246,13 +250,16 @@ describe("handleAuthenticatedOpenSeoMcpRequest", () => {
     );
     // The transport stamps the per-request role and user scope into the props
     // it hands the server; neither is baked into tokens.
-    expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith({
-      [MCP_AUTH_CONTEXT_PROP]: {
-        ...props[MCP_AUTH_CONTEXT_PROP],
-        role: "owner",
-        orgScope: "user",
+    expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith(
+      {
+        [MCP_AUTH_CONTEXT_PROP]: {
+          ...props[MCP_AUTH_CONTEXT_PROP],
+          role: "owner",
+          orgScope: "user",
+        },
       },
-    });
+      { selfHosted: false },
+    );
   });
 
   it("routes modern-era requests to the SDK handler", async () => {
@@ -285,13 +292,16 @@ describe("handleAuthenticatedOpenSeoMcpRequest", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith({
-      [MCP_AUTH_CONTEXT_PROP]: {
-        ...props[MCP_AUTH_CONTEXT_PROP],
-        role: "owner",
-        orgScope: "user",
+    expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith(
+      {
+        [MCP_AUTH_CONTEXT_PROP]: {
+          ...props[MCP_AUTH_CONTEXT_PROP],
+          role: "owner",
+          orgScope: "user",
+        },
       },
-    });
+      { selfHosted: false },
+    );
   });
 
   it("rejects provider props missing the OAuth client identity", async () => {
@@ -337,14 +347,17 @@ describe("handleAuthenticatedOpenSeoMcpRequest", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith({
-      [MCP_AUTH_CONTEXT_PROP]: {
-        ...props[MCP_AUTH_CONTEXT_PROP],
-        organizationId: "org-2",
-        role: "member",
-        orgScope: "user",
+    expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith(
+      {
+        [MCP_AUTH_CONTEXT_PROP]: {
+          ...props[MCP_AUTH_CONTEXT_PROP],
+          organizationId: "org-2",
+          role: "member",
+          orgScope: "user",
+        },
       },
-    });
+      { selfHosted: false },
+    );
   });
 
   it("rejects a token whose user belongs to no organization", async () => {

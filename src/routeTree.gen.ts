@@ -57,6 +57,7 @@ import { Route as AppPProjectIdSavedRouteImport } from './routes/_app/p/$project
 import { Route as AppPProjectIdSearchPerformanceRouteImport } from './routes/_app/p/$projectId/search-performance'
 import { Route as AppPProjectIdSettingsRouteImport } from './routes/_app/p/$projectId/settings'
 import { Route as ApiGa4OauthCallbackRouteImport } from './routes/api/ga4/oauth/callback'
+import { Route as ApiGbpOauthCallbackRouteImport } from './routes/api/gbp/oauth/callback'
 import { Route as ApiGscOauthCallbackRouteImport } from './routes/api/gsc/oauth/callback'
 import { Route as AppPProjectIdAiVisibilityIndexRouteImport } from './routes/_app/p/$projectId/ai-visibility/index'
 import { Route as AppPProjectIdAiVisibilityResearchRouteImport } from './routes/_app/p/$projectId/ai-visibility/research'
@@ -317,6 +318,11 @@ const ApiGa4OauthCallbackRoute = ApiGa4OauthCallbackRouteImport.update({
   path: '/api/ga4/oauth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGbpOauthCallbackRoute = ApiGbpOauthCallbackRouteImport.update({
+  id: '/api/gbp/oauth/callback',
+  path: '/api/gbp/oauth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGscOauthCallbackRoute = ApiGscOauthCallbackRouteImport.update({
   id: '/api/gsc/oauth/callback',
   path: '/api/gsc/oauth/callback',
@@ -445,6 +451,7 @@ export interface FileRoutesByFullPath {
   '/p/$projectId/search-performance': typeof AppPProjectIdSearchPerformanceRoute
   '/p/$projectId/settings': typeof AppPProjectIdSettingsRouteWithChildren
   '/api/ga4/oauth/callback': typeof ApiGa4OauthCallbackRoute
+  '/api/gbp/oauth/callback': typeof ApiGbpOauthCallbackRoute
   '/api/gsc/oauth/callback': typeof ApiGscOauthCallbackRoute
   '/p/$projectId/': typeof AppPProjectIdIndexRoute
   '/p/$projectId/ai-visibility/research': typeof AppPProjectIdAiVisibilityResearchRoute
@@ -501,6 +508,7 @@ export interface FileRoutesByTo {
   '/p/$projectId/saved': typeof AppPProjectIdSavedRoute
   '/p/$projectId/search-performance': typeof AppPProjectIdSearchPerformanceRoute
   '/api/ga4/oauth/callback': typeof ApiGa4OauthCallbackRoute
+  '/api/gbp/oauth/callback': typeof ApiGbpOauthCallbackRoute
   '/api/gsc/oauth/callback': typeof ApiGscOauthCallbackRoute
   '/p/$projectId': typeof AppPProjectIdIndexRoute
   '/p/$projectId/ai-visibility/research': typeof AppPProjectIdAiVisibilityResearchRoute
@@ -566,6 +574,7 @@ export interface FileRoutesById {
   '/_app/p/$projectId/search-performance': typeof AppPProjectIdSearchPerformanceRoute
   '/_app/p/$projectId/settings': typeof AppPProjectIdSettingsRouteWithChildren
   '/api/ga4/oauth/callback': typeof ApiGa4OauthCallbackRoute
+  '/api/gbp/oauth/callback': typeof ApiGbpOauthCallbackRoute
   '/api/gsc/oauth/callback': typeof ApiGscOauthCallbackRoute
   '/_app/p/$projectId/': typeof AppPProjectIdIndexRoute
   '/_app/p/$projectId/ai-visibility/research': typeof AppPProjectIdAiVisibilityResearchRoute
@@ -629,6 +638,7 @@ export interface FileRouteTypes {
     | '/p/$projectId/search-performance'
     | '/p/$projectId/settings'
     | '/api/ga4/oauth/callback'
+    | '/api/gbp/oauth/callback'
     | '/api/gsc/oauth/callback'
     | '/p/$projectId/'
     | '/p/$projectId/ai-visibility/research'
@@ -685,6 +695,7 @@ export interface FileRouteTypes {
     | '/p/$projectId/saved'
     | '/p/$projectId/search-performance'
     | '/api/ga4/oauth/callback'
+    | '/api/gbp/oauth/callback'
     | '/api/gsc/oauth/callback'
     | '/p/$projectId'
     | '/p/$projectId/ai-visibility/research'
@@ -749,6 +760,7 @@ export interface FileRouteTypes {
     | '/_app/p/$projectId/search-performance'
     | '/_app/p/$projectId/settings'
     | '/api/ga4/oauth/callback'
+    | '/api/gbp/oauth/callback'
     | '/api/gsc/oauth/callback'
     | '/_app/p/$projectId/'
     | '/_app/p/$projectId/ai-visibility/research'
@@ -784,6 +796,7 @@ export interface RootRouteChildren {
   STokenRawRoute: typeof STokenRawRoute
   STokenIndexRoute: typeof STokenIndexRoute
   ApiGa4OauthCallbackRoute: typeof ApiGa4OauthCallbackRoute
+  ApiGbpOauthCallbackRoute: typeof ApiGbpOauthCallbackRoute
   ApiGscOauthCallbackRoute: typeof ApiGscOauthCallbackRoute
 }
 
@@ -1125,6 +1138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGa4OauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/gbp/oauth/callback': {
+      id: '/api/gbp/oauth/callback'
+      path: '/api/gbp/oauth/callback'
+      fullPath: '/api/gbp/oauth/callback'
+      preLoaderRoute: typeof ApiGbpOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/gsc/oauth/callback': {
       id: '/api/gsc/oauth/callback'
       path: '/api/gsc/oauth/callback'
@@ -1419,6 +1439,7 @@ const rootRouteChildren: RootRouteChildren = {
   STokenRawRoute: STokenRawRoute,
   STokenIndexRoute: STokenIndexRoute,
   ApiGa4OauthCallbackRoute: ApiGa4OauthCallbackRoute,
+  ApiGbpOauthCallbackRoute: ApiGbpOauthCallbackRoute,
   ApiGscOauthCallbackRoute: ApiGscOauthCallbackRoute,
 }
 export const routeTree = rootRouteImport

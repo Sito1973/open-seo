@@ -17,6 +17,12 @@ vi.mock("@/serverFunctions/ga4", () => ({
   setGa4Property: vi.fn(),
   disconnectGa4: vi.fn(),
 }));
+vi.mock("@/serverFunctions/gbp", () => ({
+  getGbpConnection: vi.fn(),
+  listGbpAccounts: vi.fn(),
+  setGbpAccount: vi.fn(),
+  disconnectGbp: vi.fn(),
+}));
 vi.mock("@/serverFunctions/projects", () => ({ getProjects: vi.fn() }));
 vi.mock("@/serverFunctions/googleAccounts", () => ({
   getGoogleAccountRemovalImpact: vi.fn(),

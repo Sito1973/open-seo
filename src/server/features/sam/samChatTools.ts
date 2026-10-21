@@ -350,7 +350,8 @@ function scrapeTools(projectDomain: string | null): ToolSet {
  *
  * When the MCP server gains a tool, add it here too — this list drifted for six
  * weeks once (audit + GA4 + rank-tracker management were MCP-only) before
- * anyone noticed.
+ * anyone noticed. The one deliberate exception is the self-hosted-only Google
+ * Business Profile tools, which stay out of SAM.
  */
 export function buildSamMcpTools(
   authContext: ToolAuthContext,

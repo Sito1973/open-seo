@@ -41,6 +41,12 @@ import { runRankTrackerTool } from "@/server/mcp/tools/run-rank-tracker";
 import { searchSerpLocationsTool } from "@/server/mcp/tools/search-serp-locations";
 import { getSerpResultsTool } from "@/server/mcp/tools/get-serp-results";
 import {
+  getGoogleBusinessProfilePerformanceTool,
+  getGoogleBusinessProfileReviewsTool,
+  getGoogleBusinessProfileSearchKeywordsTool,
+  listGoogleBusinessProfileLocationsTool,
+} from "@/server/mcp/tools/business-profile-tools";
+import {
   getGoogleAnalyticsAudienceBreakdownTool,
   getGoogleAnalyticsEcommercePerformanceTool,
   getGoogleAnalyticsKeyEventsTool,
@@ -168,7 +174,10 @@ function registerOpenSeoTool<Input extends ToolSchema>(
   );
 }
 
-export function createOpenSeoMcpServer(authProps: McpProps) {
+export function createOpenSeoMcpServer(
+  authProps: McpProps,
+  options: { selfHosted: boolean } = { selfHosted: false },
+) {
   const server = new McpServer(
     {
       name: "OpenSEO MCP",
@@ -276,6 +285,15 @@ export function createOpenSeoMcpServer(authProps: McpProps) {
   register(listReportTemplatesTool);
   register(saveReportTemplateTool);
   register(deleteReportTemplateTool);
+
+  // Business Profile reads the owner's own listings with a write-capable
+  // scope that only self-hosted installs grant, so hosted never lists these.
+  if (options.selfHosted) {
+    register(listGoogleBusinessProfileLocationsTool);
+    register(getGoogleBusinessProfileReviewsTool);
+    register(getGoogleBusinessProfilePerformanceTool);
+    register(getGoogleBusinessProfileSearchKeywordsTool);
+  }
 
   return server;
 }

@@ -77,7 +77,11 @@ function validateLegacyRequest(
   return originRejection ? withMcpCors(originRejection) : undefined;
 }
 
-async function handleLegacyJsonRequest(request: Request, props: McpProps) {
+async function handleLegacyJsonRequest(
+  request: Request,
+  props: McpProps,
+  selfHosted: boolean,
+) {
   if (request.method !== "POST") {
     return withMcpCors(
       Response.json(
@@ -99,7 +103,7 @@ async function handleLegacyJsonRequest(request: Request, props: McpProps) {
   // before the request completes. JSON mode silently drops server-to-client
   // requests (sampling/elicitation) and would hang the buffered response —
   // no OpenSEO tool issues them.
-  const server = createOpenSeoMcpServer(props);
+  const server = createOpenSeoMcpServer(props, { selfHosted });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
@@ -122,21 +126,26 @@ async function handleLegacyJsonRequest(request: Request, props: McpProps) {
 // derived from the request's own Host would accept a DNS-rebinding page
 // trivially. Non-browser MCP clients send no Origin and are unaffected either
 // way.
+// `selfHosted` registers the self-hosted-only tools (Business Profile).
 function createRequestHandler(
   props: McpProps,
-  allowedOriginHostnames?: string[],
+  options: { selfHosted: boolean; allowedOriginHostnames?: string[] },
 ) {
-  const modernHandler = createMcpHandler(() => createOpenSeoMcpServer(props), {
-    route: MCP_ROUTE,
-    allowedOriginHostnames,
-    legacy: "reject",
-    // MCP serving is strictly stateless: no notification is ever published,
-    // so refuse subscriptions/listen outright (in-band -32603 before the
-    // ack). The SSE streams it would otherwise hold open pin isolates for
-    // hours and turn every isolate death into a burst of exceededMemory
-    // request outcomes (EVE-95).
-    maxSubscriptions: 0,
-  });
+  const { selfHosted, allowedOriginHostnames } = options;
+  const modernHandler = createMcpHandler(
+    () => createOpenSeoMcpServer(props, { selfHosted }),
+    {
+      route: MCP_ROUTE,
+      allowedOriginHostnames,
+      legacy: "reject",
+      // MCP serving is strictly stateless: no notification is ever published,
+      // so refuse subscriptions/listen outright (in-band -32603 before the
+      // ack). The SSE streams it would otherwise hold open pin isolates for
+      // hours and turn every isolate death into a burst of exceededMemory
+      // request outcomes (EVE-95).
+      maxSubscriptions: 0,
+    },
+  );
 
   return async (request: Request, env: unknown, ctx: ExecutionContext) => {
     if (request.method === "OPTIONS") {
@@ -150,7 +159,7 @@ function createRequestHandler(
     }
 
     const rejection = validateLegacyRequest(request, allowedOriginHostnames);
-    return rejection ?? handleLegacyJsonRequest(request, props);
+    return rejection ?? handleLegacyJsonRequest(request, props, selfHosted);
   };
 }
 
@@ -225,10 +234,13 @@ export async function handleAuthenticatedOpenSeoMcpRequest(
     // ServerContext.http.req. Display only (report attribution).
     userAgent: request.headers.get("user-agent") ?? undefined,
   });
-  return createRequestHandler(requestProps, [
-    hostedUrl.hostname,
-    SURFMIND_CHROME_EXTENSION_HOSTNAME,
-  ])(request, env, ctx);
+  return createRequestHandler(requestProps, {
+    selfHosted: false,
+    allowedOriginHostnames: [
+      hostedUrl.hostname,
+      SURFMIND_CHROME_EXTENSION_HOSTNAME,
+    ],
+  })(request, env, ctx);
 }
 
 export async function handleSelfHostedOpenSeoMcpRequest(
@@ -254,5 +266,5 @@ export async function handleSelfHostedOpenSeoMcpRequest(
     userAgent: request.headers.get("user-agent") ?? undefined,
   });
 
-  return createRequestHandler(props)(request, env, ctx);
+  return createRequestHandler(props, { selfHosted: true })(request, env, ctx);
 }
