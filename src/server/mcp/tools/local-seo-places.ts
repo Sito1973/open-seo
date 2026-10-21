@@ -179,6 +179,7 @@ export function placesResponseFields(
   )) {
     const provider = attribution.provider ?? null;
     const providerUri = attribution.providerUri ?? null;
+    if (!provider && !providerUri) continue;
     attributions.set(`${provider}|${providerUri}`, { provider, providerUri });
   }
   return {
@@ -189,9 +190,25 @@ export function placesResponseFields(
   };
 }
 
-/** Source, storage and budget lines every Places response text ends with. */
-export function placesNotes(budget: PlacesBudget): string[] {
-  return [PLACES_SOURCE_NOTE, PLACES_STORAGE_NOTE, placesBudgetLine(budget)];
+/**
+ * Source, attribution, storage and budget lines every Places response text
+ * ends with. Google requires third-party attributions to be shown with the
+ * results, and most clients give the model only the text.
+ */
+export function placesNotes({
+  budget,
+  attributions,
+}: ReturnType<typeof placesResponseFields>): string[] {
+  return [
+    PLACES_SOURCE_NOTE,
+    ...attributions.map(({ provider, providerUri }) =>
+      provider && providerUri
+        ? `Also attribute: ${provider} (${providerUri})`
+        : `Also attribute: ${provider ?? providerUri}`,
+    ),
+    PLACES_STORAGE_NOTE,
+    placesBudgetLine(budget),
+  ];
 }
 
 /**

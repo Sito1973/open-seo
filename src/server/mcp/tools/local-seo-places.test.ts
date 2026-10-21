@@ -4,7 +4,7 @@ import {
   searchLocalBusinessesTool,
 } from "./dataforseo-research-tools";
 import { getLocalRankGridTool } from "./local-seo-tools";
-import { makeToolContext } from "./tool-test-support";
+import { makeToolContext, textContent } from "./tool-test-support";
 
 // The Google Places path of the three switched local tools: a self-hosted
 // install with GOOGLE_PLACES_API_KEY and no DataForSEO key.
@@ -158,6 +158,9 @@ it("fetches a Maps SERP with the listing mask and maps rows onto the DataForSEO 
       googleMapsUri: "https://maps.google.com/?cid=123",
       rating: 4.6,
       userRatingCount: 210,
+      attributions: [
+        { provider: "Acme Data", providerUri: "https://acme.example" },
+      ],
       // proto3 JSON omits zero values, here the minutes.
       regularOpeningHours: {
         periods: [{ open: { day: 0, hour: 9 }, close: { day: 0, hour: 17 } }],
@@ -187,6 +190,10 @@ it("fetches a Maps SERP with the listing mask and maps rows onto the DataForSEO 
       },
     },
   });
+  // Google requires third-party attributions to be shown with the results.
+  expect(textContent(result)).toContain(
+    "Also attribute: Acme Data (https://acme.example)",
+  );
 });
 
 it("searches businesses inside the area, filtering and sorting before the offset", async () => {
@@ -232,6 +239,34 @@ it("searches businesses inside the area, filtering and sorting before the offset
     expect.objectContaining({ place_id: "a" }),
     expect.objectContaining({ place_id: "d" }),
   ]);
+});
+
+it("reserves each further page before sending it and stops when refused", async () => {
+  mocks.fetch.mockImplementation(async () =>
+    Response.json({ places: [{ id: "a" }], nextPageToken: "t" }),
+  );
+  mocks.reserveCalls.mockResolvedValueOnce(1).mockResolvedValueOnce(null);
+
+  // Sorting needs every row, so the search asks for up to 3 pages.
+  const result = await searchLocalBusinessesTool.handler(
+    {
+      projectId: "project_1",
+      query: "cafe",
+      near: { ...near, radiusKm: 2 },
+      sortBy: "reviews",
+    },
+    toolContext,
+  );
+
+  expect(mocks.reserveCalls).toHaveBeenCalledTimes(2);
+  for (const [reservation] of mocks.reserveCalls.mock.calls) {
+    expect(reservation).toMatchObject({
+      sku: "text_search_enterprise",
+      count: 1,
+    });
+  }
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  expect(textContent(result)).toContain("Stopped early");
 });
 
 it("refuses the isClaimed filter before sending a request", async () => {

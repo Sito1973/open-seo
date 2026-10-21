@@ -993,7 +993,7 @@ export const getLocalRankGridTool = {
   config: {
     title: "Get local rank grid",
     description:
-      "Runs one Google Maps search per point of a square grid around a coordinate and reports where the target business ranks at each point — plus each point's result count and #1 business — revealing how far its Maps visibility reaches. Cost scales with the grid: gridSize squared SERP calls (3x3 = 9, the sensible default; 5x5 = 25). Charges credits per grid point. The searches run as one queued batch that usually finishes within this call; if some are still running you get status 'processing'. Calling again with the same arguments within an hour collects the same searches at no extra charge, so repeat the call in about a minute to finish a 'processing' grid or to recover a lost response.",
+      "Runs one Google Maps search per point of a square grid around a coordinate and reports where the target business ranks at each point — plus each point's result count and #1 business — revealing how far its Maps visibility reaches. Cost scales with the grid: gridSize squared SERP calls (3x3 = 9, the sensible default; 5x5 = 25). Charges credits per grid point. The searches run as one queued batch that usually finishes within this call; if some are still running you get status 'processing'. Calling again with the same arguments within an hour collects the same searches at no extra charge, so repeat the call in about a minute to finish a 'processing' grid or to recover a lost response. On self-hosted installs using Google Places, each call spends gridSize squared of the monthly Text Search Pro budget and always completes in one call; repeat it only if the grid actually failed.",
     inputSchema: getLocalRankGridInputSchema,
     outputSchema: z.looseObject({
       status: z.enum(["completed", "processing"]),
@@ -1086,7 +1086,7 @@ export const getLocalRankGridTool = {
         header: `Local rank grid for "${args.keyword}" on Google Places (${gridSize}x${gridSize}, ${spacingKm} km spacing, each point biased to a ${radiusM} m circle, top ${RANK_GRID_DEPTH} checked; zoom and device do not apply).`,
         failedLegend:
           '"x" = search failed (still counted against the monthly budget)',
-        notes: placesNotes(places.budget),
+        notes: placesNotes(places.fields),
         meta,
         providerFields: places.fields,
       });

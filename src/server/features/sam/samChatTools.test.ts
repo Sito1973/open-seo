@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Tool } from "ai";
-import { toModelOutput, waitingAuditStatusTool } from "./samChatTools";
+import { makeToolContext } from "@/server/mcp/tools/tool-test-support";
+import {
+  buildSamMcpTools,
+  toModelOutput,
+  waitingAuditStatusTool,
+} from "./samChatTools";
 
 vi.mock("cloudflare:workers", () => ({
   env: {},
@@ -34,6 +39,7 @@ const callOptions = { toolCallId: "t", messages: [] };
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 describe("waitingAuditStatusTool", () => {
@@ -84,4 +90,29 @@ describe("toModelOutput", () => {
       data: { meta: { url: "https://example.com" } },
     });
   });
+});
+
+// SAM saves every tool result in its chat history, and Google's terms restrict
+// storing Places content, so the tools that switch to Places must refuse.
+it("refuses the local tools that would run on Google Places", async () => {
+  vi.stubEnv("DATAFORSEO_API_KEY", "");
+  vi.stubEnv("AUTH_MODE", "");
+  vi.stubEnv("GOOGLE_PLACES_API_KEY", "places-key");
+  const tools = buildSamMcpTools(makeToolContext().auth, {
+    id: "project_1",
+    domain: null,
+  });
+
+  for (const name of [
+    "search_local_businesses",
+    "get_local_serp_results",
+    "get_local_rank_grid",
+  ]) {
+    await expect(
+      tools[name]?.execute?.({}, callOptions),
+    ).resolves.toHaveProperty(
+      "error",
+      expect.stringContaining("chat history is saved"),
+    );
+  }
 });

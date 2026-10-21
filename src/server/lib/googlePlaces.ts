@@ -243,6 +243,9 @@ export async function searchGrid(
         textQuery: input.textQuery,
         languageCode: input.languageCode,
         regionCode: input.regionCode,
+        // Google Maps lists businesses that hide their address; Text Search
+        // leaves them out unless asked.
+        includePureServiceAreaBusinesses: true,
         pageSize: PAGE_SIZE,
         locationBias: {
           circle: {
@@ -299,6 +302,7 @@ export async function searchListings(
       textQuery: input.textQuery,
       languageCode: input.languageCode,
       regionCode: input.regionCode,
+      includePureServiceAreaBusinesses: true,
       minRating: input.minRating,
       ...area,
       pageSize: Math.min(PAGE_SIZE, input.maxRows - places.length),

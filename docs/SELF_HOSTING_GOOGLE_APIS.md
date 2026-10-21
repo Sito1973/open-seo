@@ -110,6 +110,12 @@ billing account, so use a billing account that no other Google Maps Platform
 project shares. Otherwise the other project's usage counts against the same
 allowance and you can be charged.
 
+The counter covers one OpenSEO database. Do not put the same key, or a key
+billed to the same account, on a second install (local development, staging):
+each install counts only its own requests, so together they can pass the free
+allowance. Give that install no Places key, or a key on a different billing
+account.
+
 The counter lives in OpenSEO's database. With Docker Compose that is the
 `open_seo_data` volume mounted at `/app/.wrangler`. On a platform that runs the
 image for you, mount a persistent volume at `/app/.wrangler`. If the volume is
@@ -140,7 +146,9 @@ credentials → API key**, then edit it:
 The built-in budget is the main guard. Add two more in the Cloud Console:
 
 - On the Places API (New) **Quotas** page, lower the Text Search request quota
-  so a runaway client cannot send many requests at once.
+  so a runaway client cannot send many requests at once. Keep the per-minute
+  quota at 60 or more: a 5x5 grid sends 25 requests at once, and requests over
+  the quota fail but still count against the monthly budget.
 - Under **Billing → Budgets & alerts**, create a budget of $1 with an email
   alert. Google only sends the alert; it does not stop charges.
 
@@ -172,5 +180,6 @@ ratings, review counts, hours and coordinates) in the chat and out of
 grid coordinates, your own business details and the agent's conclusions. Show
 the "Google Maps" attribution when you present the results.
 
-Do not set `OPENROUTER_API_KEY` (SAM, the in-app agent) on an install that uses
-Google Places. SAM saves its chat history, which would store Places results.
+SAM, the in-app agent, saves its chat history, which would store Places results.
+So while Google Places is in use, SAM refuses these three tools; run them from
+an MCP client instead.

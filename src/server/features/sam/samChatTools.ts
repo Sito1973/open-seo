@@ -78,6 +78,7 @@ import {
 import { whoamiTool } from "@/server/mcp/tools/whoami";
 import { explorePromptTool } from "@/server/mcp/tools/explore-prompt";
 import { discoverSiteUrls, readPages, readSite } from "@/server/lib/scrape";
+import { getGoogleFallbackKey } from "@/server/lib/runtime-env";
 import { capToolOutput } from "@/server/features/sam/samToolOutput";
 import openSeoFactSheet from "@/server/features/sam/openseo-fact-sheet.md?raw";
 
@@ -251,6 +252,28 @@ export function waitingAuditStatusTool(
   };
 }
 
+// SAM persists every tool result in its chat history, and Google's terms
+// restrict storing Places content. So the local tools that switch to Google
+// Places refuse in SAM; external MCP clients and the DataForSEO path are
+// unaffected.
+function refuseOnPlaces(base: Tool): Tool {
+  const baseExecute = base.execute;
+  if (!baseExecute) return base;
+  return {
+    ...base,
+    execute: async (args, options) => {
+      if (await getGoogleFallbackKey("GOOGLE_PLACES_API_KEY")) {
+        return {
+          error:
+            "Google Places results can't be used in SAM because its chat history is saved. Use an MCP client, or set DATAFORSEO_API_KEY.",
+        };
+      }
+      const result: unknown = await baseExecute(args, options);
+      return result;
+    },
+  };
+}
+
 // Free (credit-less) site-reading tools, split into discovery + reading so the
 // model can pick which pages to read instead of blindly taking the first N
 // sitemap entries.
@@ -415,14 +438,16 @@ export function buildSamMcpTools(
     run_rank_tracker: adaptTool(runRankTrackerTool),
     get_ranked_keywords: adaptTool(getRankedKeywordsTool),
     find_serp_competitors: adaptTool(findSerpCompetitorsTool),
-    search_local_businesses: adaptTool(searchLocalBusinessesTool),
-    get_local_serp_results: adaptTool(getLocalSerpResultsTool),
+    search_local_businesses: refuseOnPlaces(
+      adaptTool(searchLocalBusinessesTool),
+    ),
+    get_local_serp_results: refuseOnPlaces(adaptTool(getLocalSerpResultsTool)),
     get_google_business_questions: adaptTool(getGoogleBusinessQuestionsTool),
     get_business_profile: adaptTool(getBusinessProfileTool),
     get_business_reviews: adaptTool(getBusinessReviewsTool),
     get_business_updates: adaptTool(getBusinessUpdatesTool),
     list_business_categories: adaptTool(listBusinessCategoriesTool),
-    get_local_rank_grid: adaptTool(getLocalRankGridTool),
+    get_local_rank_grid: refuseOnPlaces(adaptTool(getLocalRankGridTool)),
     get_keyword_metrics: adaptTool(getKeywordMetricsTool),
     get_search_console_performance: adaptTool(getSearchConsolePerformanceTool),
     inspect_urls: adaptTool(inspectUrlsTool),

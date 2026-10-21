@@ -846,13 +846,11 @@ async function getPlacesLocalSerp(
   if (results.length > 0) {
     lines.push(formatMcpTable(results, LOCAL_SERP_COLUMNS));
   }
+  const fields = placesResponseFields(listing.budget, listing.places);
   return mcpResponse({
-    text: [...lines, ...placesNotes(listing.budget)].join("\n"),
+    text: [...lines, ...placesNotes(fields)].join("\n"),
     meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
-    structuredContent: {
-      results,
-      ...placesResponseFields(listing.budget, listing.places),
-    },
+    structuredContent: { results, ...fields },
   });
 }
 
@@ -949,13 +947,11 @@ async function searchPlacesBusinesses(
   if (businesses.length > 0) {
     lines.push(formatMcpTable(businesses, LOCAL_BUSINESS_COLUMNS));
   }
+  const fields = placesResponseFields(listing.budget, listing.places);
   return mcpResponse({
-    text: [...lines, ...placesNotes(listing.budget)].join("\n"),
+    text: [...lines, ...placesNotes(fields)].join("\n"),
     meta: buildProjectMeta(context, args.projectId, `/p/${args.projectId}`),
-    structuredContent: {
-      businesses,
-      ...placesResponseFields(listing.budget, listing.places),
-    },
+    structuredContent: { businesses, ...fields },
   });
 }
 
