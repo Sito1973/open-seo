@@ -5,6 +5,9 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import { getKeywordResearchSources } from "@/serverFunctions/keywords";
 import {
   useKeywordControlsForm,
   type KeywordControlsValues,
@@ -159,6 +162,15 @@ export function useKeywordResearchController(
     setSerpPage(0);
   }, [setSerpKeyword, setSerpPage, uiState]);
 
+  // Self-hosted stand-ins for DataForSEO's keyword sources; hosted never asks.
+  const researchSources = useQuery({
+    queryKey: ["keywordResearchSources"],
+    queryFn: () => getKeywordResearchSources(),
+    enabled: !isHostedClientAuthMode(),
+    staleTime: Infinity,
+  }).data;
+  const keywordPlanner = researchSources?.keywordPlanner === true;
+
   const onFormSubmit = input.onFormSubmit;
   const controlsForm = useKeywordControlsForm(
     {
@@ -167,7 +179,12 @@ export function useKeywordResearchController(
     },
     (value) => {
       setPreferredLocationCode(value.locationCode);
-      onFormSubmit({ ...value, groupKeywords: preferredGroupKeywords });
+      // The Keyword Planner has no clickstream data or keyword grouping.
+      onFormSubmit({
+        ...value,
+        clickstream: value.clickstream && !keywordPlanner,
+        groupKeywords: preferredGroupKeywords && !keywordPlanner,
+      });
     },
   );
 
@@ -264,9 +281,17 @@ export function useKeywordResearchController(
     setSerpPage(0);
   };
 
+  const researchData = researchQuery.data;
   return {
     preferredGroupKeywords,
     setPreferredGroupKeywords,
+    keywordPlanner,
+    relatedSearchesAvailable: researchSources?.relatedSearches === true,
+    // What a stand-in source could not provide for this result, and why.
+    researchNotes:
+      hasSearched && researchData && "notes" in researchData
+        ? (researchData.notes ?? [])
+        : [],
     activeFilterCount,
     activeSerpKeyword,
     confirmSave,

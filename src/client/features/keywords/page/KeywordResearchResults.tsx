@@ -1,4 +1,4 @@
-import { FileDown, Gauge, Save, Sheet } from "lucide-react";
+import { FileDown, Gauge, Info, Save, Sheet } from "lucide-react";
 import {
   lastTwelveMonths,
   MONTH_SHORT_LABELS,
@@ -87,7 +87,12 @@ function MobileTabs({ controller }: Props) {
 }
 
 function KeywordPanel({ controller }: Props) {
-  const { mobileTab, searchedKeyword, showApproximateMatchNotice } = controller;
+  const {
+    mobileTab,
+    researchNotes,
+    searchedKeyword,
+    showApproximateMatchNotice,
+  } = controller;
 
   return (
     <div
@@ -99,6 +104,16 @@ function KeywordPanel({ controller }: Props) {
             No exact match for{" "}
             <span className="font-medium">"{searchedKeyword}"</span>. Showing
             closest related keywords instead.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {researchNotes.length > 0 ? (
+        <Alert variant="info" role="status">
+          <Info />
+          <AlertDescription>
+            {researchNotes.map((note) => (
+              <p key={note}>{note}</p>
+            ))}
           </AlertDescription>
         </Alert>
       ) : null}

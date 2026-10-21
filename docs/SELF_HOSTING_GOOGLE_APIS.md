@@ -405,6 +405,9 @@ It runs:
 - **Keyword difficulty estimates**: from the first pages rank checks save, at
   no cost, and on demand at most 300 requests a month. See
   [Keyword difficulty estimates](#keyword-difficulty-estimates-bright-data-and-open-pagerank).
+- **"Google related searches and questions"** in keyword research, with the
+  Keyword Planner: up to 4 requests per new seed. See
+  [Keyword sources](#keyword-sources).
 
 Each response says where its results came from, for example "Bright Data live
 Google SERP from www.google.com.co (exit country CO, language es)". The rank
@@ -716,7 +719,10 @@ instead, for free. It runs:
 
 - **`research_keywords`** and the app's keyword research page: keyword ideas
   for each seed from Keyword Planner, sorted by volume, with average monthly
-  searches, the monthly trend and paid competition.
+  searches, the monthly trend and paid competition. The app's keyword
+  research page can also take phrase-match ideas from Google autocomplete and
+  related searches from Google's results page (see
+  [Keyword sources](#keyword-sources)).
 - **`get_keyword_metrics`**, refreshing saved keywords and a rank tracker's
   keyword metrics: volumes for a list of keywords, up to 700 per request.
 - **`find_serp_competitors`** on Bright Data: the volumes behind each
@@ -731,6 +737,52 @@ when Bright Data is set. CPC also stays empty: Google reports bids in the Ads ac
 and OpenSEO shows CPC in US dollars. Google merges close variants such as
 "hamburguesa" and "hamburguesas", and each keyword you asked for gets the
 shared numbers; do not add them together.
+
+### Keyword sources
+
+In the app's keyword research, **Options → Keyword source** offers three
+sources on the Keyword Planner, for every country. The clickstream and keyword
+grouping options are hidden: Keyword Planner has neither.
+
+- **Keyword Planner ideas** (the default, and what `research_keywords` uses):
+  Keyword Planner's ideas for the seed.
+- **Phrase match + Google autocomplete**: the Keyword Planner ideas that
+  contain every word of the seed, plus Google's autocomplete suggestions that
+  do (accents ignored, and "hamburguesa" also matches "hamburguesas"). Keyword
+  Planner then measures the new suggestions in one request.
+- **Google related searches and questions**: the related searches and People
+  Also Ask questions on the seed's Google results page, and on the pages of
+  its first three related searches, measured by Keyword Planner. It needs
+  [Bright Data](#bright-data-live-google-serp-for-rank-tracking) and sends up
+  to 4 requests from its monthly budget per new seed, on desktop, without a
+  city. Each page is also saved as a [first page](#saved-first-pages).
+
+For a city, the ideas stay national and Keyword Planner gives the city's
+volumes, as with the default source.
+
+While Google has not approved Basic access, or before Google Ads is connected,
+the phrase match and related sources still list their keywords, without
+volume, CPC or competition, and a note above the table says why. Keyword
+Planner ideas need Basic access. A result with a note is not cached, so the
+same search runs again next time; Google's related searches then cost their
+Bright Data requests again.
+
+Google autocomplete is not an official API, and Google may block a server that
+calls it too often. OpenSEO calls `suggestqueries.google.com` gently:
+
+- about 40 lookups for a new seed: the seed, the seed followed by each letter
+  from a to z, and, in Spanish, a few words around it ("mejor", "donde", "en",
+  "cerca", "domicilio"...);
+- one lookup a second, so a new seed takes about 40 seconds;
+- each answer cached for 30 days, so a repeated seed sends nothing;
+- at most 2,000 lookups a month, counted like the other budgets;
+- when Google refuses a lookup (HTTP 429 or 403, or its captcha page), every
+  lookup pauses for 24 hours, and the note says until when.
+
+Lookups use Google's interface language for the project (`es-419` for Spanish
+outside Spain) and its country (`gl=co` for Colombia), without a city. They
+come from your server's IP address and do not use your Google accounts. There
+is no setting to raise the budget or turn the pause off.
 
 ### Locations and language
 
@@ -828,7 +880,9 @@ one operation of the daily quota:
 
 - a research seed sends one request;
 - a city or region adds one location lookup and one volume request;
-- `get_keyword_metrics` and refreshes send one request per 700 keywords.
+- `get_keyword_metrics` and refreshes send one request per 700 keywords;
+- the phrase match and related sources add one volume request for their new
+  keywords.
 
 Keyword Planner updates its numbers once a month, so OpenSEO keeps each answer
 until the end of the calendar month (UTC) and repeats of the same request in

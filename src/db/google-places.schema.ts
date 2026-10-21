@@ -12,7 +12,8 @@ import {
 // DataForSEO Backlinks API requests ("dataforseo_backlinks", with
 // DATAFORSEO_SCOPE=backlinks) and of the Bright Data requests that keyword
 // difficulty estimates may send ("difficulty_estimate", a share of
-// "brightdata_serp"). It holds no tenant data on purpose: each
+// "brightdata_serp") and of Google autocomplete lookups for keyword research
+// ("google_autocomplete"). It holds no tenant data on purpose: each
 // cap belongs to the install's provider account, and none runs on hosted.
 export const googlePlacesUsage = sqliteTable(
   "google_places_usage",
@@ -30,6 +31,7 @@ export const googlePlacesUsage = sqliteTable(
         "dataforseo_backlinks",
         "open_pagerank",
         "difficulty_estimate",
+        "google_autocomplete",
       ],
     }).notNull(),
     calls: integer("calls").notNull().default(0),

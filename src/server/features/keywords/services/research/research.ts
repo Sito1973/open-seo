@@ -31,6 +31,7 @@ import {
   fetchResearchRowsBySource,
 } from "./research-data";
 import { storedDifficultyEstimates } from "@/server/features/serp/services/difficultyEstimate";
+import { fetchStandInRows } from "./stand-in-modes";
 import {
   MIN_NON_SEED_FOR_AUTO,
   countNonSeedKeywords,
@@ -43,6 +44,13 @@ type ResearchResult = {
   rows: KeywordResearchRow[];
   source: ResearchSource;
   usedFallback: boolean;
+  /**
+   * Set only by the Keyword Planner's stand-in modes: what the result is
+   * missing and why, such as volumes while Google has not approved the
+   * Keyword Planner, or Google autocomplete paused. Such a result is not
+   * cached, so the next search tries again.
+   */
+  notes?: string[];
 };
 
 type CachedResult = ResearchResult;
@@ -238,6 +246,18 @@ async function buildResearchCacheKey(
   });
 }
 
+// Rows to store as keyword metrics. On the Keyword Planner, a row without
+// volume or trend got no answer from it (a candidate it does not know, or a
+// Planner not approved yet), and storing it would erase metrics saved earlier.
+function rowsToStore(
+  rows: EnrichedKeyword[],
+  planner: AdsKeywordClient | null,
+) {
+  return planner
+    ? rows.filter((row) => row.searchVolume != null || row.trend.length > 0)
+    : rows;
+}
+
 function persistRows(
   input: ResolvedResearchKeywordsInput,
   rows: EnrichedKeyword[],
@@ -319,11 +339,22 @@ async function researchRows(
     : getKeywordDataProvider(input.locationCode);
   // Labs source modes, clickstream, and synonym filtering don't exist for
   // Google-Ads-served countries; normalize them so equivalent requests share
-  // one cache entry. Local volume replaces the clickstream volume, so a local
-  // request never pays for clickstream.
+  // one cache entry. The Keyword Planner keeps phrase match and related, which
+  // its stand-in sources serve; its ideas answer auto and category ideas
+  // alike. Local volume replaces the clickstream volume, so a local request
+  // never pays for clickstream.
   const effectiveInput: ResolvedResearchKeywordsInput =
     provider === "google_ads"
-      ? { ...input, mode: "auto", clickstream: false, groupKeywords: false }
+      ? {
+          ...input,
+          mode:
+            planner &&
+            (input.mode === "suggestions" || input.mode === "related")
+              ? input.mode
+              : "auto",
+          clickstream: false,
+          groupKeywords: false,
+        }
       : input.locationName
         ? { ...input, clickstream: false }
         : input;
@@ -355,12 +386,18 @@ async function researchRows(
         creditFeature,
       )
     : provider === "google_ads"
-      ? await fetchGoogleAdsRows(
-          effectiveInput,
-          seedKeyword,
-          planner ?? createDataforseoClient(billingCustomer),
-          creditFeature,
-        )
+      ? planner && (mode === "suggestions" || mode === "related")
+        ? await fetchStandInRows(mode, effectiveInput, seedKeyword, {
+            planner,
+            organizationId: billingCustomer.organizationId,
+            creditFeature,
+          })
+        : await fetchGoogleAdsRows(
+            effectiveInput,
+            seedKeyword,
+            planner ?? createDataforseoClient(billingCustomer),
+            creditFeature,
+          )
       : mode === "auto"
         ? await fetchAutoRows(
             effectiveInput,
@@ -376,10 +413,12 @@ async function researchRows(
             creditFeature,
           );
 
-  await setCached(cacheKey, result, CACHE_TTL.researchResult);
+  if (!result.notes) {
+    await setCached(cacheKey, result, CACHE_TTL.researchResult);
+  }
   // Keyword metrics are stored per country, so local rows are not persisted.
   if (!effectiveInput.locationName)
-    void persistRows(effectiveInput, result.rows);
+    void persistRows(effectiveInput, rowsToStore(result.rows, planner));
 
   return result;
 }
@@ -410,7 +449,11 @@ async function researchLocal(
   // A save from local results sends no metrics, so the saved keyword relies on
   // the stored national ones. Store them before returning, also when the
   // national result came from the cache.
-  await persistRows(nationalInput, national.rows);
+  const measured = rowsToStore(national.rows, planner);
+  await persistRows(nationalInput, measured);
+  // The Planner answered no national row (Basic access not approved yet, or
+  // keywords it does not know), so it would not answer for the city either.
+  if (planner && measured.length === 0) return national;
   return {
     ...national,
     rows: await localizeResearchRows(

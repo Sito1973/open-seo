@@ -142,6 +142,14 @@ export const getSerpAnalysis = createServerFn({ method: "POST" })
     ),
   );
 
+/**
+ * Which stand-in keyword sources this server has: the Google Ads Keyword
+ * Planner, and Bright Data for related searches. Both false on hosted.
+ */
+export const getKeywordResearchSources = createServerFn({ method: "GET" })
+  .middleware(requireAuthenticatedContext)
+  .handler(() => KeywordResearchService.keywordResearchSources());
+
 /** Whether this server estimates keyword difficulty. */
 export const getKeywordDifficultyEstimateStatus = createServerFn({
   method: "GET",
