@@ -9,6 +9,7 @@ import {
   AI_RECORD_COST_USD,
   type AiCostEstimate,
   type AiEngine,
+  type AiRequestBudget,
 } from "@/shared/ai-visibility";
 import { llmResponseUsd } from "@/server/lib/dataforseo/pricing";
 import {
@@ -18,37 +19,45 @@ import {
 import { scheduledChecksPerMonth } from "@/shared/rank-tracking";
 import type { EstimateAiCostInput } from "@/types/schemas/ai-visibility";
 import { projectPatch } from "./aiVisibilityMutation";
+import { SERPAPI_HOURLY_LIMIT } from "@/server/lib/serpApiAiMode";
 import {
   aiCollectionProvider,
   aiProviderEngines,
   aiSearchBudget,
-  serpApiSearchesPerCheck,
 } from "./aiVisibilityProvider";
 
 /**
  * Raw provider USD for one answer. Google AI Mode is a SerpApi search on the
- * free plan. Claude and Perplexity always use DataForSEO's model API. The other
- * engines are live on Run now and queued otherwise.
+ * free plan, and on a stand-in server (self-hosted without DataForSEO) Google
+ * AI Overviews are a Bright Data request on its free tier. Claude and
+ * Perplexity always use DataForSEO's model API. The other engines are live on
+ * Run now and queued otherwise.
  */
-function aiAnswerUsd(engine: AiEngine, mode: "live" | "queued") {
-  if (engine === "google_ai_mode") return 0;
+function aiAnswerUsd(
+  engine: AiEngine,
+  mode: "live" | "queued",
+  standIn: boolean,
+) {
+  if (standIn || engine === "google_ai_mode") return 0;
   if (aiEngineUsesModelApi(engine)) return llmResponseUsd(engine, true);
   return mode === "live" ? AI_LIVE_RECORD_COST_USD : AI_RECORD_COST_USD;
 }
 
 /**
  * The customer's cost for a check, given one engine per answer: credits when
- * hosted, else provider USD.
+ * hosted, else provider USD. `standIn`: this server collects through free
+ * stand-ins, so every answer costs $0.
  */
 export function aiCostForAnswers(
   engines: AiEngine[],
   hosted: boolean,
   mode: "live" | "queued",
+  standIn = false,
 ) {
   let providerUsd = 0;
   let costCredits = 0;
   for (const engine of engines) {
-    const usd = aiAnswerUsd(engine, mode);
+    const usd = aiAnswerUsd(engine, mode, standIn);
     providerUsd += usd;
     costCredits += creditsForProviderUsd(usd);
   }
@@ -77,24 +86,32 @@ export async function estimateCost(
   const scope = aiScope(config, input.promptIds);
   const answers = scope.prompts.flatMap(() => scope.engines);
   const hosted = await isHostedServerAuthMode();
-  const cost = aiCostForAnswers(answers, hosted, "queued");
-  const runNow = aiCostForAnswers(answers, hosted, "live");
+  const provider = await aiCollectionProvider();
+  const standIn = provider?.name === "standin";
+  const cost = aiCostForAnswers(answers, hosted, "queued", standIn);
+  const runNow = aiCostForAnswers(answers, hosted, "live", standIn);
   const liveEngines = scope.engines.filter(aiEngineUsesModelApi);
   const scheduleInterval =
     input.scheduleInterval ?? current?.tracker.scheduleInterval ?? "weekly";
   const checksPerMonth = scheduledChecksPerMonth(scheduleInterval);
-  const provider = await aiCollectionProvider();
   const unavailable = scope.engines.filter(
     (engine) => !aiProviderEngines(provider).includes(engine),
   );
-  const searchBudget =
-    provider === "serpapi"
-      ? await aiSearchBudget(
-          scope.prompts.length * serpApiSearchesPerCheck(scope.engines),
+  const standInBudget = (engine: "google_ai_mode" | "google_ai_overview") =>
+    standIn && scope.engines.includes(engine)
+      ? aiSearchBudget(
+          engine,
+          scope.prompts.length,
           scheduleInterval,
           config.tracker.id,
         )
       : null;
+  const aiModeBudget = await standInBudget("google_ai_mode");
+  const searchBudget = aiModeBudget && {
+    ...aiModeBudget,
+    hourlyLimit: SERPAPI_HOURLY_LIMIT,
+  };
+  const brightDataBudget = await standInBudget("google_ai_overview");
   return {
     promptCount: scope.prompts.length,
     engineCount: scope.engines.length,
@@ -107,12 +124,27 @@ export async function estimateCost(
     monthlyCostUsd: Math.round(cost.costUsd * checksPerMonth * 1e6) / 1e6,
     currency: "USD",
     searchBudget,
+    brightDataBudget,
     warnings: [
-      hosted
-        ? "Customer cost uses OpenSEO data credits, including the service markup."
-        : searchBudget
-          ? `Self-hosted: Google AI Mode answers come from SerpApi's free plan, so they cost $0, but each one uses a search. A check uses ${searchBudget.perCheck}; this server's budget has ${searchBudget.remaining} of ${searchBudget.monthlyBudget} left this month (UTC).`
-          : "Self-hosted: cost estimates your own DataForSEO account charges. OpenSEO credits are not used.",
+      ...(hosted
+        ? [
+            "Customer cost uses OpenSEO data credits, including the service markup.",
+          ]
+        : standIn
+          ? []
+          : [
+              "Self-hosted: cost estimates your own DataForSEO account charges. OpenSEO credits are not used.",
+            ]),
+      ...(searchBudget
+        ? [
+            `Self-hosted: Google AI Mode answers come from SerpApi's free plan, so they cost $0, but each one uses a search. A check uses ${searchBudget.perCheck}; this server's budget has ${searchBudget.remaining} of ${searchBudget.monthlyBudget} left this month (UTC).`,
+          ]
+        : []),
+      ...(brightDataBudget
+        ? [
+            `Self-hosted: Google AI Overviews answers come from Bright Data's free tier, so they cost $0, but each one uses a request from this server's Bright Data budget, which rank tracking and SERP tools also use. A check uses ${brightDataBudget.perCheck}; the budget has ${brightDataBudget.remaining} of ${brightDataBudget.monthlyBudget} left this month (UTC). Bright Data does not wait for an AI Overview that Google loads after the page, so some are missed.`,
+          ]
+        : []),
       `One fresh answer per prompt and engine. The ${scheduleInterval} estimate assumes ${checksPerMonth} ${checksPerMonth === 1 ? "check" : "checks"} per month.`,
       ...(liveEngines.length
         ? [
@@ -134,6 +166,7 @@ export async function estimateCost(
             `A ${scheduleInterval} schedule, with this server's other Google AI Mode trackers, needs up to ${searchBudget.perMonth} SerpApi searches a month, more than the shared budget of ${searchBudget.monthlyBudget}, so it is refused. Track fewer prompts or choose a longer interval.`,
           ]
         : []),
+      ...brightDataWarnings(brightDataBudget, scheduleInterval),
       ...(unavailable.length
         ? [
             `${unavailable.map((e) => AI_ENGINE_LABELS[e]).join(" and ")} cannot collect answers on this server.`,
@@ -146,4 +179,24 @@ export async function estimateCost(
         : []),
     ],
   };
+}
+
+/** Why a Google AI Overviews check or schedule on Bright Data would be refused. */
+function brightDataWarnings(
+  budget: AiRequestBudget | null,
+  scheduleInterval: string,
+): string[] {
+  if (!budget) return [];
+  return [
+    ...(budget.perCheck > budget.remaining
+      ? [
+          "This check needs more Bright Data requests than this month's budget has left, so it would be refused until the budget resets on the 1st.",
+        ]
+      : []),
+    ...(budget.perMonth > budget.monthlyBudget
+      ? [
+          `A ${scheduleInterval} schedule, with this server's other Google AI Overviews trackers, needs up to ${budget.perMonth} Bright Data requests a month, more than the budget of ${budget.monthlyBudget} that rank tracking also uses, so it is refused. Track fewer prompts or choose a longer interval.`,
+        ]
+      : []),
+  ];
 }

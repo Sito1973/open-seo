@@ -175,6 +175,11 @@ function standInProviders(env: EnvRecord): string[] {
   if (get(env, "SERPAPI_API_KEY")) {
     replacements.push("Google AI Mode answers in AI visibility (SerpApi)");
   }
+  if (get(env, "BRIGHTDATA_API_KEY") && get(env, "BRIGHTDATA_SERP_ZONE")) {
+    replacements.push(
+      "Google AI Overviews answers in AI visibility (Bright Data)",
+    );
+  }
   return replacements;
 }
 

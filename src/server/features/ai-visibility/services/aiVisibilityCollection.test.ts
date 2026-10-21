@@ -34,6 +34,8 @@ vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: async () => false,
   // SERPAPI_API_KEY, for Google AI Mode answers.
   getGoogleFallbackKey: async () => "serpapi-key",
+  // BRIGHTDATA_SERP_ZONE is unset, so DataForSEO collects AI Overviews.
+  getOptionalEnvValue: async () => undefined,
 }));
 vi.mock("@/server/lib/dataforseo", () => ({
   MAX_TASKS_PER_POST: 100,

@@ -1,6 +1,11 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { aiObservations, aiRuns, projects } from "@/db/schema";
+import {
+  aiObservations,
+  aiRuns,
+  googlePlacesUsage,
+  projects,
+} from "@/db/schema";
 import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepository";
 import { runCheck } from "./aiVisibilityRuns";
 import { saveTracker } from "./aiVisibilitySetup";
@@ -12,7 +17,7 @@ const { testDb, workflow, keys } = await vi.hoisted(async () => {
   return {
     testDb: await createAiVisibilityTestDb(),
     workflow: { create: vi.fn(), get: vi.fn() },
-    keys: { dataforseo: vi.fn(), serpApi: vi.fn() },
+    keys: { dataforseo: vi.fn(), standIn: vi.fn(), serpZone: vi.fn() },
   };
 });
 vi.mock("cloudflare:workers", () => ({
@@ -23,8 +28,11 @@ vi.mock("@/db/runBatch", () => ({ runBatch: testDb.runBatch }));
 vi.mock("@/server/lib/runtime-env", () => ({
   // DATAFORSEO_API_KEY
   getDataforseoKey: keys.dataforseo,
-  // SERPAPI_API_KEY, which applies only without DATAFORSEO_API_KEY.
-  getGoogleFallbackKey: keys.serpApi,
+  // SERPAPI_API_KEY or BRIGHTDATA_API_KEY, which apply only without
+  // DATAFORSEO_API_KEY.
+  getGoogleFallbackKey: keys.standIn,
+  // BRIGHTDATA_SERP_ZONE
+  getOptionalEnvValue: keys.serpZone,
   isHostedServerAuthMode: async () => false,
 }));
 
@@ -35,12 +43,24 @@ const workflowStatus = (status: string) =>
 /** A self-hosted server with SERPAPI_API_KEY and no DataForSEO key. */
 function serpApiOnly() {
   keys.dataforseo.mockResolvedValue(null);
-  keys.serpApi.mockResolvedValue("serpapi-key");
+  keys.standIn.mockImplementation(async (name: string) =>
+    name === "SERPAPI_API_KEY" ? "serpapi-key" : null,
+  );
+}
+
+/** A self-hosted server with a Bright Data SERP zone and no DataForSEO key. */
+function brightDataOnly() {
+  keys.dataforseo.mockResolvedValue(null);
+  keys.standIn.mockImplementation(async (name: string) =>
+    name === "BRIGHTDATA_API_KEY" ? "brightdata-key" : null,
+  );
+  keys.serpZone.mockResolvedValue("serp-zone");
 }
 
 beforeEach(async () => {
   keys.dataforseo.mockResolvedValue("dataforseo-key");
-  keys.serpApi.mockResolvedValue(null);
+  keys.standIn.mockResolvedValue(null);
+  keys.serpZone.mockResolvedValue(undefined);
   await testDb.seedProject();
   await repo.saveConfiguration(
     configuration({
@@ -147,6 +167,25 @@ describe("AI visibility checks", () => {
     ).rejects.toMatchObject({ reason: "SEARCH_BUDGET_EXHAUSTED" });
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch.mock.calls[0][0]).toMatch(/\/account\.json\?/);
+    expect(await repo.listRuns(projectId)).toEqual([]);
+  });
+
+  it("refuses a free Google AI Overviews check that this month's Bright Data budget cannot cover, before any request", async () => {
+    brightDataOnly();
+    await saveTracker({ projectId, engines: ["google_ai_overview"] });
+    // Rank tracking left 1 of the 4,500 requests; 2 prompts need 2.
+    await testDb.db.insert(googlePlacesUsage).values({
+      month: new Date().toISOString().slice(0, 7),
+      sku: "brightdata_serp",
+      calls: 4499,
+    });
+    const fetch = vi.spyOn(globalThis, "fetch");
+
+    // maxCostUsd 0: answers through Bright Data are free.
+    await expect(
+      runCheck({ projectId, maxCostUsd: 0 }, customer),
+    ).rejects.toMatchObject({ reason: "SEARCH_BUDGET_EXHAUSTED" });
+    expect(fetch).not.toHaveBeenCalled();
     expect(await repo.listRuns(projectId)).toEqual([]);
   });
 

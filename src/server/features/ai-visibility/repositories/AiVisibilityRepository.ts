@@ -253,11 +253,15 @@ async function claimDueTracker(input: {
 }
 
 /**
- * Active prompts of every other enabled Google AI Mode tracker on this
- * install, per schedule interval: the SerpApi budget is one counter for the
- * whole install, so this deliberately spans every organization. Counts only.
+ * Active prompts of every other enabled tracker on this install that collects
+ * this engine, per schedule interval: a stand-in's budget (SerpApi for Google
+ * AI Mode, Bright Data for AI Overviews) is one counter for the whole install,
+ * so this deliberately spans every organization. Counts only.
  */
-async function countOtherAiModePrompts(trackerId: string) {
+async function countOtherEnginePrompts(
+  trackerId: string,
+  engine: "google_ai_mode" | "google_ai_overview",
+) {
   return db
     .select({ scheduleInterval: aiTrackers.scheduleInterval, prompts: count() })
     .from(aiPrompts)
@@ -267,7 +271,12 @@ async function countOtherAiModePrompts(trackerId: string) {
       and(
         ne(aiTrackers.id, trackerId),
         eq(aiTrackers.enabled, true),
-        eq(aiTrackers.googleAiMode, true),
+        eq(
+          engine === "google_ai_mode"
+            ? aiTrackers.googleAiMode
+            : aiTrackers.googleAiOverview,
+          true,
+        ),
         isNull(projects.archivedAt),
         eq(aiPrompts.paused, false),
         eq(aiPrompts.archived, false),
@@ -294,7 +303,7 @@ export const AiVisibilityRepository = {
   updateTracker: (id: string, values: Partial<TrackerRow>) =>
     db.update(aiTrackers).set(values).where(eq(aiTrackers.id, id)),
   claimDueTracker,
-  countOtherAiModePrompts,
+  countOtherEnginePrompts,
   /** Oldest due first; every processed tracker advances its next check. */
   listDue: (now: string) =>
     db

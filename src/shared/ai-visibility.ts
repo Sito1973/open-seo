@@ -140,22 +140,31 @@ export interface AiCostEstimate {
   warnings: string[];
   /** Self-hosted Google AI Mode through SerpApi: free, but searches are limited. */
   searchBudget: AiSearchBudget | null;
+  /**
+   * Self-hosted Google AI Overviews through Bright Data: free, but each answer
+   * uses a request from the Bright Data budget that rank tracking also uses.
+   */
+  brightDataBudget: AiRequestBudget | null;
 }
-export interface AiSearchBudget {
-  /** SerpApi searches one check uses: one per Google AI Mode answer. */
+/** A stand-in provider's free requests for one engine's answers. */
+export interface AiRequestBudget {
+  /** Requests one check uses: one per answer of the engine. */
   perCheck: number;
   /**
    * perCheck times the most checks the schedule can run in one month, plus
-   * the same for every other enabled Google AI Mode tracker on this server.
+   * the same for every other enabled tracker of the engine on this server.
    */
   perMonth: number;
-  /** This server's monthly SerpApi budget, below the free plan's searches. */
+  /** This server's monthly budget, below the provider's free requests. */
   monthlyBudget: number;
-  /** The free plan's searches an hour: the most one check can use. */
-  hourlyLimit: number;
   usedThisMonth: number;
   /** Budget left this month (UTC). */
   remaining: number;
+}
+/** SerpApi's searches for Google AI Mode answers. */
+export interface AiSearchBudget extends AiRequestBudget {
+  /** The free plan's searches an hour: the most one check can use. */
+  hourlyLimit: number;
 }
 export interface AiBrandResult {
   name: string;
@@ -353,8 +362,16 @@ export function aiObservationStatusLabel(status: AiObservationStatus): string {
   return status === "pending" ? "In progress" : status;
 }
 
-/** An empty Google result means Google showed no AI answer. */
-export function aiNoAnswerLabel(engine: AiEngine): string {
+/**
+ * An empty Google result means Google showed no AI answer. A no-answer result
+ * with the provider's note (an AI Overview Bright Data returned without its
+ * text) had an answer whose text was not captured.
+ */
+export function aiNoAnswerLabel(
+  engine: AiEngine,
+  note?: string | null,
+): string {
+  if (note) return "Answer without text";
   if (engine === "google_ai_overview") return "No AI Overview shown";
   if (engine === "google_ai_mode") return "No AI Mode answer shown";
   return "No substantive answer";

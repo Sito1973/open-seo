@@ -19,7 +19,10 @@ import { configuration, customer } from "./aiVisibilityTestFixtures";
 
 beforeEach(() => {
   getConfiguration.mockResolvedValue(null);
-  aiCollectionProvider.mockResolvedValue("dataforseo");
+  aiCollectionProvider.mockResolvedValue({
+    name: "dataforseo",
+    engines: ["chatgpt"],
+  });
 });
 
 const topic = (name: string) => ({
@@ -51,8 +54,11 @@ describe("prepareWebsiteTracking", () => {
     expect(tracking?.prompts).toHaveLength(15);
   });
 
-  it("seeds Google AI Mode on a SerpApi-only server, which collects nothing else", async () => {
-    aiCollectionProvider.mockResolvedValue("serpapi");
+  it("seeds the engines a server without DataForSEO collects, which collects nothing else", async () => {
+    aiCollectionProvider.mockResolvedValue({
+      name: "standin",
+      engines: ["google_ai_overview", "google_ai_mode"],
+    });
 
     const tracking = await prepareWebsiteTracking(
       { projectId: "project", suggestedTopics: [topic("burgers")] },
@@ -61,6 +67,7 @@ describe("prepareWebsiteTracking", () => {
 
     expect(tracking?.tracker).toMatchObject({
       googleAiMode: true,
+      googleAiOverview: true,
       chatgpt: false,
       gemini: false,
     });

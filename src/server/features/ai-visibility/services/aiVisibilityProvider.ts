@@ -5,6 +5,10 @@ import {
 } from "../repositories/AiVisibilityRepository";
 import { AiVisibilityError } from "./aiVisibilityErrors";
 import { activeAiPrompts, trackerEngines } from "./aiVisibilityConfiguration";
+import {
+  brightDataBudgetUsage,
+  getBrightDataSerp,
+} from "@/server/lib/brightDataSerp";
 import { getDataforseoKey } from "@/server/lib/runtime-env";
 import {
   fetchSerpApiAccount,
@@ -16,31 +20,60 @@ import {
 import {
   AI_ENGINE_LABELS,
   type AiEngine,
+  type AiRequestBudget,
   type AiScheduleInterval,
-  type AiSearchBudget,
 } from "@/shared/ai-visibility";
 import { aiEngineSchema } from "@/types/schemas/ai-visibility";
 
-type AiCollectionProvider = "dataforseo" | "serpapi";
+interface AiCollectionProvider {
+  /**
+   * "standin": a self-hosted install without DataForSEO for other features,
+   * where each engine has its own free provider.
+   */
+  name: "dataforseo" | "standin";
+  engines: AiEngine[];
+}
+
+/** Engines collected through a free stand-in, each from its own budget. */
+type AiStandInEngine = Extract<
+  AiEngine,
+  "google_ai_mode" | "google_ai_overview"
+>;
+
+const DATAFORSEO_ENGINES = aiEngineSchema.options.filter(
+  (engine) => engine !== "google_ai_mode",
+);
+
+const STAND_IN_PROVIDERS =
+  "Google AI Mode through SerpApi (SERPAPI_API_KEY) and Google AI Overviews through Bright Data (BRIGHTDATA_API_KEY and BRIGHTDATA_SERP_ZONE)";
 
 /**
- * Who collects answers on this server. DataForSEO collects every engine but
- * Google AI Mode. Without it (or with DATAFORSEO_SCOPE=backlinks), a
- * self-hosted install with SERPAPI_API_KEY collects Google AI Mode only,
- * through SerpApi. Null: setup only.
+ * Who collects answers on this server, and which engines. DataForSEO collects
+ * every engine but Google AI Mode. Without it (or with
+ * DATAFORSEO_SCOPE=backlinks), a self-hosted install collects through
+ * stand-ins: Google AI Mode through SerpApi and Google AI Overviews through
+ * Bright Data's SERP API. Null: setup only.
  */
 export async function aiCollectionProvider(): Promise<AiCollectionProvider | null> {
-  if (await getDataforseoKey("other")) return "dataforseo";
-  return (await getSerpApiKey()) ? "serpapi" : null;
+  if (await getDataforseoKey("other"))
+    return { name: "dataforseo", engines: DATAFORSEO_ENGINES };
+  const [serpApiKey, brightData] = await Promise.all([
+    getSerpApiKey(),
+    getBrightDataSerp(),
+  ]);
+  const engines = aiEngineSchema.options.filter(
+    (engine) =>
+      (engine === "google_ai_mode" && !!serpApiKey) ||
+      (engine === "google_ai_overview" && !!brightData),
+  );
+  return engines.length ? { name: "standin", engines } : null;
 }
 
 /** The engines a tracker can use here. Without a provider, DataForSEO's. */
 export function aiProviderEngines(
   provider: AiCollectionProvider | null,
 ): AiEngine[] {
-  return aiEngineSchema.options.filter(
-    (engine) => (engine === "google_ai_mode") === (provider === "serpapi"),
-  );
+  return provider?.engines ?? DATAFORSEO_ENGINES;
 }
 
 /** Refuses engines this server cannot collect, naming them and why. */
@@ -51,11 +84,13 @@ export function requireAiEngines(
   const available = aiProviderEngines(provider);
   const unavailable = engines.filter((engine) => !available.includes(engine));
   if (!unavailable.length) return;
+  const labels = (list: AiEngine[]) =>
+    list.map((engine) => AI_ENGINE_LABELS[engine]).join(" and ");
   throw new AiVisibilityError(
     "ENGINE_UNAVAILABLE",
-    `${unavailable.map((engine) => AI_ENGINE_LABELS[engine]).join(" and ")} cannot collect answers on this server. ${
-      provider === "serpapi"
-        ? "Without DataForSEO (DATAFORSEO_API_KEY unset or DATAFORSEO_SCOPE=backlinks) it collects Google AI Mode only, through SerpApi. Remove the other engines."
+    `${labels(unavailable)} cannot collect answers on this server. ${
+      provider?.name === "standin"
+        ? `Without DataForSEO (DATAFORSEO_API_KEY unset or DATAFORSEO_SCOPE=backlinks) it collects ${labels(available)} only: ${STAND_IN_PROVIDERS}, each when its keys are set. Remove the other engines.`
         : "Google AI Mode is collected through SerpApi, only on self-hosted servers without DataForSEO (DATAFORSEO_API_KEY unset or DATAFORSEO_SCOPE=backlinks). Remove it."
     }`,
   );
@@ -76,19 +111,41 @@ export function serpApiSearchesPerCheck(engines: readonly AiEngine[]) {
   return engines.filter((engine) => engine === "google_ai_mode").length;
 }
 
+/** How each stand-in's budget is named, and what else uses it. */
+const STAND_IN_BUDGETS: Record<
+  AiStandInEngine,
+  { unit: string; sharedWith: string }
+> = {
+  google_ai_mode: { unit: "SerpApi searches", sharedWith: "" },
+  google_ai_overview: {
+    unit: "Bright Data requests",
+    sharedWith: ", which rank tracking and SERP tools also use",
+  },
+};
+
+async function standInUsage(engine: AiStandInEngine) {
+  return engine === "google_ai_mode"
+    ? {
+        usedThisMonth: await serpApiSearchesUsed(),
+        monthlyBudget: SERPAPI_MONTHLY_BUDGET,
+      }
+    : brightDataBudgetUsage();
+}
+
 /**
- * The searches a tracker's checks use. perMonth adds the busiest month of
- * every other enabled Google AI Mode tracker on this server, which shares the
- * budget.
+ * The requests a tracker's checks use from one stand-in's budget: one per
+ * prompt. perMonth adds the busiest month of every other enabled tracker of
+ * that engine on this server, which shares the budget.
  */
 export async function aiSearchBudget(
+  engine: AiStandInEngine,
   perCheck: number,
   interval: AiScheduleInterval,
   trackerId: string,
-): Promise<AiSearchBudget> {
-  const [usedThisMonth, others] = await Promise.all([
-    serpApiSearchesUsed(),
-    repo.countOtherAiModePrompts(trackerId),
+): Promise<AiRequestBudget> {
+  const [{ usedThisMonth, monthlyBudget }, others] = await Promise.all([
+    standInUsage(engine),
+    repo.countOtherEnginePrompts(trackerId, engine),
   ]);
   return {
     perCheck,
@@ -98,43 +155,47 @@ export async function aiSearchBudget(
         others,
         (row) => row.prompts * MAX_CHECKS_PER_MONTH[row.scheduleInterval],
       ),
-    monthlyBudget: SERPAPI_MONTHLY_BUDGET,
-    hourlyLimit: SERPAPI_HOURLY_LIMIT,
+    monthlyBudget,
     usedThisMonth,
-    remaining: Math.max(0, SERPAPI_MONTHLY_BUDGET - usedThisMonth),
+    remaining: Math.max(0, monthlyBudget - usedThisMonth),
   };
 }
 
 /**
- * Refuses a SerpApi schedule whose check needs more searches than SerpApi
- * allows in an hour, or which, with every other enabled Google AI Mode
- * tracker on this server, could need more a month than the shared budget.
+ * Refuses a stand-in schedule whose check needs more SerpApi searches than
+ * SerpApi allows in an hour, or which, with every other enabled tracker of
+ * the same engine on this server, could need more a month than that
+ * stand-in's budget.
  */
 export async function requireAiScheduleBudget(
   config: ConfigurationRows,
   interval: AiScheduleInterval,
 ) {
-  if ((await aiCollectionProvider()) !== "serpapi") return;
-  const perCheck =
-    activeAiPrompts(config).length *
-    serpApiSearchesPerCheck(trackerEngines(config.tracker));
-  if (!perCheck) return;
-  if (perCheck > SERPAPI_HOURLY_LIMIT)
+  if ((await aiCollectionProvider())?.name !== "standin") return;
+  const prompts = activeAiPrompts(config).length;
+  const engines = trackerEngines(config.tracker);
+  const searches = prompts * serpApiSearchesPerCheck(engines);
+  if (searches > SERPAPI_HOURLY_LIMIT)
     throw new AiVisibilityError(
       "SEARCH_BUDGET_EXCEEDED",
-      `A check of these prompts needs ${perCheck} SerpApi searches, more than the ${SERPAPI_HOURLY_LIMIT} an hour SerpApi's free plan allows. Track fewer prompts or pause tracking.`,
+      `A check of these prompts needs ${searches} SerpApi searches, more than the ${SERPAPI_HOURLY_LIMIT} an hour SerpApi's free plan allows. Track fewer prompts or pause tracking.`,
     );
-  const { perMonth } = await aiSearchBudget(
-    perCheck,
-    interval,
-    config.tracker.id,
-  );
-  const own = perCheck * MAX_CHECKS_PER_MONTH[interval];
-  if (perMonth > SERPAPI_MONTHLY_BUDGET)
-    throw new AiVisibilityError(
-      "SEARCH_BUDGET_EXCEEDED",
-      `A ${interval} schedule of these prompts needs up to ${own} SerpApi searches a month${perMonth > own ? `, and this server's other Google AI Mode trackers up to ${perMonth - own}` : ""}: more than this server's budget of ${SERPAPI_MONTHLY_BUDGET}. Track fewer prompts, choose a longer interval, or pause tracking.`,
+  for (const engine of ["google_ai_mode", "google_ai_overview"] as const) {
+    if (!prompts || !engines.includes(engine)) continue;
+    const { perMonth, monthlyBudget } = await aiSearchBudget(
+      engine,
+      prompts,
+      interval,
+      config.tracker.id,
     );
+    const own = prompts * MAX_CHECKS_PER_MONTH[interval];
+    const { unit, sharedWith } = STAND_IN_BUDGETS[engine];
+    if (perMonth > monthlyBudget)
+      throw new AiVisibilityError(
+        "SEARCH_BUDGET_EXCEEDED",
+        `A ${interval} schedule of these prompts needs up to ${own} ${unit} a month${perMonth > own ? `, and this server's other ${AI_ENGINE_LABELS[engine]} trackers up to ${perMonth - own}` : ""}: more than this server's budget of ${monthlyBudget}${sharedWith}. Track fewer prompts, choose a longer interval, or pause tracking.`,
+      );
+  }
 }
 
 /**
@@ -161,5 +222,20 @@ export async function requireSerpApiSearches(searches: number) {
     throw new AiVisibilityError(
       "SEARCH_BUDGET_EXHAUSTED",
       `This check needs ${searches} SerpApi ${searches === 1 ? "search" : "searches"}, but ${shortfall}. No search was sent.`,
+    );
+}
+
+/**
+ * Refuses a check that this month's Bright Data budget, shared with rank
+ * tracking and SERP tools, cannot cover: one request per Google AI Overviews
+ * answer. Nothing is collected or counted.
+ */
+export async function requireBrightDataRequests(requests: number) {
+  const { usedThisMonth, monthlyBudget } = await brightDataBudgetUsage();
+  const remaining = Math.max(0, monthlyBudget - usedThisMonth);
+  if (requests > remaining)
+    throw new AiVisibilityError(
+      "SEARCH_BUDGET_EXHAUSTED",
+      `This check needs ${requests} Bright Data ${requests === 1 ? "request" : "requests"}, but this server's monthly Bright Data budget, which rank tracking and SERP tools also use, has ${remaining} of ${monthlyBudget} left (it resets on the 1st, UTC). No request was sent.`,
     );
 }

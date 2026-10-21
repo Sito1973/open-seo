@@ -128,6 +128,8 @@ export const aiObservations = sqliteTable(
     collectedAt: text("collected_at"),
     // Null on a completed row means the engine gave no answer.
     answerMarkdown: text("answer_markdown"),
+    // Why a failed row failed, or on a completed row without an answer, why
+    // there is none when the provider says (an AI Overview without its text).
     error: text("error"),
   },
   (t) => [

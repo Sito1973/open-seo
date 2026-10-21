@@ -14,7 +14,11 @@ import {
   getAiVisibilityResults,
   listAiResearchKeywords,
 } from "@/serverFunctions/ai-visibility";
-import type { AiRun, AiSearchBudget } from "@/shared/ai-visibility";
+import type {
+  AiRequestBudget,
+  AiRun,
+  AiSearchBudget,
+} from "@/shared/ai-visibility";
 
 export const aiVisibilityKey = (projectId: string) => [
   "aiVisibility",
@@ -189,42 +193,63 @@ export function aiMoney(value: number) {
 }
 
 /**
- * Whether a SerpApi check or schedule needs more searches than the budget, or
- * than SerpApi allows in an hour, permits.
+ * Whether a stand-in check or schedule needs more requests than its budget,
+ * or than SerpApi allows in an hour, permits.
  */
 export function aiSearchBudgetExceeded(
-  budget: AiSearchBudget | null,
+  budget: AiRequestBudget | AiSearchBudget | null,
   mode: "check" | "schedule",
 ) {
   if (!budget) return false;
-  if (budget.perCheck > budget.hourlyLimit) return true;
+  if ("hourlyLimit" in budget && budget.perCheck > budget.hourlyLimit)
+    return true;
   return mode === "check"
     ? budget.perCheck > budget.remaining
     : budget.perMonth > budget.monthlyBudget;
 }
 
+const BUDGET_WORDS = {
+  serpapi: {
+    one: "SerpApi search",
+    many: "SerpApi searches",
+    engine: "Google AI Mode",
+    sharedWith: "",
+  },
+  brightdata: {
+    one: "Bright Data request",
+    many: "Bright Data requests",
+    engine: "Google AI Overviews",
+    sharedWith: ", also used by rank tracking",
+  },
+};
+
 /**
- * Google AI Mode answers through SerpApi cost nothing but use searches from
- * this server's monthly budget.
+ * Google AI Mode answers through SerpApi, and Google AI Overviews through
+ * Bright Data, cost nothing but use requests from this server's monthly
+ * budget for that provider.
  */
 export function AiSearchBudgetNote({
   budget,
   mode,
+  provider,
 }: {
-  budget: AiSearchBudget;
+  budget: AiRequestBudget | AiSearchBudget;
   mode: "check" | "schedule";
+  provider: keyof typeof BUDGET_WORDS;
 }) {
   const over = aiSearchBudgetExceeded(budget, mode);
+  const words = BUDGET_WORDS[provider];
+  const hourlyLimit = "hourlyLimit" in budget ? budget.hourlyLimit : null;
   return (
     <p
       className={`text-sm ${over ? "text-destructive" : "text-muted-foreground"}`}
     >
       {mode === "check"
-        ? `Uses ${budget.perCheck} of the ${budget.remaining} SerpApi searches left this month (budget ${budget.monthlyBudget}).`
-        : `Uses ${budget.perCheck} SerpApi ${budget.perCheck === 1 ? "search" : "searches"} per run. With this server's other Google AI Mode trackers, schedules use up to ${budget.perMonth} a month of a shared budget of ${budget.monthlyBudget} (${budget.remaining} left this month).`}
+        ? `Uses ${budget.perCheck} of the ${budget.remaining} ${words.many} left this month (budget ${budget.monthlyBudget}${words.sharedWith}).`
+        : `Uses ${budget.perCheck} ${budget.perCheck === 1 ? words.one : words.many} per run. With this server's other ${words.engine} trackers, schedules use up to ${budget.perMonth} a month of a shared budget of ${budget.monthlyBudget}${words.sharedWith} (${budget.remaining} left this month).`}
       {over &&
-        (budget.perCheck > budget.hourlyLimit
-          ? ` SerpApi's free plan allows ${budget.hourlyLimit} searches an hour, so a run can use at most that many: track fewer prompts.`
+        (hourlyLimit !== null && budget.perCheck > hourlyLimit
+          ? ` SerpApi's free plan allows ${hourlyLimit} searches an hour, so a run can use at most that many: track fewer prompts.`
           : mode === "check"
             ? " Not enough are left; the budget resets on the 1st (UTC)."
             : " That is more than the budget: track fewer prompts or choose a longer interval.")}

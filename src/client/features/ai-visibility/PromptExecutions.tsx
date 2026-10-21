@@ -54,7 +54,7 @@ export function PromptExecutions({
             observation.status !== "completed"
               ? aiObservationStatusLabel(observation.status)
               : observation.answerStatus === "no_answer"
-                ? aiNoAnswerLabel(observation.engine)
+                ? aiNoAnswerLabel(observation.engine, observation.error)
                 : "Answer unavailable";
           return (
             <li

@@ -17,6 +17,7 @@ import { aiCostForAnswers } from "./aiVisibilityCost";
 import {
   aiCollectionProvider,
   requireAiEngines,
+  requireBrightDataRequests,
   requireSerpApiSearches,
   serpApiSearchesPerCheck,
 } from "./aiVisibilityProvider";
@@ -75,7 +76,7 @@ export async function startRun(
   if (!provider)
     throw new AiVisibilityError(
       "PROVIDER_NOT_CONFIGURED",
-      "An operator must configure DATAFORSEO_API_KEY without DATAFORSEO_SCOPE (or, self-hosted, SERPAPI_API_KEY for Google AI Mode) before collection. Your saved tracker remains available.",
+      "An operator must configure DATAFORSEO_API_KEY without DATAFORSEO_SCOPE (or, self-hosted, SERPAPI_API_KEY for Google AI Mode, or BRIGHTDATA_API_KEY and BRIGHTDATA_SERP_ZONE for Google AI Overviews) before collection. Your saved tracker remains available.",
     );
   const project = await repo.getProject(config.tracker.projectId);
   if (
@@ -94,10 +95,13 @@ export async function startRun(
       "Add or unpause prompts before starting a check.",
     );
   requireAiEngines(scope.engines, provider);
-  if (provider === "serpapi")
+  if (provider.name === "standin") {
     await requireSerpApiSearches(
       scope.prompts.length * serpApiSearchesPerCheck(scope.engines),
     );
+    if (scope.engines.includes("google_ai_overview"))
+      await requireBrightDataRequests(scope.prompts.length);
+  }
   const own = { name: project.name, domain: project.domain };
   // Two attempts: once normally, once after failing a stale blocker.
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -174,6 +178,7 @@ export async function runCheck(
     scope.prompts.flatMap(() => scope.engines),
     await isHostedServerAuthMode(),
     "live",
+    (await aiCollectionProvider())?.name === "standin",
   );
   if (Math.round(costUsd * 1e6) > Math.round(input.maxCostUsd * 1e6))
     throw new AiVisibilityError(

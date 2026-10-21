@@ -91,6 +91,18 @@ export const aiCostOutput = z.looseObject({
     .describe(
       "Self-hosted Google AI Mode through SerpApi only: the free searches one check uses (at most hourlyLimit) and the schedule's busiest month uses together with the server's other AI Mode trackers, against this server's shared monthly budget. Null otherwise.",
     ),
+  brightDataBudget: z
+    .looseObject({
+      perCheck: count,
+      perMonth: count,
+      monthlyBudget: count,
+      usedThisMonth: count,
+      remaining: count,
+    })
+    .nullable()
+    .describe(
+      "Self-hosted Google AI Overviews through Bright Data only: the free requests one check uses and the schedule's busiest month uses together with the server's other AI Overviews trackers, against this server's monthly Bright Data budget, which rank tracking and SERP tools also use. Null otherwise.",
+    ),
 });
 const observation = z.looseObject({
   id: text,
@@ -114,7 +126,9 @@ const observation = z.looseObject({
   answerStatus: z.enum(["answered", "no_answer"]).nullable(),
   citationCount: count,
   collectedAt: nullableText,
-  error: nullableText,
+  error: nullableText.describe(
+    "Why a failed collection failed. On a no_answer collection, why it has no answer when the provider said, such as a Google AI Overview that Bright Data returned without its text; it still counts as no answer, not as a missing brand.",
+  ),
 });
 export const aiResultsOutput = z.looseObject({
   runId: nullableText,

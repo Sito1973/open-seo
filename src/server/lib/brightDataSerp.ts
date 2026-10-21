@@ -22,8 +22,9 @@ import { jsonCodec } from "@/shared/json";
 import { getIsoCountryCode } from "@/shared/keyword-locations";
 
 // Bright Data's SERP API: the live Google SERP behind rank tracking,
-// get_serp_results and find_serp_competitors on self-hosted installs without
-// DataForSEO. The URL is a fixed provider host, so no SSRF screening applies.
+// get_serp_results, find_serp_competitors and Google AI Overviews answers on
+// self-hosted installs without DataForSEO. The URL is a fixed provider host,
+// so no SSRF screening applies.
 const REQUEST_URL = "https://api.brightdata.com/request";
 // Bright Data takes 20-50 s per Google page.
 const REQUEST_TIMEOUT_MS = 90_000;
@@ -147,6 +148,18 @@ export function brightDataSourceNote(market: SerpMarket): string {
 
 export function brightDataBudgetLine(usedThisMonth: number): string {
   return `Bright Data budget: ${usedThisMonth} of ${MONTHLY_BUDGET} SERP requests used this month (resets on the 1st, UTC).`;
+}
+
+/**
+ * This server's monthly Bright Data budget, which every feature on Bright
+ * Data shares, and the requests counted against it this month (UTC).
+ */
+export async function brightDataBudgetUsage() {
+  const usedThisMonth = await GooglePlacesUsageRepository.usedCalls({
+    month: new Date().toISOString().slice(0, 7),
+    sku: "brightdata_serp",
+  });
+  return { usedThisMonth, monthlyBudget: MONTHLY_BUDGET };
 }
 
 export const BRIGHTDATA_RANK_CHECK_NOTE = `Rank checks on this server run on Bright Data's live Google SERP: each keyword and device sends one request per 10 results of depth, stopping at the page where the tracked domain appears, from this server's monthly budget of ${MONTHLY_BUDGET} requests. A scheduled check reuses the first page of the same search (keyword, market and device) fetched in this organization in the last ${FIRST_PAGE_REUSE_DAYS} days, by any tracker or SERP tool, and sends requests only for the pages after it; a manual check always fetches live.`;
@@ -458,6 +471,38 @@ export async function fetchBrightDataSerp(
     features,
     usedThisMonth,
   };
+}
+
+/**
+ * The AI Overview section of the Google results page for one AI visibility
+ * prompt, as Bright Data parsed it: undefined when the page has none. One
+ * desktop request from the budget, as DataForSEO checks AI Overviews on
+ * desktop, and the page is saved to the SERP observation store like every
+ * first page. Bright Data does not wait for an AI Overview that Google loads
+ * after the page (see fetchSerpPage), so some are missed.
+ */
+export async function fetchBrightDataAiOverview(
+  config: BrightDataSerp,
+  input: {
+    prompt: string;
+    locationCode: number;
+    languageCode: string;
+    organizationId: string;
+  },
+): Promise<unknown> {
+  const request: SerpRequest = {
+    keyword: input.prompt,
+    market: input,
+    device: "desktop",
+    depth: RESULTS_PER_PAGE,
+    observation: {
+      organizationId: input.organizationId,
+      origin: "ai_visibility",
+    },
+  };
+  const { page } = await fetchSerpPage(config, { ...request, start: 0 });
+  await recordFirstPage(request, page);
+  return page.ai_overview;
 }
 
 /**

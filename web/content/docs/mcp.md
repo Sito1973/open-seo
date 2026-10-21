@@ -140,7 +140,7 @@ OpenSEO MCP exposes tools for SEO research workflows:
 - Explore a prompt in ChatGPT or compare answers and available citations across selected AI models. ChatGPT is the default; uncached answers use credits.
 - Research questions about a keyword with ChatGPT's answers and cited sources (uses credits).
 - Configure AI prompt tracking, preview cost, and start or pause scheduled checks.
-- On a self-hosted install without DataForSEO, track Google AI Mode answers through SerpApi's free plan, with where each answer links its cited pages. See the [free Google APIs guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).
+- On a self-hosted install without DataForSEO, track Google AI Mode answers through SerpApi's free plan, with where each answer links its cited pages, and Google AI Overviews through Bright Data's free tier. See the [free Google APIs guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).
 - Read and export saved AI answers, trends, citations, and competitor appearances without using credits.
 - Read first-party Google Search Console performance (clicks, impressions, CTR, position).
 - Self-hosted only: compare real-user Core Web Vitals from the Chrome UX Report across your sites and competitors' with a free Google API key. See the [free Google APIs guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md).

@@ -399,6 +399,9 @@ It runs:
   tracker when it has one. See
   [Setup without an AI model](#setup-without-an-ai-model) for installs
   without `OPENROUTER_API_KEY`.
+- **Google AI Overviews in AI visibility tracking**: one request per prompt
+  in each check, reading the AI Overview on that results page. See
+  [Google AI Overviews for AI visibility](#google-ai-overviews-for-ai-visibility).
 
 Each response says where its results came from, for example "Bright Data live
 Google SERP from www.google.com.co (exit country CO, language es)". The rank
@@ -445,8 +448,8 @@ proof that Google shows none for that query.
 ### Saved first pages
 
 OpenSEO saves the first results page of every Bright Data request, from rank
-checks, `get_serp_results`, `find_serp_competitors`, the SERP Analysis card
-and project setup searches: the keyword, market
+checks, `get_serp_results`, `find_serp_competitors`, the SERP Analysis card,
+project setup searches and Google AI Overviews checks: the keyword, market
 (country, language and city), device and time, the organic results and the
 local pack (position, domain, link, title, and the pack's rating and review
 count), and the page's SERP features. Later pages are not saved. The pages
@@ -502,9 +505,9 @@ Sort by `visibility` (the default), `traffic_estimate`, `avg_position` or
 
 ### Built-in monthly budget
 
-| What OpenSEO sends                                                       | Bright Data free tier | OpenSEO budget |
-| ------------------------------------------------------------------------ | --------------------- | -------------- |
-| One Google results page (a rank check, query or keyword sends 1 or more) | 5,000 per month       | 4,500          |
+| What OpenSEO sends                                                                                 | Bright Data free tier | OpenSEO budget |
+| -------------------------------------------------------------------------------------------------- | --------------------- | -------------- |
+| One Google results page (a rank check, query or keyword sends 1 or more; an AI Overviews answer 1) | 5,000 per month       | 4,500          |
 
 OpenSEO counts each request before sending it, and the budget resets on the
 1st of each month, UTC. When it runs out, the tool or rank check says so and
@@ -517,7 +520,8 @@ For scale: four sites with 25 keywords each, checked weekly on both devices at
 depth 10, send about 870 requests a month when every domain ranks on page 1.
 A domain outside the top 10 costs one more request per 10 results of depth.
 Keywords that several sites track cost less, because scheduled checks reuse
-saved first pages.
+saved first pages. Google AI Overviews tracking adds one request per prompt
+per check: 40 prompts checked weekly send up to 200 a month.
 
 There is no setting to raise the budget. The counter shares the table and the
 caveats of the [Google Places budget](#built-in-monthly-budget): it covers one
@@ -534,6 +538,47 @@ MCP server. OpenSEO's 4,500 is its own count, not a reservation: other usage on
 the same account can use up the pool first, and OpenSEO's requests then fail
 while its counter still shows budget left. Use a Bright Data account that runs nothing
 else, or keep your other usage within the remaining 500 credits.
+
+### Google AI Overviews for AI visibility
+
+With Bright Data set and no DataForSEO for other features, AI visibility
+tracking offers **Google AI Overviews** as an engine, next to
+[Google AI Mode](#serpapi-google-ai-mode-for-ai-visibility) when SerpApi is
+set too. A new tracker starts on every engine the install collects. Run now
+and scheduled checks both collect live: Bright Data has no cheaper queue.
+
+- **Request:** the tracked prompt, exactly as saved, as a Google search from
+  the tracker's country in its language, on desktop, as DataForSEO checks AI
+  Overviews. There is no city: to ask about one, name it in the prompt. The
+  page is one request and is saved with the
+  [saved first pages](#saved-first-pages).
+- **Answer:** the AI Overview's text (its paragraphs and list items) and the
+  pages it cites, in Google's order. Brand mentions and citations are matched
+  as for the other engines. Citations have no placement, as with DataForSEO.
+- **No answer:** a page without an AI Overview counts as no answer, as with
+  DataForSEO. So does a page where Google showed an AI Overview but Bright
+  Data returned it without its text: the answer keeps the pages it cites and
+  a note saying why, shows as "Answer without text", and is left out of
+  visibility rates. Neither is ever counted as an answer that leaves your
+  brand out.
+- **Cost:** answers cost $0. Each one uses a request from the
+  [4,500-request budget](#built-in-monthly-budget-1), which rank tracking and
+  the SERP tools also use. Estimates show the requests a check uses, the most
+  the schedules can use in one month and the requests left this month.
+- **Before a check,** OpenSEO checks that every prompt fits the requests left
+  this month; otherwise the check does not start and says why. A scheduled
+  check shows the reason as the tracker's scheduling notice.
+- **Schedules** must fit in their busiest month (up to 31 daily, 5 weekly or
+  1 monthly check), together with every other enabled Google AI Overviews
+  tracker on the install: saving or enabling one that could need more than
+  4,500 requests in a month is refused. Rank tracking is not counted there,
+  so leave room for it: the estimate shows what the budget has left.
+
+OpenSEO does not ask Bright Data to wait for AI Overviews (`brd_ai_overview`,
+which failed on the tested zone, see above). Google loads some AI Overviews
+after the page, and those count as no answer, so the share of prompts with
+an AI Overview comes out lower than DataForSEO's, which waits for them.
+Compare AI Overviews results over several checks rather than single answers.
 
 ### 1) Create a SERP API zone
 
@@ -720,12 +765,13 @@ visibility tracking collects Google AI Mode answers through
 SerpApi is a paid service, not a Google API, but its free plan includes 250
 searches a month, at most 50 an hour, and OpenSEO stays under both.
 
-Without DataForSEO, Google AI Mode is the only engine a tracker can use:
-ChatGPT, Gemini, Google AI Overviews, Claude and Perplexity answers need
-DataForSEO. Tracking settings offer only Google AI Mode, and a new tracker
-starts on it. A tracker saved earlier with other engines does not run, and its
-scheduling notice says why, until you switch it to Google AI Mode. With
-`DATAFORSEO_API_KEY` set, Google AI Mode is not offered.
+Without DataForSEO, a tracker can use Google AI Mode, and Google AI Overviews
+when [Bright Data](#google-ai-overviews-for-ai-visibility) is set too:
+ChatGPT, Gemini, Claude and Perplexity answers need DataForSEO. Tracking
+settings offer only those engines, and a new tracker starts on them. A
+tracker saved earlier with other engines does not run, and its scheduling
+notice says why, until you switch it. With `DATAFORSEO_API_KEY` set for every
+feature, Google AI Mode is not offered.
 
 Run now and scheduled checks both work. Each prompt is one SerpApi search, and
 an answer takes about 8 seconds. SerpApi has no cheaper queue, so scheduled
@@ -817,9 +863,10 @@ stand-in providers.
 
 ### 3) Switch tracking to Google AI Mode
 
-Open **Prompt Tracking → Tracking settings** and select **Google AI Mode**,
-the only engine offered. Review the estimate, which shows the searches, then
-save and use **Run now** for a first answer.
+Open **Prompt Tracking → Tracking settings** and select **Google AI Mode**
+(and **Google AI Overviews** with Bright Data), the only engines offered.
+Review the estimate, which shows the searches and requests, then save and use
+**Run now** for a first answer.
 
 ### Accuracy
 

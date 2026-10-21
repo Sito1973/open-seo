@@ -20,7 +20,8 @@ export async function requireConfiguration(projectId: string) {
 /**
  * Applies a patch to the saved tracker, or to a new one in the project's
  * market. Engines must be ones this server can collect; a new tracker on a
- * SerpApi-only server starts on Google AI Mode.
+ * stand-in server starts on every engine it collects (Google AI Mode through
+ * SerpApi, Google AI Overviews through Bright Data).
  */
 export async function projectPatch(
   projectId: string,
@@ -29,8 +30,8 @@ export async function projectPatch(
 ) {
   const provider = await aiCollectionProvider();
   const patch =
-    !previous && !rawPatch.engines && provider === "serpapi"
-      ? { ...rawPatch, engines: ["google_ai_mode" as const] }
+    !previous && !rawPatch.engines && provider?.name === "standin"
+      ? { ...rawPatch, engines: provider.engines }
       : rawPatch;
   if (patch.engines) requireAiEngines(patch.engines, provider);
   const project = await repo.getProject(projectId);

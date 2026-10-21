@@ -9,8 +9,8 @@ import {
 import { organization } from "./better-auth-schema";
 
 // One store for the Google results pages this organization has fetched live
-// from Bright Data: rank checks, get_serp_results and find_serp_competitors
-// write the first page of each request here, so another site's rank check can
+// from Bright Data: rank checks, SERP tools, keyword research and Google AI
+// Overviews checks write the first page of each request here, so another site's rank check can
 // reuse it instead of paying for the same search. Only the first page is kept,
 // whatever the request's depth.
 export const serpObservations = sqliteTable(
@@ -28,7 +28,7 @@ export const serpObservations = sqliteTable(
     locationName: text("location_name"),
     device: text("device", { enum: ["desktop", "mobile"] }).notNull(),
     origin: text("origin", {
-      enum: ["rank_check", "serp_tool", "research", "sample"],
+      enum: ["rank_check", "serp_tool", "research", "sample", "ai_visibility"],
     }).notNull(),
     observedAt: text("observed_at").notNull(),
   },

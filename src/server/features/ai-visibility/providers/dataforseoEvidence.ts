@@ -44,6 +44,8 @@ export interface ParsedAiAnswer {
   answerText: string;
   citations: AiCitation[];
   collectedAt: string | null;
+  /** Why there is no answer, when the provider says; saved with the answer. */
+  note?: string;
 }
 
 /**

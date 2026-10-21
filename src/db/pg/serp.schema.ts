@@ -22,7 +22,7 @@ export const serpObservations = pgTable(
     locationName: text("location_name"),
     device: text("device", { enum: ["desktop", "mobile"] }).notNull(),
     origin: text("origin", {
-      enum: ["rank_check", "serp_tool", "research", "sample"],
+      enum: ["rank_check", "serp_tool", "research", "sample", "ai_visibility"],
     }).notNull(),
     observedAt: text("observed_at").notNull(),
   },
