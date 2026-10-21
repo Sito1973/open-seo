@@ -1,8 +1,7 @@
 import { z } from "zod";
 import {
   buildStoredLighthousePayload,
-  type RawLighthouseAudit,
-  type RawLighthouseCategory,
+  lighthouseReportSchema,
   type StoredLighthousePayload,
   summarizeZodIssues,
   withLighthouseParseLock,
@@ -18,8 +17,10 @@ const PAGESPEED_CATEGORIES = [
   "BEST_PRACTICES",
   "SEO",
 ] as const;
-// Partial response: only what the stored payload reads. Screenshots, the
-// full-page screenshot and loading-experience field data are left out.
+// Partial response: the full-page screenshot, loading-experience field data
+// and other top-level report sections are left out. The audits map (which
+// still carries the final-screenshot and screenshot-thumbnails images) cannot
+// be narrowed by key.
 const PAGESPEED_FIELDS =
   "analysisUTCTimestamp,lighthouseResult(requestedUrl,finalUrl,lighthouseVersion,runtimeError,categories,audits)";
 // A live Lighthouse run on a slow page can take over a minute.
@@ -27,19 +28,10 @@ const REQUEST_TIMEOUT_MS = 120_000;
 
 const pagespeedResponseSchema = z.object({
   analysisUTCTimestamp: z.string().optional(),
-  lighthouseResult: z.object({
-    requestedUrl: z.string().optional(),
-    finalUrl: z.string().optional(),
-    lighthouseVersion: z.string().optional(),
+  lighthouseResult: lighthouseReportSchema.extend({
     runtimeError: z
       .object({ code: z.string().optional(), message: z.string().optional() })
       .optional(),
-    // Only the key maps are copied, so the multi-MB category and audit bodies
-    // stay as the response's own objects (see dataforseoLighthousePayload.ts).
-    categories: z
-      .record(z.string(), z.custom<RawLighthouseCategory>())
-      .optional(),
-    audits: z.record(z.string(), z.custom<RawLighthouseAudit>()).optional(),
   }),
 });
 
@@ -112,13 +104,7 @@ export async function fetchPagespeedLighthouse(input: {
     }
 
     return buildStoredLighthousePayload({
-      report: {
-        requestedUrl: report.requestedUrl,
-        finalUrl: report.finalUrl ?? report.requestedUrl,
-        lighthouseVersion: report.lighthouseVersion,
-        categories: report.categories,
-        audits: report.audits,
-      },
+      report: { ...report, finalUrl: report.finalUrl ?? report.requestedUrl },
       request: { url: input.url, strategy: input.strategy },
       source: "pagespeed-insights",
       taskId: null,

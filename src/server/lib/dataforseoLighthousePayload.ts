@@ -1,8 +1,7 @@
 import { z } from "zod";
 import {
   buildStoredLighthousePayload,
-  type RawLighthouseAudit,
-  type RawLighthouseCategory,
+  lighthouseReportSchema,
   type StoredLighthousePayload,
   summarizeZodIssues,
 } from "@/server/lib/lighthouseStoredPayload";
@@ -16,25 +15,12 @@ export const requestCategories = [
 
 export type LighthouseStrategy = "mobile" | "desktop";
 
-const lighthouseResponseSchema = z.object({
-  requestedUrl: z.string().optional(),
-  finalUrl: z.string().optional(),
-  lighthouseVersion: z.string().optional(),
-  // Only the key map is copied here, so the multi-MB category/audit bodies stay
-  // as the provider's own objects. Deep-parsing them cloned the whole report a
-  // second time and pushed the audit worker over its memory limit.
-  categories: z
-    .record(z.string(), z.custom<RawLighthouseCategory>())
-    .optional(),
-  audits: z.record(z.string(), z.custom<RawLighthouseAudit>()).optional(),
-});
-
 const dataforseoTaskSchema = z.object({
   id: z.string().optional(),
   cost: z.number().optional(),
   status_code: z.number().optional(),
   status_message: z.string().optional(),
-  result: z.array(lighthouseResponseSchema).optional(),
+  result: z.array(lighthouseReportSchema).optional(),
 });
 
 const dataforseoLighthouseResponseSchema = z.object({

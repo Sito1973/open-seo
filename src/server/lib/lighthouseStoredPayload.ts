@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { LIGHTHOUSE_CATEGORIES } from "@/shared/lighthouse";
 
-export type RawLighthouseAudit = {
+type RawLighthouseAudit = {
   title?: string;
   description?: string;
   score?: number | null;
@@ -16,12 +16,26 @@ export type RawLighthouseAudit = {
   };
 };
 
-export type RawLighthouseCategory = {
+type RawLighthouseCategory = {
   score?: number | null;
   auditRefs?: Array<{
     id?: string;
   }>;
 };
+
+/** A provider's Lighthouse report: the same shape from DataForSEO and PageSpeed Insights. */
+export const lighthouseReportSchema = z.object({
+  requestedUrl: z.string().optional(),
+  finalUrl: z.string().optional(),
+  lighthouseVersion: z.string().optional(),
+  // Only the key map is copied here, so the multi-MB category/audit bodies stay
+  // as the provider's own objects. Deep-parsing them cloned the whole report a
+  // second time and pushed the audit worker over its memory limit.
+  categories: z
+    .record(z.string(), z.custom<RawLighthouseCategory>())
+    .optional(),
+  audits: z.record(z.string(), z.custom<RawLighthouseAudit>()).optional(),
+});
 
 const storedLighthouseMetricSchema = z.object({
   score: z.number().nullable(),
@@ -299,13 +313,7 @@ export function withLighthouseParseLock<T>(fn: () => Promise<T>): Promise<T> {
  * payload, and validates that payload in full.
  */
 export function buildStoredLighthousePayload(input: {
-  report: {
-    requestedUrl?: string;
-    finalUrl?: string;
-    lighthouseVersion?: string;
-    categories?: Record<string, RawLighthouseCategory>;
-    audits?: Record<string, RawLighthouseAudit>;
-  };
+  report: z.infer<typeof lighthouseReportSchema>;
   request: { url: string; strategy: "mobile" | "desktop" };
   source: StoredLighthousePayload["source"];
   taskId: string | null;
