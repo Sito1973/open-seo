@@ -30,6 +30,8 @@ New DataForSEO accounts include $1 of free credit to test with, and the minimum 
 
 Search Console is optional and works in self-hosted deployments using your own Google OAuth client. It takes about 10 minutes of one-time setup. See the [Google Search Console guide on GitHub](https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md).
 
+Without DataForSEO, Domain Overview and new rank trackers' keyword suggestions read your own sites from their connected Search Console properties: real clicks and the queries Search Console lists for the last 28 days. Competitor domains still need DataForSEO. See the [free Google APIs guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_APIS.md#search-console-domain-overview-for-your-own-sites).
+
 ### Google Business Profile
 
 A self-hosted install can connect your own Google Business Profile account so MCP clients can read your locations, reviews, daily performance and search terms. After you approve each change in chat, they can also edit the listing, reply to reviews, publish posts and update the food menu. It reuses the Search Console OAuth client and needs Google to approve Business Profile API access for your Cloud project first. It is not available on hosted OpenSEO. See the [Google Business Profile guide on GitHub](https://github.com/Sito1973/open-seo/blob/main/docs/SELF_HOSTING_GOOGLE_BUSINESS_PROFILE.md).

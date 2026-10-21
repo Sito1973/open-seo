@@ -9,6 +9,8 @@ export type KeywordRow = {
   url: string | null;
   relativeUrl: string | null;
   keywordDifficulty: number | null;
+  /** Search Console impressions, on a self-hosted install that uses it. */
+  impressions?: number;
 };
 
 export type PageRow = {

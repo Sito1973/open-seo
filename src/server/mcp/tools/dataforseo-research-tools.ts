@@ -65,6 +65,7 @@ import {
   type ScopeFilter,
 } from "@/server/lib/dataforseo/researchScopeFilters";
 import { parseResearchTargetOrThrow } from "@/server/lib/domainUtils";
+import { rankedKeywordsFromSearchConsole } from "@/server/mcp/tools/ranked-keywords-search-console";
 import {
   RESEARCH_SCOPE_PARAM_DESCRIPTION,
   researchScopeSchema,
@@ -1006,6 +1007,14 @@ export const getRankedKeywordsTool = {
       : parsedDefault;
     const scopeFilter = buildRankedKeywordsScopeFilter(target);
     const market = resolveMarketSelector(args, context.project);
+    const ownSite = await rankedKeywordsFromSearchConsole({
+      ...args,
+      ...market,
+      organizationId: context.auth.organizationId,
+      baseUrl: context.baseUrl,
+      target,
+    });
+    if (ownSite) return ownSite;
     const keywords = await client.domain.rankedKeywords({
       target: target.hostname,
       locationCode: market.locationCode,

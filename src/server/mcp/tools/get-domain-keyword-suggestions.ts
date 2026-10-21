@@ -27,12 +27,20 @@ import {
   researchScopeSchema,
 } from "@/shared/researchScope";
 import { parseResearchTargetOrThrow } from "@/server/lib/domainUtils";
+import { searchConsoleNote } from "@/server/features/domain/services/searchConsoleDomain";
 
 const SUGGESTION_COLUMNS: McpTableColumn<unknown>[] = [
   { header: "keyword", value: (row) => readPath(row, "keyword") },
   { header: "position", value: (row) => readPath(row, "position") },
   { header: "volume", value: (row) => readPath(row, "searchVolume") },
   { header: "KD", value: (row) => readPath(row, "keywordDifficulty") },
+];
+
+const SEARCH_CONSOLE_COLUMNS: McpTableColumn<unknown>[] = [
+  { header: "keyword", value: (row) => readPath(row, "keyword") },
+  { header: "avg position", value: (row) => readPath(row, "position") },
+  { header: "clicks", value: (row) => readPath(row, "traffic") },
+  { header: "volume", value: (row) => readPath(row, "searchVolume") },
 ];
 
 const inputSchema = {
@@ -79,7 +87,7 @@ export const getDomainKeywordSuggestionsTool = {
     );
     assertLabsLocationCode(locationCode);
     assertLanguageForLocation(locationCode, languageCode);
-    const keywords = await DomainService.getSuggestedKeywords(
+    const suggestions = await DomainService.getSuggestedKeywords(
       {
         domain: args.domain,
         scope: args.scope,
@@ -90,15 +98,19 @@ export const getDomainKeywordSuggestionsTool = {
       },
       context.billing,
     );
+    const { keywords, dataSource, searchConsole } = suggestions;
     // The service already parsed the same input, so this cannot throw here.
     const parsed = parseResearchTargetOrThrow(args.domain, args.scope);
     const target = parsed.display;
     const scope = parsed.scope;
     const targetLabel = `${target} (scope: ${scope})`;
-    const text =
+    const rankedText =
       keywords.length === 0
         ? `No ranked keywords found for ${targetLabel}.`
-        : `Keywords for ${targetLabel} (${keywords.length}):\n${formatMcpTable(keywords, SUGGESTION_COLUMNS)}`;
+        : `Keywords for ${targetLabel} (${keywords.length}):\n${formatMcpTable(keywords, searchConsole ? SEARCH_CONSOLE_COLUMNS : SUGGESTION_COLUMNS)}`;
+    const text = searchConsole
+      ? `${searchConsoleNote(searchConsole, target)}\n${rankedText}`
+      : rankedText;
     return mcpResponse({
       text,
       meta: buildProjectMeta(
@@ -110,7 +122,12 @@ export const getDomainKeywordSuggestionsTool = {
           ...(scope ? { scope } : {}),
         },
       ),
-      structuredContent: { keywords, target, scope },
+      structuredContent: {
+        keywords,
+        target,
+        scope,
+        ...(searchConsole ? { dataSource, searchConsole } : {}),
+      },
     });
   }),
 };

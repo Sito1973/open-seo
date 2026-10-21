@@ -684,6 +684,56 @@ exactly as DataForSEO's are, so saved keywords show them. Search Console
 impressions shown before Basic access are never stored. The cached Keyword
 Planner answers expire after the month, and the cached TRM after the day.
 
+## Search Console: Domain Overview for your own sites
+
+Without DataForSEO, Domain Overview reads your own sites from Google Search
+Console: the overview card, the **Top Keywords** and **Top Pages** tabs, the
+keyword suggestions of a new rank tracker, and the `get_domain_overview`,
+`get_domain_keyword_suggestions` and `get_ranked_keywords` MCP tools. It needs
+no key beyond the
+[Search Console connection](SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md) and costs
+nothing.
+
+- A site counts as yours when a project in the same organization has a Search
+  Console property connected that covers it. A domain property
+  (`sc-domain:example.com`) covers the domain and all its subdomains; a
+  URL-prefix property covers only its own host, with or without `www.`. When
+  two properties cover the site, the current project's wins.
+- The numbers cover the last 28 days Search Console reports, in all countries.
+  Search Console runs 2 to 3 days behind. The location picker does not change
+  them.
+- Traffic is real clicks. Keywords are the queries Search Console lists, each
+  with its average position weighted by impressions and the page that had the
+  most impressions. Search Console leaves out rare (anonymized) queries, so
+  the keyword count is a minimum; page clicks include those queries.
+- Volume, CPC and difficulty come from the keyword metrics the project already
+  stored for the country, for example from keyword research on the Keyword
+  Planner. Otherwise they stay empty. Backlinks and referring domains stay
+  empty.
+- Scopes, filters, sorting and pagination work as they do with DataForSEO.
+- A new rank tracker suggests the site's 100 queries with the most
+  impressions, whatever the tracker's location, a city included.
+- The page and the MCP tools say the numbers come from Search Console, and the
+  tools return `dataSource: "gsc"` with the property and the dates. They use
+  no credits.
+
+A domain that no connected property covers, such as a competitor's, shows no
+data and a note listing the connected sites: competitor domains still need
+DataForSEO. If Google rejects the saved Search Console grant, reconnect Search
+Console under the project's **Settings → Integrations**.
+
+### Limits and caching
+
+A site's report is two Search Console requests, one of queries by page and
+one of pages, of up to 25,000 rows each. OpenSEO keeps the report for 12 hours,
+so every tab, scope and filter on the same site reads that copy. Search
+Console's quota is far above this.
+
+### What OpenSEO stores
+
+The report, in the app's cache for 12 hours. Nothing is written to the
+database.
+
 ## SerpApi: Google AI Mode for AI visibility
 
 Google has no API for AI Mode answers either. With `SERPAPI_API_KEY` set, AI

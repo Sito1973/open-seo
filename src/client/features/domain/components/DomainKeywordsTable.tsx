@@ -34,6 +34,8 @@ type Props = DataTableFrameProps & {
   currentSortOrder: SortOrder;
   onSortClick: (sort: DomainSortMode) => void;
   onToggleKeyword: (keyword: string) => void;
+  /** Rows are the site's own Search Console queries, not DataForSEO's. */
+  searchConsole?: boolean;
 };
 
 const keywordColumnHelper = createColumnHelper<KeywordRow>();
@@ -47,6 +49,7 @@ export function DomainKeywordsTable({
   currentSortOrder,
   onSortClick,
   onToggleKeyword,
+  searchConsole = false,
   ...frame
 }: Props) {
   const selectAnchorRef = useSelectionAnchor();
@@ -70,6 +73,11 @@ export function DomainKeywordsTable({
         header: () => (
           <SortableHeader
             label="Rank"
+            helpText={
+              searchConsole
+                ? "Average position in Search Console, weighted by impressions."
+                : undefined
+            }
             column={domainSortColumn(
               sortMode === "rank",
               currentSortOrder,
@@ -95,7 +103,12 @@ export function DomainKeywordsTable({
       keywordColumnHelper.accessor("traffic", {
         header: () => (
           <SortableHeader
-            label="Traffic"
+            label={searchConsole ? "Clicks" : "Traffic"}
+            helpText={
+              searchConsole
+                ? "Clicks from Google Search in Search Console's last 28 days."
+                : undefined
+            }
             column={domainSortColumn(
               sortMode === "traffic",
               currentSortOrder,
@@ -105,6 +118,14 @@ export function DomainKeywordsTable({
         ),
         cell: ({ getValue }) => formatRounded(getValue()),
       }),
+      ...(searchConsole
+        ? [
+            keywordColumnHelper.accessor("impressions", {
+              header: () => "Impressions",
+              cell: ({ getValue }) => formatNumber(getValue()),
+            }),
+          ]
+        : []),
       keywordColumnHelper.accessor("cpc", {
         header: () => (
           <SortableHeader
@@ -149,7 +170,14 @@ export function DomainKeywordsTable({
         cell: ({ getValue }) => <ScoreBadge value={getValue()} />,
       }),
     ],
-    [currentSortOrder, domain, onSortClick, selectAnchorRef, sortMode],
+    [
+      currentSortOrder,
+      domain,
+      onSortClick,
+      searchConsole,
+      selectAnchorRef,
+      sortMode,
+    ],
   );
   const table = useDataTable({
     data: rows,

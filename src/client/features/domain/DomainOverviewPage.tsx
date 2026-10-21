@@ -29,6 +29,7 @@ import { QueryError } from "@/client/components/QueryState";
 import { DomainSearchCard } from "@/client/features/domain/components/DomainSearchCard";
 import { KeywordsTab } from "@/client/features/domain/components/KeywordsTab";
 import { PagesTab } from "@/client/features/domain/components/PagesTab";
+import { SearchConsoleSourceAlert } from "@/client/features/domain/components/SearchConsoleSourceAlert";
 import { HelpLabel } from "@/client/components/HelpLabel";
 import { MetricsTable } from "@/client/components/MetricsTable";
 import { SearchTabStrip } from "@/client/features/search-tabs/SearchTabStrip";
@@ -505,12 +506,25 @@ export function DomainOverviewPage({
     navigateToInput: navigateToSearchTab,
   });
 
+  // Set on a self-hosted install that reads Domain Overview from Search
+  // Console: those numbers are clicks and queries for the exact scope.
+  const searchConsole =
+    state.overview && "searchConsole" in state.overview
+      ? state.overview.searchConsole
+      : undefined;
+
   // domain_rank_overview can't be narrowed: its metrics always cover the
   // hostname plus subdomains, so anything narrower needs a label.
   const overviewMetricsHint =
-    state.overview && state.overview.scope !== "subdomains"
+    state.overview && state.overview.scope !== "subdomains" && !searchConsole
       ? "Whole domain incl. subdomains"
       : undefined;
+  const trafficLabel = searchConsole
+    ? "Clicks (Search Console)"
+    : "Estimated organic traffic";
+  const keywordsLabel = searchConsole
+    ? "Search queries (Search Console)"
+    : "Organic keywords";
 
   const tabs = (
     <DataTableTabs
@@ -613,7 +627,11 @@ export function DomainOverviewPage({
           <>
             {tabControls}
             {overviewError}
-            {!state.overview.hasData ? (
+            {searchConsole ? (
+              <SearchConsoleSourceAlert source={searchConsole} />
+            ) : null}
+            {/* An uncovered site is explained by the Search Console alert. */}
+            {!state.overview.hasData && searchConsole?.siteUrl !== null ? (
               <Alert variant="info">
                 <Info />
                 <AlertDescription className="text-foreground">
@@ -643,7 +661,7 @@ export function DomainOverviewPage({
                             helpText={overviewMetricsHint}
                           />
                         ) : (
-                          "Estimated organic traffic"
+                          trafficLabel
                         ),
                         value: formatMetric(
                           state.overview.organicTraffic,
@@ -657,7 +675,7 @@ export function DomainOverviewPage({
                             helpText={overviewMetricsHint}
                           />
                         ) : (
-                          "Organic keywords"
+                          keywordsLabel
                         ),
                         value: formatMetric(
                           state.overview.organicKeywords,
