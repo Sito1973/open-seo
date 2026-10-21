@@ -16,6 +16,9 @@ services:
       - PORT=${PORT:-3001}
       - ALLOWED_HOST=${ALLOWED_HOST:-}
       - AUTH_MODE=local_noauth
+      # Optional: require this key for the app and /mcp.
+      # docs/SELF_HOSTING_DOCKER.md#protect-a-public-server-with-an-access-key
+      - SELFHOST_ACCESS_KEY=${SELFHOST_ACCESS_KEY:-}
       - OPENSEO_TELEMETRY_DISABLED=${OPENSEO_TELEMETRY_DISABLED:-}
       - DO_NOT_TRACK=${DO_NOT_TRACK:-}
       - DATAFORSEO_API_KEY=${DATAFORSEO_API_KEY}

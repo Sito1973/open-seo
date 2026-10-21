@@ -5,7 +5,7 @@ description: "Run OpenSEO locally with Docker Compose using the published GHCR i
 
 Run OpenSEO locally with Docker.
 
-In Docker mode, OpenSEO uses `AUTH_MODE=local_noauth` (no auth checks, local admin user `admin@localhost`). Only expose it behind your own auth-protected reverse proxy, tunnel, or private network. For internet-facing self-hosting, use [Cloudflare](/docs/self-hosting/cloudflare) instead.
+In Docker mode, OpenSEO uses `AUTH_MODE=local_noauth` (no auth checks, local admin user `admin@localhost`). Only expose it behind your own auth-protected reverse proxy, tunnel, or private network, or set an [access key](#protect-a-public-server-with-an-access-key). For internet-facing self-hosting, use [Cloudflare](/docs/self-hosting/cloudflare) instead.
 
 The default `compose.yaml` uses the published GHCR image:
 
@@ -43,13 +43,28 @@ Optional env values:
 
 AI Visibility uses your `DATAFORSEO_API_KEY` and sends tracked questions to DataForSEO. Set `OPENROUTER_API_KEY` for setup research and generated prompt suggestions. You pay providers directly; the app shows the collection cost before a check or schedule starts. Keep the container running for background answers and daily, weekly, or monthly tracking. The built-in scheduler checks for due work every five minutes; no host cron setup is required. See the [AI Visibility guide](/docs/ai-visibility).
 
-If you are putting Docker behind a reverse proxy or a temporary tunnel, remember that Docker self-hosting runs with app auth disabled. Only expose it behind your own auth-protected reverse proxy, tunnel, or private network, and add the public hostname before restarting:
+If you are putting Docker behind a reverse proxy or a temporary tunnel, remember that Docker self-hosting runs with app auth disabled. Only expose it behind your own auth-protected reverse proxy, tunnel, or private network, or set an [access key](#protect-a-public-server-with-an-access-key), and add the public hostname before restarting:
 
 ```bash
 ALLOWED_HOST=yourdomain.com docker compose up -d
 ```
 
 You can also persist it in `.env`.
+
+## Protect a public server with an access key
+
+Set `SELFHOST_ACCESS_KEY` to require a key for the web app and the MCP server:
+
+```bash
+echo "SELFHOST_ACCESS_KEY=$(openssl rand -hex 32)" >> .env
+docker compose up -d --force-recreate open-seo
+```
+
+- The browser asks for a login. Use any username and the key as the password.
+- MCP clients send the key as `Authorization: Bearer <key>`, for example `claude mcp add --transport http openseo https://yourdomain.com/mcp --header "Authorization: Bearer <key>"`. Clients that only take a URL, such as Claude.ai custom connectors, use `https://yourdomain.com/mcp?key=<key>` with the OAuth fields left empty. Prefer the header when the client supports it, because URLs can end up in proxy logs.
+- `/api/health` stays public. It reports setup status only.
+- Serve the app over HTTPS: the key travels with every request.
+- If your proxy rewrites the `Host` header to the container's address, block `/cdn-cgi/` at the proxy. The local runtime serves debug routes there before the app sees the request.
 
 ## Telemetry
 

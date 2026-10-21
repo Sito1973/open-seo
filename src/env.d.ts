@@ -29,6 +29,9 @@ declare namespace Cloudflare {
     AUDIT_ENGINE: Service<typeof import("./audit-worker").default>;
 
     AUTH_MODE?: "cloudflare_access" | "local_noauth" | "hosted";
+    // local_noauth only: required by the web app (Basic login, any username)
+    // and /mcp (Bearer or ?key=).
+    SELFHOST_ACCESS_KEY?: string;
     BYPASS_EMAIL_VERIFICATION?: string;
     TEAM_DOMAIN?: string;
     POLICY_AUD?: string;

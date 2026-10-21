@@ -27,6 +27,8 @@ type PreflightResult = {
 
 type EnvRecord = Record<string, string | undefined>;
 
+const MIN_SELFHOST_ACCESS_KEY_LENGTH = 32;
+
 function get(env: EnvRecord, name: string): string | undefined {
   const value = env[name]?.trim();
   return value ? value : undefined;
@@ -48,13 +50,30 @@ function checkAuthMode(env: EnvRecord, items: PreflightItem[]): void {
   const mode = rawMode ?? "cloudflare_access";
 
   if (mode === "local_noauth") {
-    items.push({
-      key: "auth",
-      name: "AUTH_MODE",
-      level: "ok",
-      message:
-        "local_noauth — no auth, single admin user. Do not expose publicly without your own auth in front.",
-    });
+    const accessKey = get(env, "SELFHOST_ACCESS_KEY");
+    if (!accessKey) {
+      items.push({
+        key: "auth",
+        name: "AUTH_MODE",
+        level: "ok",
+        message:
+          "local_noauth — no auth, single admin user. Do not expose publicly without SELFHOST_ACCESS_KEY or your own auth in front.",
+      });
+    } else if (accessKey.length < MIN_SELFHOST_ACCESS_KEY_LENGTH) {
+      items.push({
+        key: "auth",
+        name: "AUTH_MODE",
+        level: "fail",
+        message: `SELFHOST_ACCESS_KEY must be at least ${MIN_SELFHOST_ACCESS_KEY_LENGTH} characters. Generate one with: openssl rand -hex 32`,
+      });
+    } else {
+      items.push({
+        key: "auth",
+        name: "AUTH_MODE",
+        level: "ok",
+        message: "local_noauth — the app and MCP require SELFHOST_ACCESS_KEY.",
+      });
+    }
     return;
   }
 

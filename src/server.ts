@@ -9,7 +9,11 @@ import { SamSessionRepository } from "@/server/features/sam/SamSessionRepository
 import { runScheduledRankChecks } from "@/server/features/rank-tracking/services/scheduledRankChecks";
 import { reconcileStaleAudits } from "@/server/features/audit/services/auditReconciler";
 import { getOrCreateOrganizationCustomer } from "@/server/billing/subscription";
-import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import {
+  getEnvValueSync,
+  isHostedServerAuthMode,
+} from "@/server/lib/runtime-env";
+import { checkSelfHostAccess } from "@/server/lib/selfhost-access";
 import { getAuthMode, isHostedAuthMode } from "@/lib/auth-mode";
 import {
   createOpenSeoOAuthProvider,
@@ -143,6 +147,14 @@ function handleFetch(
   const authMode = getAuthMode(env.AUTH_MODE);
   const publicRequest = requestWithPublicOrigin(request);
   const pathname = new URL(publicRequest.url).pathname;
+  if (authMode === "local_noauth") {
+    const denied = checkSelfHostAccess(
+      publicRequest,
+      pathname,
+      getEnvValueSync(env, "SELFHOST_ACCESS_KEY")?.trim(),
+    );
+    if (denied) return denied;
+  }
   ctx.waitUntil(maybeSendSelfHostHeartbeat(pathname));
 
   if (pathname === "/api/ai-visibility/download") {

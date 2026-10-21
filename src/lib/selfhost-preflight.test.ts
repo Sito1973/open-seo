@@ -44,6 +44,16 @@ describe("runSelfhostPreflight", () => {
     expect(message).not.toContain("BETTER_AUTH_SECRET,");
   });
 
+  it("fails a short SELFHOST_ACCESS_KEY without echoing it", () => {
+    const result = runSelfhostPreflight({
+      AUTH_MODE: "local_noauth",
+      SELFHOST_ACCESS_KEY: "short-key",
+    });
+
+    expect(result.failed).toBe(true);
+    expect(itemFor(result, "AUTH_MODE")?.message).not.toContain("short-key");
+  });
+
   it("warns that GSC stays disabled on a short BETTER_AUTH_SECRET", () => {
     const result = runSelfhostPreflight({
       AUTH_MODE: "local_noauth",

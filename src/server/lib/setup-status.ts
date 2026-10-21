@@ -22,6 +22,7 @@ type SelfHostSetupStatus = {
 // shared checks against runtime env so the two reports can never drift.
 const CHECK_ENV_VARS = [
   "AUTH_MODE",
+  "SELFHOST_ACCESS_KEY",
   "TEAM_DOMAIN",
   "POLICY_AUD",
   "DATAFORSEO_API_KEY",

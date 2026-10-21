@@ -16,6 +16,11 @@ COPY . .
 
 EXPOSE 3001
 
+# The Cloudflare Vite plugin turns on Miniflare's local explorer by default,
+# including a raw D1 SQL route under /cdn-cgi/ that Miniflare serves before the
+# app (and so before SELFHOST_ACCESS_KEY). Self-hosting never needs it.
+ENV X_LOCAL_EXPLORER=false
+
 # Readiness probe against the unauthenticated setup/health endpoint. The long
 # start period covers migrations plus the boot-time vite build (skipped when
 # the previous start's build is still valid; see deploy/docker/docker-entrypoint.sh).
