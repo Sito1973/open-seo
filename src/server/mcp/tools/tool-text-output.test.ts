@@ -91,14 +91,16 @@ describe("MCP tool text output (service-backed tools)", () => {
   });
 
   it("get_domain_keyword_suggestions renders keyword rows", async () => {
-    mocks.getSuggestedKeywords.mockResolvedValue([
-      {
-        keyword: "seo audit",
-        position: 4,
-        searchVolume: 880,
-        keywordDifficulty: 22,
-      },
-    ]);
+    mocks.getSuggestedKeywords.mockResolvedValue({
+      keywords: [
+        {
+          keyword: "seo audit",
+          position: 4,
+          searchVolume: 880,
+          keywordDifficulty: 22,
+        },
+      ],
+    });
     const result = await getDomainKeywordSuggestionsTool.handler(
       { projectId: "project_1", domain: "example.com" },
       toolContext,

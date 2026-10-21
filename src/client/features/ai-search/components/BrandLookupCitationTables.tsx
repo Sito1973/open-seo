@@ -39,8 +39,7 @@ function HeaderWithHelp({
   );
 }
 
-const PLATFORM_HELP =
-  "Which AI surface produced the answer — ChatGPT or Google AI Overview.";
+const PLATFORM_HELP = "Which AI surface produced the answer.";
 
 /**
  * Platform indicator used only when a table actually spans >1 platform. A dot +
@@ -129,10 +128,12 @@ function KeywordsCell({
   keywords,
   projectId,
   brand,
+  showVolume,
 }: {
   keywords: TopPageRow["keywords"];
   projectId: string;
   brand: string;
+  showVolume: boolean;
 }) {
   if (keywords.length === 0) {
     return <span className="text-muted-foreground">—</span>;
@@ -154,12 +155,14 @@ function KeywordsCell({
             <span className="text-foreground/80 group-hover/kw:underline">
               {keyword.question}
             </span>
-            <span
-              className="shrink-0 text-muted-foreground tabular-nums"
-              title="Prompt volume in the fetched sample"
-            >
-              {formatCount(keyword.aiSearchVolume)} vol.
-            </span>
+            {showVolume ? (
+              <span
+                className="shrink-0 text-muted-foreground tabular-nums"
+                title="Prompt volume in the fetched sample"
+              >
+                {formatCount(keyword.aiSearchVolume)} vol.
+              </span>
+            ) : null}
           </Link>
         </li>
       )}
@@ -175,11 +178,14 @@ const queriesHelper = createColumnHelper<TopQueryRow>();
 
 export function buildTopPagesColumns({
   showPlatform,
+  showVolume,
   targetDomain,
   projectId,
   brand,
 }: {
   showPlatform: boolean;
+  /** False for answers this server collected: no source reports volume. */
+  showVolume: boolean;
   targetDomain: string | null;
   projectId: string;
   brand: string;
@@ -226,35 +232,42 @@ export function buildTopPagesColumns({
           keywords={row.original.keywords}
           projectId={projectId}
           brand={brand}
+          showVolume={showVolume}
         />
       ),
     }),
-    pagesHelper.accessor("capturedVolume", {
-      id: "capturedVolume",
-      meta: { cellClassName: NUMBER_CELL },
-      header: ({ column }) => (
-        <SortableHeader
-          column={column}
-          label="Source vol."
-          helpText="Estimated monthly prompt demand DataForSEO reports for this cited source, across prompts where the searched brand or domain appears."
-          align="right"
-        />
-      ),
-      cell: ({ getValue }) => (
-        <span className="tabular-nums">{formatCount(getValue())}</span>
-      ),
-      sortingFn: numericNullsLast,
-      sortDescFirst: true,
-    }),
+    ...(showVolume
+      ? [
+          pagesHelper.accessor("capturedVolume", {
+            id: "capturedVolume",
+            meta: { cellClassName: NUMBER_CELL },
+            header: ({ column }) => (
+              <SortableHeader
+                column={column}
+                label="Source vol."
+                helpText="Estimated monthly prompt demand DataForSEO reports for this cited source, across prompts where the searched brand or domain appears."
+                align="right"
+              />
+            ),
+            cell: ({ getValue }) => (
+              <span className="tabular-nums">{formatCount(getValue())}</span>
+            ),
+            sortingFn: numericNullsLast,
+            sortDescFirst: true,
+          }),
+        ]
+      : []),
   ];
 }
 
 export function buildTopQueriesColumns({
   showPlatform,
+  showVolume,
   projectId,
   brand,
 }: {
   showPlatform: boolean;
+  showVolume: boolean;
   projectId: string;
   brand: string;
 }) {
@@ -293,23 +306,27 @@ export function buildTopQueriesColumns({
           }),
         ]
       : []),
-    queriesHelper.accessor("aiSearchVolume", {
-      id: "aiSearchVolume",
-      meta: { cellClassName: NUMBER_CELL },
-      header: ({ column }) => (
-        <SortableHeader
-          column={column}
-          label="AI search vol."
-          helpText="Estimated monthly search demand for this prompt's topic. This is prompt demand, not the number of brand mentions."
-          align="right"
-        />
-      ),
-      cell: ({ getValue }) => (
-        <span className="tabular-nums">{formatCount(getValue())}</span>
-      ),
-      sortingFn: numericNullsLast,
-      sortDescFirst: true,
-    }),
+    ...(showVolume
+      ? [
+          queriesHelper.accessor("aiSearchVolume", {
+            id: "aiSearchVolume",
+            meta: { cellClassName: NUMBER_CELL },
+            header: ({ column }) => (
+              <SortableHeader
+                column={column}
+                label="AI search vol."
+                helpText="Estimated monthly search demand for this prompt's topic. This is prompt demand, not the number of brand mentions."
+                align="right"
+              />
+            ),
+            cell: ({ getValue }) => (
+              <span className="tabular-nums">{formatCount(getValue())}</span>
+            ),
+            sortingFn: numericNullsLast,
+            sortDescFirst: true,
+          }),
+        ]
+      : []),
     queriesHelper.display({
       id: "action",
       header: () => <span className="sr-only">Actions</span>,

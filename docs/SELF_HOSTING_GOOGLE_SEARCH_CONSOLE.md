@@ -92,6 +92,9 @@ project.
   (keyed by `BETTER_AUTH_SECRET`).
 - Access tokens are minted and refreshed on demand — you only authorize once.
 - Search Console data comes from your own Google account, so OpenSEO never meters credits for it.
+- On an install without DataForSEO, Domain Overview and new rank trackers'
+  keyword suggestions read your connected sites from Search Console. See
+  [Domain Overview for your own sites](SELF_HOSTING_GOOGLE_APIS.md#search-console-domain-overview-for-your-own-sites).
 
 ## Troubleshooting
 

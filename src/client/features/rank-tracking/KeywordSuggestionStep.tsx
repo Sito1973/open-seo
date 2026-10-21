@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { getDomainKeywordSuggestions } from "@/serverFunctions/domain";
 import { addTrackingKeywords } from "@/serverFunctions/rank-tracking";
 import { isLabsLocationCode } from "@/client/features/keywords/locations";
+import { isHostedClientAuthMode } from "@/lib/auth-mode";
 import { Spinner } from "@/client/components/Spinner";
 import {
   DataTable,
@@ -170,20 +171,26 @@ export function KeywordSuggestionStep({
   // any SERP language with any country, and the server resolves a Labs-served
   // language for this country (resolveLabsMarket in serverFunctions/domain.ts).
   const labsSupported = isLabsLocationCode(locationCode);
+  // A self-hosted install without DataForSEO suggests the site's own Search
+  // Console queries, which have no market, so it asks for any location; the
+  // server sends nothing to DataForSEO for one Labs can't serve.
+  const askAnyLocation = !isHostedClientAuthMode();
   const suggestionsQuery = useQuery({
     queryKey: ["domainKeywordSuggestions", projectId, domain, locationCode],
     queryFn: () =>
       getDomainKeywordSuggestions({
         data: { projectId, domain, locationCode },
       }),
-    enabled: labsSupported,
+    enabled: labsSupported || askAnyLocation,
   });
 
-  const data = suggestionsQuery.data ?? [];
+  const data = suggestionsQuery.data?.keywords ?? [];
+  const searchConsole = suggestionsQuery.data?.searchConsole;
+  const fromSearchConsole = searchConsole?.siteUrl != null;
 
   // Pre-select top 20 by traffic once data loads.
   useEffect(() => {
-    const items = suggestionsQuery.data;
+    const items = suggestionsQuery.data?.keywords;
     if (items && items.length > 0 && !hasInitialized) {
       const indexed = items.map((item, i) => ({
         index: i,
@@ -231,7 +238,12 @@ export function KeywordSuggestionStep({
     }
   };
 
-  if (!labsSupported) {
+  if (
+    !labsSupported &&
+    !fromSearchConsole &&
+    !suggestionsQuery.isLoading &&
+    !suggestionsQuery.isError
+  ) {
     return (
       <>
         <StepHeader
@@ -288,7 +300,11 @@ export function KeywordSuggestionStep({
     <>
       <StepHeader
         title="Choose keywords to track"
-        description={`We found ${data.length} keywords ${domain} ranks for.`}
+        description={
+          fromSearchConsole
+            ? `We found ${data.length} Search Console queries for ${domain} (${searchConsole?.startDate} to ${searchConsole?.endDate}). Position is the average position; traffic is clicks.`
+            : `We found ${data.length} keywords ${domain} ranks for.`
+        }
       />
 
       <DataTable

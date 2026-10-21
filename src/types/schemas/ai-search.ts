@@ -54,8 +54,24 @@ export const brandLookupInputSchema = z.object({
 
 export type BrandLookupInput = z.infer<typeof brandLookupInputSchema>;
 
+/**
+ * DataForSEO's LLM Mentions API covers ChatGPT and Google AI Overview
+ * ("google"). A self-hosted install without DataForSEO answers from the AI
+ * answers its own prompt tracker collected, which can come from any engine.
+ */
+const BRAND_LOOKUP_PLATFORMS = [
+  "chat_gpt",
+  "google",
+  "google_ai_mode",
+  "gemini",
+  "claude",
+  "perplexity",
+] as const;
+const brandLookupPlatformSchema = z.enum(BRAND_LOOKUP_PLATFORMS);
+export type BrandLookupPlatform = z.infer<typeof brandLookupPlatformSchema>;
+
 const brandPlatformBreakdownSchema = z.object({
-  platform: z.enum(["chat_gpt", "google"]),
+  platform: brandLookupPlatformSchema,
   status: z.enum(["success", "error"]),
   mentions: z.number().int().nonnegative().nullable(),
   aiSearchVolume: z.number().int().nonnegative().nullable(),
@@ -65,7 +81,7 @@ const brandShareOfVoiceSchema = z.object({
   // The platforms whose cross_aggregated call succeeded and are summed into
   // the entries — so the UI can caption a single-platform leaderboard honestly
   // when the other platform's call failed.
-  platforms: z.array(z.enum(["chat_gpt", "google"])),
+  platforms: z.array(brandLookupPlatformSchema),
   entries: z.array(
     z.object({
       label: z.string().max(BRAND_LOOKUP_MAX_INPUT_LENGTH),
@@ -84,7 +100,7 @@ const brandTopPageKeywordSchema = z.object({
 const brandTopPageSchema = z.object({
   url: z.string().max(2048),
   domain: z.string().max(253).nullable(),
-  platform: z.enum(["chat_gpt", "google"]),
+  platform: brandLookupPlatformSchema,
   // Page-level citation mentions from DataForSEO top_pages.
   mentions: z.number().int().nonnegative().nullable(),
   // Page-level AI demand index from DataForSEO top_pages.
@@ -95,7 +111,7 @@ const brandTopPageSchema = z.object({
 
 const brandTopQuerySchema = z.object({
   question: z.string().max(500),
-  platform: z.enum(["chat_gpt", "google"]),
+  platform: brandLookupPlatformSchema,
   aiSearchVolume: z.number().int().nonnegative().nullable(),
   firstSeenAt: z.string().nullable(),
   lastSeenAt: z.string().nullable(),
@@ -145,6 +161,24 @@ export const brandLookupResultSchema = z.object({
   topPages: z.array(brandTopPageSchema).max(40),
   topQueries: z.array(brandTopQuerySchema).max(50),
   monthlyVolume: z.array(brandMonthlyVolumeSchema),
+  /**
+   * Set when the lookup read the answers this server's prompt tracker stored
+   * instead of DataForSEO: what the counts cover. There is no AI search volume
+   * then, so every volume field is null. Null on DataForSEO results.
+   */
+  collectedAnswers: z
+    .object({
+      answers: z.number().int().nonnegative(),
+      engines: z.array(brandLookupPlatformSchema),
+      /** When the oldest counted answer was collected. */
+      since: z.string().nullable(),
+      /** More checks ran in the window than the lookup reads. */
+      truncated: z.boolean(),
+      /** The target is the project's own brand or site. */
+      ownBrand: z.boolean(),
+    })
+    .nullable()
+    .default(null),
 });
 
 export type BrandLookupResult = z.infer<typeof brandLookupResultSchema>;

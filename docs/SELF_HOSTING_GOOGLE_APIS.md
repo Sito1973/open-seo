@@ -567,20 +567,22 @@ The search volumes DataForSEO sells for keyword research come from Google Ads'
 Keyword Planner. With the Google Ads variables below set and Google Ads
 connected, OpenSEO reads them from your own Google Ads account through the
 [Google Ads API](https://developers.google.com/google-ads/api/docs/keyword-planning/generate-keyword-ideas)
-instead, for free. It runs:
+instead, for free. Every feature that reads keyword metrics runs on it:
 
-- **`research_keywords`** and the app's keyword research page: keyword ideas
-  for each seed from Keyword Planner, sorted by volume, with average monthly
-  searches, the monthly trend and paid competition.
-- **`get_keyword_metrics`**, refreshing saved keywords and a rank tracker's
-  keyword metrics: volumes for a list of keywords, up to 700 per request.
+| Feature                                                                                   | What it reads                                                    | Before Basic access                                                                         |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Keyword research page and `research_keywords`                                             | Keyword ideas for each seed, sorted by volume                    | Your site's Search Console queries, [as below](#before-basic-access-search-console-queries) |
+| `get_keyword_metrics`                                                                     | Metrics for a list of keywords, up to 700 per request            | Fails with "Google Ads API access pending"                                                  |
+| **Saved Keywords → Update keyword stats**                                                 | Metrics for every saved keyword                                  | Fails with "Google Ads API access pending"                                                  |
+| Rank tracker volume and CPC, read when you add keywords and with **Update keyword stats** | Metrics for the tracker's keywords, for its city when it has one | Adding keywords works and leaves volume and CPC empty; Update keyword stats fails           |
 
-Keyword Planner has no keyword difficulty or search intent, so those columns
-stay empty, as they do for the countries DataForSEO serves from Google Ads
-data. CPC also stays empty: Google reports bids in the Ads account's currency,
-and OpenSEO shows CPC in US dollars. Google merges close variants such as
-"hamburguesa" and "hamburguesas", and each keyword you asked for gets the
-shared numbers; do not add them together.
+Each answer carries average monthly searches, the monthly trend, paid
+competition, [CPC in US dollars](#cpc-in-us-dollars) and, for Spanish keywords,
+[OpenSEO's own search intent](#search-intent-for-spanish-keywords). Keyword
+Planner has no keyword difficulty, so that column stays empty, as it does for
+the countries DataForSEO serves from Google Ads data. Google merges close
+variants such as "hamburguesa" and "hamburguesas", and each keyword you asked
+for gets the shared numbers; do not add them together.
 
 ### Locations and language
 
@@ -610,10 +612,12 @@ page. OpenSEO sends no developer token.
 | Explorer | Blocked         | 2,880                                    |
 | Basic    | Allowed         | 15,000                                   |
 
-Explorer is usually approved automatically but blocks Keyword Planner. Until
-Basic is approved, keyword research answers "Google Ads API access pending
-(Explorer level blocks Keyword Planner)" instead of failing with a generic
-error. Brand verification of the Cloud project comes first: an OAuth consent
+Explorer is usually approved automatically but blocks Keyword Planner
+entirely: no volumes and no ideas. Until Basic is approved, keyword research
+shows [your site's Search Console queries](#before-basic-access-search-console-queries)
+when it can, and every other feature in the table above answers "Google Ads API
+access pending (Explorer level blocks Keyword Planner)" instead of failing with
+a generic error. Brand verification of the Cloud project comes first: an OAuth consent
 screen set to **Internal** has to be made **External** and **In production**,
 with its branding filled in. Then apply for Basic on the Overview page; Google
 may upgrade the project automatically after you apply.
@@ -658,8 +662,8 @@ Insights section. With DataForSEO unset, the `dataforseo` check in
 Open any project's **Settings → Integrations** and use **Connect** on the
 **Google Ads Keyword Planner** card. Google asks for the `adwords` scope, the
 only scope the Google Ads API has. It allows changes to campaigns, but OpenSEO
-only calls Keyword Planner and a read-only location lookup with it and never
-changes anything in the account.
+only calls Keyword Planner, a read-only location lookup and a read of the
+account's currency with it, and never changes anything in the account.
 
 The grant belongs to the OpenSEO user who connected it, and keyword research
 uses the grant of the user who runs it. **Disconnect** deletes the stored
@@ -667,6 +671,67 @@ grant; you can also remove OpenSEO's access in your Google account's security
 settings. Hosted OpenSEO never offers this connection. With
 `DATAFORSEO_API_KEY` set, the card appears only while you still have a grant
 to disconnect.
+
+### CPC in US dollars
+
+OpenSEO shows CPC in US dollars, as DataForSEO does. Keyword Planner reports
+the average cost per click in the Ads account's currency; when it has no
+average, OpenSEO takes the middle of the top-of-page bid range Google
+suggests. Then:
+
+- **US dollar account:** the number as Google reports it.
+- **Colombian peso account:** divided by the official exchange rate (TRM) of
+  the day, from the Superintendencia Financiera's
+  [open dataset on datos.gov.co](https://www.datos.gov.co/Econom-a-y-Finanzas/Tasa-de-Cambio-Representativa-del-Mercado-TRM/32sa-8pi3).
+  It is free and needs no key.
+- **Any other currency:** CPC stays empty.
+
+When datos.gov.co does not answer, that answer has no CPC and the next request
+tries again. OpenSEO reads the account's currency from Google Ads once a month
+and the TRM once a day.
+Because of the conversion, CPC can differ by a few cents from what DataForSEO
+or the Google Ads interface shows.
+
+### Search intent for Spanish keywords
+
+Keyword Planner has no search intent, so for Spanish keywords OpenSEO assigns
+one with its own rules, in this order:
+
+1. **Navigational:** the keyword names the project's brand (its domain name,
+   such as "bandidos" for bandidos.co) or one of the competitors on the
+   project's **Context** page, by name or domain name.
+2. **Transactional:** domicilio, pedir, ordenar, reservar, rappi, delivery,
+   para llevar, abierto ahora, cerca de mí, 24 horas.
+3. **Informational:** receta, cómo, qué es, historia, calorías, ingredientes.
+4. **Commercial:** mejor, barato, económico, precio, menú, carta, opiniones,
+   reseñas, vs.
+5. **Navigational:** Google marks the keyword as a brand. Only keyword ideas
+   carry this mark, so a later refresh of the same keyword cannot see it and
+   stores it as unknown.
+
+Accents and capitals do not matter. Anything else stays unknown, as does every
+keyword in other languages. Intent is stored with the keyword's other metrics,
+so saved keywords keep it and a refresh applies the same rules again. List your
+competitors on the project's **Context** page so their names count as
+navigational.
+
+### Before Basic access: Search Console queries
+
+While Google answers "access pending", keyword research does not stop. If the
+project has [Search Console connected](SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md),
+the research page and `research_keywords` list your site's Search Console
+queries from the last 28 days that contain the seed, most impressions first,
+with OpenSEO's intent. The research page says so above the table and adds a
+**GSC impr.** column; `research_keywords` reports the seed's source as
+`search_console`.
+
+These are your own site's impressions, not search volume: a query appears only
+if your site showed up for it, and the number counts those appearances. Volume,
+CPC and competition stay empty, and OpenSEO neither caches these rows nor
+stores them as keyword metrics, so real volumes replace them as soon as Google
+approves Basic access. A city search shows the same site-wide queries. Without
+Search Console, or with no query containing the seed, keyword research answers
+"access pending" like the other features.
 
 ### Limits and caching
 
@@ -679,6 +744,7 @@ one operation of the daily quota:
 - a city or region adds one location lookup and one volume request;
 - `get_keyword_metrics` and refreshes send one request per 700 keywords.
 
+Reading the account's currency for CPC is one more request, once a month.
 Keyword Planner updates its numbers once a month, so OpenSEO keeps each answer
 until the end of the calendar month (UTC) and repeats of the same request in
 that month send nothing to Google. When Google reports a quota error, the tool
@@ -693,9 +759,61 @@ little or no spend; Google does not document a threshold for the API.
 
 ### What OpenSEO stores
 
-The Google grant, encrypted like the Search Console grant. Keyword metrics are
-stored in the project exactly as DataForSEO's are, so saved keywords show them.
-The cached Keyword Planner answers expire after the month.
+The Google grant, encrypted like the Search Console grant. Keyword metrics,
+including the CPC in dollars and OpenSEO's intent, are stored in the project
+exactly as DataForSEO's are, so saved keywords show them. Search Console
+impressions shown before Basic access are never stored. The cached Keyword
+Planner answers expire after the month, and the cached TRM after the day.
+
+## Search Console: Domain Overview for your own sites
+
+Without DataForSEO, Domain Overview reads your own sites from Google Search
+Console: the overview card, the **Top Keywords** and **Top Pages** tabs, the
+keyword suggestions of a new rank tracker, and the `get_domain_overview`,
+`get_domain_keyword_suggestions` and `get_ranked_keywords` MCP tools. It needs
+no key beyond the
+[Search Console connection](SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md) and costs
+nothing.
+
+- A site counts as yours when a project in the same organization has a Search
+  Console property connected that covers it. A domain property
+  (`sc-domain:example.com`) covers the domain and all its subdomains; a
+  URL-prefix property covers only its own host, with or without `www.`. When
+  two properties cover the site, the current project's wins.
+- The numbers cover the last 28 days Search Console reports, in all countries.
+  Search Console runs 2 to 3 days behind. The location picker does not change
+  them.
+- Traffic is real clicks. Keywords are the queries Search Console lists, each
+  with its average position weighted by impressions and the page that had the
+  most impressions. Search Console leaves out rare (anonymized) queries, so
+  the keyword count is a minimum; page clicks include those queries.
+- Volume, CPC and difficulty come from the keyword metrics the project already
+  stored for the country, for example from keyword research on the Keyword
+  Planner. Otherwise they stay empty. Backlinks and referring domains stay
+  empty.
+- Scopes, filters, sorting and pagination work as they do with DataForSEO.
+- A new rank tracker suggests the site's 100 queries with the most
+  impressions, whatever the tracker's location, a city included.
+- The page and the MCP tools say the numbers come from Search Console, and the
+  tools return `dataSource: "gsc"` with the property and the dates. They use
+  no credits.
+
+A domain that no connected property covers, such as a competitor's, shows no
+data and a note listing the connected sites: competitor domains still need
+DataForSEO. If Google rejects the saved Search Console grant, reconnect Search
+Console under the project's **Settings → Integrations**.
+
+### Limits and caching
+
+A site's report is two Search Console requests, one of queries by page and
+one of pages, of up to 25,000 rows each. OpenSEO keeps the report for 12 hours,
+so every tab, scope and filter on the same site reads that copy. Search
+Console's quota is far above this.
+
+### What OpenSEO stores
+
+The report, in the app's cache for 12 hours. Nothing is written to the
+database.
 
 ## SerpApi: Google AI Mode for AI visibility
 
@@ -839,3 +957,43 @@ this endpoint are free. Ahrefs' license requires the credit "Domain Rating by
 Ahrefs" wherever the ratings show, so the tables show it under the rows, and
 Ahrefs can withdraw the license. `/api/health` reports whether the key is set
 under `ahrefs`.
+
+## Brand Lookup from the answers your tracker collected
+
+Without DataForSEO, Brand Lookup (`/p/<project id>/brand-lookup`; the page is
+not in the sidebar) counts the AI answers this server's prompt tracking
+collected for the project in the last 12 weeks, instead of DataForSEO's
+database of AI answers. It needs no key and costs nothing. It only knows the
+prompts the project tracks, in the tracker's engines and market: on a server
+with SerpApi alone, Google AI Mode.
+
+- An answer counts for a brand when it names the brand or its domain, or cites
+  a page on its site, the same rule as Prompt Tracking. For the project and its
+  saved competitors, searching the domain also counts answers that only give
+  the name, and searching the name also counts answers that cite the site.
+- Mentions per engine, Share of Voice against up to 5 competitors, the prompts
+  whose answers matched and the pages those answers cited all come from the
+  same answers. Scopes work as they do with DataForSEO: under a URL scope the
+  counts stay site-wide and only the pages and prompts are narrowed.
+- There is no AI search volume. No source reports how often people ask AI
+  assistants something, so the volume columns and the monthly trend are
+  hidden. The page says how many answers it counted, from which engines and
+  since when. It reads at most the latest 50 checks.
+- With no answers in the last 12 weeks, the page says so and links to Prompt
+  Tracking.
+
+### Visits from AI assistants
+
+When you look up the project's own domain or name and the project has Google
+Analytics connected, the page adds a card with the sessions and key events AI
+assistants sent to the site in the last 28 days, by source. It counts sessions
+in GA4's AI Assistant channel and sessions whose source names ChatGPT, OpenAI,
+Perplexity, Claude, Gemini or Copilot, which covers properties whose channel
+group has no AI Assistant channel. OpenSEO keeps the report for a day. MCP
+clients can read the same sessions with
+`get_google_analytics_traffic_acquisition` and the `source_medium` breakdown.
+
+### What OpenSEO stores
+
+Nothing new: Brand Lookup reads the answers prompt tracking already stored,
+and the Google Analytics report stays in the app's cache for a day.

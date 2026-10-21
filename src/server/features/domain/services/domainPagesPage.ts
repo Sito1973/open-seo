@@ -15,6 +15,11 @@ import { assertFilterConditionBudget } from "@/server/lib/dataforseo/filters";
 import type { ResearchScope } from "@/shared/researchScope";
 import type { RelevantPagesItem } from "@/server/lib/dataforseo";
 import { computeHasMore } from "@/server/features/domain/services/pagination";
+import { filterSortPage } from "@/server/features/domain/services/filterSortPage";
+import {
+  loadOwnSiteData,
+  type OwnSiteData,
+} from "@/server/features/domain/services/searchConsoleDomain";
 import type { DomainKeywordsFilters } from "@/types/schemas/domain";
 
 const DOMAIN_PAGES_PAGE_TTL_SECONDS = 12 * 60 * 60;
@@ -42,9 +47,54 @@ const domainPagesPageResultSchema = z.object({
     }),
   ),
   fetchedAt: z.string(),
+  /** Set when the rows come from Search Console instead of DataForSEO. */
+  dataSource: z.literal("gsc").optional(),
 });
 
 type DomainPagesPageResult = z.infer<typeof domainPagesPageResultSchema>;
+
+/** The same page from the organization's own Search Console data. */
+function ownSitePagesPage(
+  ownSite: OwnSiteData,
+  input: Parameters<typeof getPagesPage>[0],
+  domain: string,
+): DomainPagesPageResult {
+  const page = filterSortPage(
+    ownSite.pages,
+    {
+      terms: (row) => row.page,
+      search: (row) => [row.page],
+      ranges: {
+        Traffic: (row) => row.clicks,
+        Vol: (row) => row.keywords,
+      },
+    },
+    {
+      filters: input.filters,
+      search: input.search,
+      sortBy: (row) =>
+        input.sortMode === "keywords" ? row.keywords : row.clicks,
+      sortOrder: input.sortOrder,
+      offset: (input.page - 1) * input.pageSize,
+      limit: input.pageSize,
+    },
+  );
+  return {
+    domain,
+    page: input.page,
+    pageSize: input.pageSize,
+    totalCount: page.totalCount,
+    hasMore: page.hasMore,
+    pages: page.rows.map((row) => ({
+      page: row.page,
+      relativePath: row.relativePath,
+      organicTraffic: row.clicks,
+      keywords: row.keywords,
+    })),
+    fetchedAt: new Date().toISOString(),
+    dataSource: "gsc",
+  };
+}
 
 function escapeLikeTerm(term: string): string {
   return term.replace(/[\\%_]/g, (match) => `\\${match}`);
@@ -150,6 +200,13 @@ export async function getPagesPage(
   billingCustomer: BillingCustomerContext,
 ): Promise<DomainPagesPageResult> {
   const target = parseResearchTargetOrThrow(input.domain, input.scope);
+  const ownSite = await loadOwnSiteData({
+    ...input,
+    organizationId: billingCustomer.organizationId,
+    target,
+  });
+  if (ownSite) return ownSitePagesPage(ownSite, input, target.hostname);
+
   const scopeFilter = buildRelevantPagesScopeFilter(target);
   const offset = (input.page - 1) * input.pageSize;
   const orderBy = [`${SORT_FIELD_BY_MODE[input.sortMode]},${input.sortOrder}`];

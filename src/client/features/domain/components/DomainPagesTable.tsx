@@ -25,6 +25,8 @@ type Props = DataTableFrameProps & {
   sortMode: DomainSortMode;
   currentSortOrder: SortOrder;
   onSortClick: (sort: DomainSortMode) => void;
+  /** Rows are the site's own Search Console pages, not DataForSEO's. */
+  searchConsole?: boolean;
 };
 
 const pageColumnHelper = createColumnHelper<PageRow>();
@@ -35,6 +37,7 @@ export function DomainPagesTable({
   sortMode,
   currentSortOrder,
   onSortClick,
+  searchConsole = false,
   ...frame
 }: Props) {
   const columns = useMemo<ColumnDef<PageRow>[]>(
@@ -56,7 +59,12 @@ export function DomainPagesTable({
       pageColumnHelper.accessor("organicTraffic", {
         header: () => (
           <SortableHeader
-            label="Organic Traffic"
+            label={searchConsole ? "Clicks" : "Organic Traffic"}
+            helpText={
+              searchConsole
+                ? "Clicks from Google Search in Search Console's last 28 days, including queries it doesn't list."
+                : undefined
+            }
             column={domainSortColumn(
               toPageSortMode(sortMode) === "traffic",
               currentSortOrder,
@@ -80,7 +88,7 @@ export function DomainPagesTable({
         cell: ({ getValue }) => formatNumber(getValue()),
       }),
     ],
-    [currentSortOrder, domain, onSortClick, sortMode],
+    [currentSortOrder, domain, onSortClick, searchConsole, sortMode],
   );
   // Memoized on purpose: a fresh slice every render defeats TanStack Table's
   // data-keyed memo, so _autoResetPageIndex fires each render and its setState

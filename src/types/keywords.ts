@@ -19,6 +19,12 @@ export type KeywordResearchRow = {
   cpc: number | null;
   competition: number | null;
   intent: KeywordIntent;
+  /**
+   * Impressions of the project's own site in Search Console over the last 28
+   * days. Set only on rows that stand in for Keyword Planner ideas until
+   * Google approves Basic access; never a search volume.
+   */
+  gscImpressions?: number;
 };
 
 export type SavedKeywordRow = {

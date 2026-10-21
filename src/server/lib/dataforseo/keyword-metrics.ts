@@ -38,8 +38,9 @@ export async function fetchAdsSearchVolumeForKeywords(
 // DataForSEO's batch metric endpoints accept up to ~700 keywords per request.
 const KEYWORD_METRICS_BATCH_SIZE = 700;
 
-// `intent` is the raw `main_intent` (null for Google Ads); run it through
-// `normalizeIntent` for the app enum. `competition` is a 0-1 ratio.
+// `intent` is the raw `main_intent` (null for DataForSEO's Google Ads data);
+// run it through `normalizeIntent` for the app enum. `competition` is a 0-1
+// ratio.
 export type KeywordMetricRow = {
   keyword: string;
   searchVolume: number | null;
@@ -94,7 +95,7 @@ function normalizeKeywordOverview(
 }
 
 // Google Ads items (countries Labs doesn't cover) carry volume/CPC/competition
-// but no keyword difficulty or search intent.
+// but no keyword difficulty. Only the self-hosted Keyword Planner sets intent.
 function normalizeAdsKeyword(
   item: AdsKeywordItem,
   keyword: string,
@@ -108,7 +109,7 @@ function normalizeAdsKeyword(
       item.competition_index != null ? item.competition_index / 100 : null,
     competitionLevel: item.competition ?? null,
     keywordDifficulty: null,
-    intent: null,
+    intent: item.intent ?? null,
     monthlySearches: toMonthlySearches(item.monthly_searches),
   };
 }

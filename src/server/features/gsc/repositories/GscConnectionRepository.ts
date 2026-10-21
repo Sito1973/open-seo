@@ -15,6 +15,16 @@ async function getByProjectId(
   return rows[0] ?? null;
 }
 
+/** Every connected property in one organization, one row per project. */
+async function listByOrganization(
+  organizationId: string,
+): Promise<GscConnection[]> {
+  return db
+    .select()
+    .from(gscConnections)
+    .where(eq(gscConnections.organizationId, organizationId));
+}
+
 async function upsert(input: {
   projectId: string;
   organizationId: string;
@@ -57,6 +67,7 @@ async function deleteByProjectId(projectId: string): Promise<void> {
 
 export const GscConnectionRepository = {
   getByProjectId,
+  listByOrganization,
   upsert,
   deleteByProjectId,
 };

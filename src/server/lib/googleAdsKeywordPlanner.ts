@@ -13,6 +13,12 @@ import { AppError } from "@/server/lib/errors";
 import { googleAdsApiError } from "@/server/lib/googleAdsErrors";
 import { buildCacheKey, getCached, setCached } from "@/server/lib/r2-cache";
 import {
+  createPlannerItemMapper,
+  int64,
+  metricsSchema,
+  type PlannerResult,
+} from "@/server/lib/keywordPlannerItems";
+import {
   getKeywordPlannerConfig,
   type KeywordPlannerConfig,
 } from "@/server/lib/keywordPlannerConfig";
@@ -27,7 +33,8 @@ import {
 // self-hosted installs without DataForSEO. It is the data DataForSEO's
 // keywords_data/google_ads endpoints resell, so results come back in the same
 // AdsKeywordItem shape and reuse the Google Ads mapping. Read-only: the client
-// calls KeywordPlanIdeaService and a geo target lookup, never a mutate.
+// calls KeywordPlanIdeaService, a geo target lookup and the account's
+// currency, never a mutate.
 // Developer tokens were sunset on September 9, 2026: the access level belongs
 // to the Cloud project that owns the OAuth client, so no developer-token
 // header is sent. The host is fixed, so no SSRF screening applies.
@@ -41,6 +48,12 @@ const CACHE_TTL_SECONDS = 32 * 24 * 60 * 60;
 // One page of ideas. DataForSEO's keywords_for_keywords returns ideas sorted
 // by volume and cut to the limit; the top of one 1,000-idea page does the same.
 const IDEAS_PAGE_SIZE = 1_000;
+// Asks for the average CPC next to the top-of-page bids. Both are in the Ads
+// account's currency, in micros.
+const HISTORICAL_METRICS_OPTIONS = { includeAverageCpc: true };
+// Google's brand concept groups. OTHER_BRANDS holds brands other than the one
+// a concept names, which still makes the search a brand search.
+const BRAND_CONCEPT_GROUPS = new Set(["BRAND", "OTHER_BRANDS"]);
 
 // Google Ads language criterion IDs from the official languagecodes.csv, keyed
 // by the codes OpenSEO projects use. A language Google Ads lacks is left out
@@ -100,43 +113,6 @@ const LANGUAGE_CRITERIA: Record<string, number> = {
   "zh-TW": 1018,
 };
 
-const MONTHS = [
-  "JANUARY",
-  "FEBRUARY",
-  "MARCH",
-  "APRIL",
-  "MAY",
-  "JUNE",
-  "JULY",
-  "AUGUST",
-  "SEPTEMBER",
-  "OCTOBER",
-  "NOVEMBER",
-  "DECEMBER",
-];
-
-const COMPETITION_LEVELS = new Set(["LOW", "MEDIUM", "HIGH"]);
-
-// JSON carries int64 fields as strings.
-const int64 = z.coerce.number();
-
-const metricsSchema = z
-  .object({
-    avgMonthlySearches: int64.optional(),
-    competition: z.string().optional(),
-    competitionIndex: int64.optional(),
-    monthlySearchVolumes: z
-      .array(
-        z.object({
-          year: int64,
-          month: z.string(),
-          monthlySearches: int64.optional(),
-        }),
-      )
-      .optional(),
-  })
-  .optional();
-
 const historicalMetricsSchema = z.object({
   results: z
     .array(
@@ -151,7 +127,25 @@ const historicalMetricsSchema = z.object({
 
 const keywordIdeasSchema = z.object({
   results: z
-    .array(z.object({ text: z.string(), keywordIdeaMetrics: metricsSchema }))
+    .array(
+      z.object({
+        text: z.string(),
+        keywordIdeaMetrics: metricsSchema,
+        // An annotation in an unexpected shape only loses the brand hint.
+        keywordAnnotations: z
+          .object({
+            concepts: z
+              .array(
+                z.object({
+                  conceptGroup: z.object({ type: z.string() }).optional(),
+                }),
+              )
+              .optional(),
+          })
+          .optional()
+          .catch(undefined),
+      }),
+    )
     .default([]),
 });
 
@@ -184,11 +178,13 @@ export type AdsKeywordClient = {
 };
 
 /**
- * Keyword Planner calls made with this user's Google Ads grant, or null when
- * the Keyword Planner does not stand in for DataForSEO on this install.
+ * Keyword Planner calls made with this user's Google Ads grant for one
+ * project, or null when the Keyword Planner does not stand in for DataForSEO on
+ * this install. The project's brands feed the Spanish intent rules.
  */
 export async function getKeywordPlannerClient(
   userId: string,
+  projectId: string,
 ): Promise<AdsKeywordClient | null> {
   const config = await getKeywordPlannerConfig();
   if (!config) return null;
@@ -231,17 +227,26 @@ export async function getKeywordPlannerClient(
     };
   };
 
+  const normalize = createPlannerItemMapper(call, config.customerId, projectId);
+
   return {
     keywords: {
       adsSearchVolume: async (input) => {
         const keywords = [...new Set(input.keywords)];
         const payload = await call(
           `customers/${config.customerId}:generateKeywordHistoricalMetrics`,
-          { keywords, ...(await targeting(input)) },
+          {
+            keywords,
+            historicalMetricsOptions: HISTORICAL_METRICS_OPTIONS,
+            ...(await targeting(input)),
+          },
         );
-        return historicalMetricItems(
-          keywords,
-          historicalMetricsSchema.parse(payload).results,
+        return normalize(
+          historicalMetricResults(
+            keywords,
+            historicalMetricsSchema.parse(payload).results,
+          ),
+          input.languageCode,
         );
       },
       adsIdeas: async (input) => {
@@ -250,18 +255,29 @@ export async function getKeywordPlannerClient(
           {
             keywordSeed: { keywords: [input.keyword] },
             pageSize: IDEAS_PAGE_SIZE,
+            keywordAnnotation: ["KEYWORD_CONCEPT"],
+            historicalMetricsOptions: HISTORICAL_METRICS_OPTIONS,
             ...(await targeting(input)),
           },
         );
-        const ideas = keywordIdeasSchema
-          .parse(payload)
-          .results.map((result) =>
-            toAdsKeywordItem(result.text, result.keywordIdeaMetrics),
-          );
-        return sortBy(ideas, [
-          (idea) => idea.search_volume ?? -1,
-          "desc",
-        ]).slice(0, input.limit);
+        const ideas = keywordIdeasSchema.parse(payload).results.map(
+          (result): PlannerResult => ({
+            keyword: result.text,
+            metrics: result.keywordIdeaMetrics,
+            googleBrandConcept: (
+              result.keywordAnnotations?.concepts ?? []
+            ).some((concept) =>
+              BRAND_CONCEPT_GROUPS.has(concept.conceptGroup?.type ?? ""),
+            ),
+          }),
+        );
+        return normalize(
+          sortBy(ideas, [
+            (idea) => idea.metrics?.avgMonthlySearches ?? -1,
+            "desc",
+          ]).slice(0, input.limit),
+          input.languageCode,
+        );
       },
     },
   };
@@ -271,9 +287,12 @@ export async function getKeywordPlannerClient(
  * The client for keyword metrics: the Keyword Planner on a self-hosted install
  * that uses it, otherwise DataForSEO.
  */
-export async function getKeywordDataClient(billing: BillingCustomerContext) {
+export async function getKeywordDataClient(
+  billing: BillingCustomerContext,
+  projectId: string,
+) {
   return (
-    (await getKeywordPlannerClient(billing.userId)) ??
+    (await getKeywordPlannerClient(billing.userId, projectId)) ??
     createDataforseoClient(billing)
   );
 }
@@ -283,14 +302,14 @@ export async function getKeywordDataClient(billing: BillingCustomerContext) {
  * result. Each requested keyword among them gets the shared metrics, as the
  * research tools already describe for Google Ads data.
  */
-function historicalMetricItems(
+function historicalMetricResults(
   keywords: string[],
   results: z.infer<typeof historicalMetricsSchema>["results"],
-): AdsKeywordItem[] {
+): PlannerResult[] {
   const requested = new Map(
     keywords.map((keyword) => [keyword.toLowerCase(), keyword]),
   );
-  const items: AdsKeywordItem[] = [];
+  const items: PlannerResult[] = [];
   for (const result of results) {
     const matches = [result.text, ...(result.closeVariants ?? [])].flatMap(
       (text) => {
@@ -301,38 +320,10 @@ function historicalMetricItems(
       },
     );
     for (const keyword of matches.length > 0 ? matches : [result.text]) {
-      items.push(toAdsKeywordItem(keyword, result.keywordMetrics));
+      items.push({ keyword, metrics: result.keywordMetrics });
     }
   }
   return items;
-}
-
-function toAdsKeywordItem(
-  keyword: string,
-  metrics: z.infer<typeof metricsSchema>,
-): AdsKeywordItem {
-  return {
-    keyword,
-    search_volume: metrics?.avgMonthlySearches ?? null,
-    cpc: null,
-    competition:
-      metrics?.competition && COMPETITION_LEVELS.has(metrics.competition)
-        ? metrics.competition
-        : null,
-    competition_index: metrics?.competitionIndex ?? null,
-    monthly_searches: (metrics?.monthlySearchVolumes ?? []).flatMap((entry) => {
-      const month = MONTHS.indexOf(entry.month) + 1;
-      return month > 0
-        ? [
-            {
-              year: entry.year,
-              month,
-              search_volume: entry.monthlySearches ?? null,
-            },
-          ]
-        : [];
-    }),
-  };
 }
 
 /**

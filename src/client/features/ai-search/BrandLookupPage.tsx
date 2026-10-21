@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { BarChart3, Quote, Sparkles, TrendingUp } from "lucide-react";
-import { lookupBrand } from "@/serverFunctions/ai-search";
+import { getBrandLookupSource, lookupBrand } from "@/serverFunctions/ai-search";
 import { useHostedPlanGate } from "@/client/features/billing/HostedPlanGate";
 import { ResearchPageShell } from "@/client/features/ai-search/ResearchPageShell";
 import { PromptTrackingWithoutUpgradeButton } from "@/client/features/ai-visibility/shared";
@@ -100,6 +100,13 @@ export function BrandLookupPage({
   // empty box shouldn't look disabled before the user has typed anything.
   const scopeDisabledReason =
     query.trim() !== "" && !scopeTarget ? KEYWORD_SCOPE_REASON : undefined;
+
+  const sourceQuery = useQuery({
+    queryKey: ["brand-lookup-source"],
+    queryFn: () => getBrandLookupSource(),
+    staleTime: Infinity,
+  });
+  const fromCollectedAnswers = sourceQuery.data?.collectedAnswers ?? false;
 
   const lookupQuery = useQuery({
     queryKey: [
@@ -206,7 +213,11 @@ export function BrandLookupPage({
   return (
     <ResearchPageShell
       title="Brand Lookup"
-      description="See how AI search cites any brand name or domain."
+      description={
+        fromCollectedAnswers
+          ? "See how the AI answers this server collected cite a brand name or domain."
+          : "See how AI search cites any brand name or domain."
+      }
       gate={{
         feature: "Brand Lookup",
         description:
@@ -234,6 +245,7 @@ export function BrandLookupPage({
           onSubmit={handleSubmit}
           isLoading={hasActiveQuery && lookupQuery.isPending}
           validationError={validationError}
+          fromCollectedAnswers={fromCollectedAnswers}
         />
       }
       query={lookupQuery}

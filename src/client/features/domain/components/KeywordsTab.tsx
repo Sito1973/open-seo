@@ -262,6 +262,11 @@ export function KeywordsTab({
 
       <DomainKeywordsTable
         domain={hostname}
+        searchConsole={
+          query.data != null &&
+          "dataSource" in query.data &&
+          query.data.dataSource === "gsc"
+        }
         rows={rows}
         selectedKeywords={selectedKeywords}
         visibleKeywords={visibleKeywords}

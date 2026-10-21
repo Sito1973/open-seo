@@ -106,6 +106,29 @@ async function upsertKeywordMetric(params: {
     });
 }
 
+/** Every stored metric of one project market: volume, CPC and difficulty. */
+async function listKeywordMetricsForMarket(params: {
+  projectId: string;
+  locationCode: number;
+  languageCode: string;
+}) {
+  return db
+    .select({
+      keyword: keywordMetrics.keyword,
+      searchVolume: keywordMetrics.searchVolume,
+      cpc: keywordMetrics.cpc,
+      keywordDifficulty: keywordMetrics.keywordDifficulty,
+    })
+    .from(keywordMetrics)
+    .where(
+      and(
+        eq(keywordMetrics.projectId, params.projectId),
+        eq(keywordMetrics.locationCode, params.locationCode),
+        eq(keywordMetrics.languageCode, params.languageCode),
+      ),
+    );
+}
+
 async function countSavedKeywords(projectId: string) {
   const [result] = await db
     .select({ value: count() })
@@ -363,6 +386,7 @@ async function removeSavedKeywords(
 
 export const KeywordResearchRepository = {
   upsertKeywordMetric,
+  listKeywordMetricsForMarket,
   countSavedKeywords,
   saveKeywordsToProject,
   listSavedKeywordsByProject,

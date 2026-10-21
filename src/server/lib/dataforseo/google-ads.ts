@@ -1,5 +1,6 @@
 import { dataforseoPost } from "@/server/lib/dataforseo/core";
 import type { LabsMonthlySearch } from "@/server/lib/dataforseo/labs";
+import type { KeywordIntent } from "@/types/keywords";
 import {
   assertOk,
   buildTaskBilling,
@@ -19,6 +20,11 @@ export interface AdsKeywordItem {
   /** 0-100 competition scale; the app stores a 0-1 ratio. */
   competition_index?: number | null;
   monthly_searches?: LabsMonthlySearch[] | null;
+  /**
+   * Set only by the self-hosted Keyword Planner, from OpenSEO's Spanish intent
+   * rules. DataForSEO's Google Ads items have no intent.
+   */
+  intent?: KeywordIntent | null;
   [key: string]: unknown;
 }
 export type AdsKeywordIdeaItem = AdsKeywordItem;

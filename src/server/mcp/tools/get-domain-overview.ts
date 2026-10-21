@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DomainService } from "@/server/features/domain/services/DomainService";
+import { searchConsoleNote } from "@/server/features/domain/services/searchConsoleDomain";
 import { mcpResponse } from "@/server/mcp/formatters";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { optionalMetaOutputSchema } from "@/server/mcp/output-schemas";
@@ -90,7 +91,7 @@ export const getDomainOverviewTool = {
       },
       context.billing,
     );
-    const text = [
+    const dataforseoText = [
       `Target: ${result.displayTarget} (scope: ${result.scope})`,
       `Organic traffic: ${result.organicTraffic ?? "?"}`,
       `Organic keywords: ${result.organicKeywords ?? "?"}`,
@@ -102,6 +103,15 @@ export const getDomainOverviewTool = {
             "Note: overview metrics cover the whole domain including subdomains; use get_ranked_keywords with this scope for scoped keyword data.",
           ]),
     ].join("\n");
+    // Search Console numbers are clicks and listed queries for the exact scope.
+    const text = result.searchConsole
+      ? [
+          `Target: ${result.displayTarget} (scope: ${result.scope})`,
+          searchConsoleNote(result.searchConsole, result.displayTarget),
+          `Clicks: ${result.organicTraffic ?? "?"}`,
+          `Search queries: ${result.organicKeywords ?? "?"}`,
+        ].join("\n")
+      : dataforseoText;
     return mcpResponse({
       text,
       meta: buildProjectMeta(

@@ -22,6 +22,7 @@ import {
   normalizeKeyword,
   type EnrichedKeyword,
 } from "./helpers";
+import { searchConsoleBridge } from "./search-console-bridge";
 import {
   assertLocalResearchLocation,
   localizeResearchRows,
@@ -178,16 +179,28 @@ async function fetchGoogleAdsRows(
   ads: AdsKeywordClient,
   creditFeature?: CreditFeature,
 ): Promise<ResearchResult> {
-  const rows = await fetchGoogleAdsResearchRows(
-    {
-      seedKeyword,
-      locationCode: input.locationCode,
-      languageCode: input.languageCode,
-      resultLimit: input.resultLimit,
-      creditFeature,
-    },
-    ads,
-  );
+  let rows: EnrichedKeyword[];
+  try {
+    rows = await fetchGoogleAdsResearchRows(
+      {
+        seedKeyword,
+        locationCode: input.locationCode,
+        languageCode: input.languageCode,
+        resultLimit: input.resultLimit,
+        creditFeature,
+      },
+      ads,
+    );
+  } catch (error) {
+    // Only the self-hosted Keyword Planner reports pending access.
+    const pending =
+      error instanceof AppError && error.code === "GOOGLE_ADS_ACCESS_PENDING";
+    const bridge = pending
+      ? await searchConsoleBridge(input, seedKeyword)
+      : null;
+    if (!bridge) throw error;
+    return bridge;
+  }
 
   return { rows, source: "google_ads", usedFallback: false };
 }
@@ -281,7 +294,10 @@ export async function research(
   // On a self-hosted install without DataForSEO, the Google Ads Keyword
   // Planner serves every country the way DataForSEO's Google Ads endpoints
   // serve the countries Labs lacks.
-  const planner = await getKeywordPlannerClient(billingCustomer.userId);
+  const planner = await getKeywordPlannerClient(
+    billingCustomer.userId,
+    input.projectId,
+  );
   const provider = planner
     ? "google_ads"
     : getKeywordDataProvider(input.locationCode);
@@ -344,6 +360,10 @@ export async function research(
             creditFeature,
           );
 
+  // Search Console rows stand in only until Basic access, so they are never
+  // cached or stored.
+  if (result.source === "search_console") return result;
+
   await setCached(cacheKey, result, CACHE_TTL.researchResult);
   // Keyword metrics are stored per country, so local rows are not persisted.
   if (!effectiveInput.locationName)
@@ -375,6 +395,9 @@ async function researchLocal(
     billingCustomer,
     creditFeature,
   );
+  // Search Console impressions are the site's, not the city's, and the
+  // Keyword Planner that would localize them is still pending.
+  if (national.source === "search_console") return national;
   // A save from local results sends no metrics, so the saved keyword relies on
   // the stored national ones. Store them before returning, also when the
   // national result came from the cache.

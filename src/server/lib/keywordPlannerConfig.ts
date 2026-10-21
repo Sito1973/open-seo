@@ -10,7 +10,7 @@ export type KeywordPlannerConfig = {
 };
 
 export const KEYWORD_PLANNER_SOURCE_NOTE =
-  "Source: Google Ads Keyword Planner through this server's Google Ads account. It has no keyword difficulty or intent, and CPC stays empty because Google reports bids in the Ads account's currency.";
+  "Source: Google Ads Keyword Planner through this server's Google Ads account. It has no keyword difficulty. CPC is Google's average CPC (or the midpoint of its top-of-page bids) converted to USD from the account's currency, at the day's official Colombian rate for a peso account. Intent for Spanish keywords comes from OpenSEO's own word rules and the project's brands, not from Google; it stays unknown when no rule matches, and other languages get none.";
 
 // Google shows customer IDs as 123-456-7890; the API takes the digits.
 function digits(customerId: string) {

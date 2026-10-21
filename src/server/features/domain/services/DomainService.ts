@@ -11,6 +11,11 @@ import type { ResearchScope } from "@/shared/researchScope";
 import { mapKeywordItem } from "@/server/features/domain/services/domainKeywordMapper";
 import { getKeywordsPage } from "@/server/features/domain/services/domainKeywordsPage";
 import { getPagesPage } from "@/server/features/domain/services/domainPagesPage";
+import {
+  loadOwnSiteData,
+  type SearchConsoleSource,
+} from "@/server/features/domain/services/searchConsoleDomain";
+import { isLabsLocationCode } from "@/shared/keyword-locations";
 
 // Lets a caller attribute spend to its own feature (e.g. the SAM agent). Applied
 // to the DataForSEO call, not the cache key, so cached results are shared
@@ -36,7 +41,22 @@ type DomainOverviewResult = z.infer<typeof domainOverviewResultSchema> & {
   /** Requested research scope, echoed for display. */
   scope: ResearchScope;
   displayTarget: string;
+  /** Set when the numbers come from Search Console instead of DataForSEO. */
+  dataSource?: "gsc";
+  searchConsole?: SearchConsoleSource;
 };
+
+type SuggestedKeyword = {
+  keyword: string;
+  position: number | null;
+  searchVolume: number | null;
+  traffic: number | null;
+  cpc: number | null;
+  keywordDifficulty: number | null;
+};
+
+/** Ranked keywords to start a rank tracker with, at most this many. */
+const SUGGESTED_KEYWORDS_LIMIT = 100;
 
 async function getOverview(
   input: {
@@ -51,6 +71,29 @@ async function getOverview(
 ): Promise<DomainOverviewResult> {
   const target = parseResearchTargetOrThrow(input.domain, input.scope);
   const domain = target.hostname;
+
+  const ownSite = await loadOwnSiteData({
+    ...input,
+    organizationId: billingCustomer.organizationId,
+    target,
+  });
+  if (ownSite) {
+    // Search Console reports the exact scope, so no domain-wide caveat.
+    const clicks = ownSite.pages.reduce((sum, page) => sum + page.clicks, 0);
+    return {
+      domain,
+      organicTraffic: clicks,
+      organicKeywords: ownSite.keywords.length,
+      backlinks: null,
+      referringDomains: null,
+      hasData: ownSite.pages.length > 0,
+      fetchedAt: new Date().toISOString(),
+      scope: target.scope,
+      displayTarget: target.display,
+      dataSource: "gsc",
+      searchConsole: ownSite.source,
+    };
+  }
 
   // domain_rank_overview has no filters and always covers the hostname plus
   // all of its subdomains, so every scope shares one cache entry per hostname.
@@ -130,17 +173,37 @@ async function getSuggestedKeywords(
   },
   billingCustomer: BillingCustomerContext,
   metering: MeteringOverrides = {},
-): Promise<
-  Array<{
-    keyword: string;
-    position: number | null;
-    searchVolume: number | null;
-    traffic: number | null;
-    cpc: number | null;
-    keywordDifficulty: number | null;
-  }>
-> {
+): Promise<{
+  keywords: SuggestedKeyword[];
+  dataSource?: "gsc";
+  searchConsole?: SearchConsoleSource;
+}> {
   const target = parseResearchTargetOrThrow(input.domain, input.scope);
+
+  // Search Console has no market, so the tracker's location (often a city)
+  // doesn't matter: its most seen queries are the suggestions.
+  const ownSite = await loadOwnSiteData({ ...input, target });
+  if (ownSite) {
+    return {
+      keywords: ownSite.keywords
+        .slice(0, SUGGESTED_KEYWORDS_LIMIT)
+        .map((row) => ({
+          keyword: row.keyword,
+          position: row.position,
+          searchVolume: row.searchVolume,
+          traffic: row.clicks,
+          cpc: row.cpc,
+          keywordDifficulty: row.keywordDifficulty,
+        })),
+      dataSource: "gsc",
+      searchConsole: ownSite.source,
+    };
+  }
+  // Ranked keywords are Labs data, which covers countries only. Only the web
+  // app's tracker setup sends other locations, so it can offer Search
+  // Console suggestions for a city tracker.
+  if (!isLabsLocationCode(input.locationCode)) return { keywords: [] };
+
   const scopeFilter = buildRankedKeywordsScopeFilter(target);
 
   const cacheKey = await buildCacheKey("domain:keyword-suggestions", {
@@ -167,7 +230,7 @@ async function getSuggestedKeywords(
     )
     .safeParse(cachedRaw);
   if (cached.success && cached.data.length > 0) {
-    return cached.data;
+    return { keywords: cached.data };
   }
 
   const dataforseo = createDataforseoClient(billingCustomer);
@@ -213,7 +276,7 @@ async function getSuggestedKeywords(
     );
   }
 
-  return keywords;
+  return { keywords };
 }
 
 export const DomainService = {

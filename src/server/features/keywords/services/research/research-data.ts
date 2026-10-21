@@ -65,7 +65,8 @@ function mapKeywordDataItems(items: LabsKeywordDataItem[]): EnrichedKeyword[] {
 
 /**
  * Google Ads items carry volume / CPC / paid competition but no keyword
- * difficulty or search intent (those are Labs-only).
+ * difficulty. Only the self-hosted Keyword Planner sets an intent, from
+ * OpenSEO's Spanish rules; Labs is the other source of intent.
  */
 export function mapAdsKeywordItems(
   items: AdsKeywordIdeaItem[],
@@ -93,7 +94,7 @@ export function mapAdsKeywordItems(
       competition:
         item.competition_index != null ? item.competition_index / 100 : null,
       keywordDifficulty: null,
-      intent: "unknown",
+      intent: item.intent ?? "unknown",
     });
   }
 
