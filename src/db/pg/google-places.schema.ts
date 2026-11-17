@@ -16,6 +16,7 @@ export const googlePlacesUsage = pgTable(
         "open_pagerank",
         "difficulty_estimate",
         "google_autocomplete",
+        "treg_usd_micro",
       ],
     }).notNull(),
     calls: integer("calls").notNull().default(0),

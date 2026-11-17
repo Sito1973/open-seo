@@ -130,7 +130,7 @@ async function handleLegacyJsonRequest(
 // trivially. Non-browser MCP clients send no Origin and are unaffected either
 // way.
 // `selfHosted` registers the self-hosted-only tools (Business Profile, Core
-// Web Vitals, place details).
+// Web Vitals, place details, treg's Instagram and Meta ads).
 function createRequestHandler(
   props: McpProps,
   options: ServerOptions & { allowedOriginHostnames?: string[] },

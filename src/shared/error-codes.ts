@@ -16,6 +16,7 @@ const ERROR_CODES = [
   "CRAWL_TARGET_BLOCKED",
   "BACKLINKS_BILLING_ISSUE",
   "AI_SEARCH_BILLING_ISSUE",
+  "TREG_BILLING_ISSUE",
   "AI_VISIBILITY_ERROR",
   "DATAFORSEO_AUTH_FAILED",
   "GOOGLE_ADS_NOT_CONNECTED",
@@ -42,6 +43,8 @@ const NON_REPORTABLE_ERROR_CODES = new Set<ErrorCode>([
   // A self-hosted install without a data source for the feature: setup the
   // owner acts on, not a bug.
   "PROVIDER_NOT_CONFIGURED",
+  // The owner's prepaid treg balance ran out: they top it up, nothing to fix.
+  "TREG_BILLING_ISSUE",
   "NOT_FOUND",
   "PAYMENT_REQUIRED",
   "INSUFFICIENT_CREDITS",

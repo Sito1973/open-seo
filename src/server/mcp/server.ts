@@ -47,6 +47,12 @@ import { searchSerpLocationsTool } from "@/server/mcp/tools/search-serp-location
 import { getSerpResultsTool } from "@/server/mcp/tools/get-serp-results";
 import { getCoreWebVitalsTool } from "@/server/mcp/tools/core-web-vitals";
 import { getPlaceDetailsTool } from "@/server/mcp/tools/place-details";
+import {
+  getInstagramPostsTool,
+  getInstagramProfileTool,
+  searchInstagramAccountsTool,
+} from "@/server/mcp/tools/instagram-tools";
+import { getMetaAdLibraryAdsTool } from "@/server/mcp/tools/meta-ads-tools";
 import { estimateKeywordDifficultyTool } from "@/server/mcp/tools/estimate-keyword-difficulty";
 import {
   createGoogleBusinessProfilePostTool,
@@ -325,8 +331,9 @@ export function createOpenSeoMcpServer(
   // Business Profile reads and, after the user approves a preview, edits the
   // owner's own listings with a scope only self-hosted installs grant, and
   // Core Web Vitals and place details run only on GOOGLE_PAGESPEED_API_KEY
-  // and GOOGLE_PLACES_API_KEY, which hosted never uses. Hosted never lists
-  // these.
+  // and GOOGLE_PLACES_API_KEY, which hosted never uses. The Instagram and
+  // Meta ad tools spend the operator's own treg balance (TREG_API_KEY).
+  // Hosted never lists these.
   if (options.selfHosted) {
     register(listGoogleBusinessProfileLocationsTool);
     register(getGoogleBusinessProfileReviewsTool);
@@ -341,6 +348,10 @@ export function createOpenSeoMcpServer(
     register(updateGoogleBusinessProfileFoodMenuTool);
     register(getCoreWebVitalsTool);
     register(getPlaceDetailsTool);
+    register(searchInstagramAccountsTool);
+    register(getInstagramProfileTool);
+    register(getInstagramPostsTool);
+    register(getMetaAdLibraryAdsTool);
   }
   // Difficulty estimates stand in for DataForSEO's difficulty, so installs
   // that use DataForSEO for every feature never list them.

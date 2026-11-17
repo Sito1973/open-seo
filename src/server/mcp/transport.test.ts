@@ -55,6 +55,7 @@ const standIns = vi.hoisted(() => ({
   model: false,
   ahrefs: false,
   dataforseoBacklinks: false,
+  treg: false,
 }));
 vi.mock("@/server/lib/data-sources", () => ({
   getDataSourceProviders: async () => standIns,

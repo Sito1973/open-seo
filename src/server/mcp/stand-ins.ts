@@ -123,6 +123,9 @@ export function standInInstructions(standIns: DataSourceProviders): string {
     standIns.dataforseoBacklinks
       ? "Backlinks tools use DataForSEO, which bills the server's owner for each request, under a monthly request cap."
       : "",
+    standIns.treg
+      ? "The Instagram and Meta ad tools use treg, which bills the server's owner a fraction of a cent for each call, under a monthly cap in US dollars."
+      : "",
     "Ask the user before a batch that would use a large share of a monthly budget. OpenSEO cannot purchase credits or charge cards.",
   ]
     .filter(Boolean)

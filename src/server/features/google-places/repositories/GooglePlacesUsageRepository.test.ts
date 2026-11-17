@@ -36,6 +36,24 @@ it("reserves up to the limit and refuses a batch that would pass it", async () =
   expect(await reserve(1)).toBeNull();
 });
 
+it("corrects a reservation to its real size, never below zero", async () => {
+  const adjust = (delta: number) =>
+    GooglePlacesUsageRepository.adjustCalls({
+      month: "2026-10",
+      sku: "text_search_pro",
+      delta,
+    });
+
+  // Nothing reserved yet: there is no counter to correct.
+  expect(await adjust(-3)).toBeNull();
+  expect(await reserve(8)).toBe(8);
+  expect(await adjust(-5)).toBe(3);
+  // What was given back can be reserved again.
+  expect(await reserve(7)).toBe(10);
+  expect(await adjust(2)).toBe(12);
+  expect(await adjust(-50)).toBe(0);
+});
+
 it("keeps a separate counter per SKU and per month", async () => {
   expect(await reserve(10)).toBe(10);
   expect(

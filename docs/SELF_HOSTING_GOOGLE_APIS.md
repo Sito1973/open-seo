@@ -54,8 +54,9 @@ Below the sections, a meter per provider shows how much of each monthly
 budget this server has used: Bright Data requests (and the share difficulty
 estimates may take), SerpApi searches, each Google Places SKU, Google
 autocomplete lookups (with the pause after Google refuses one), Open PageRank
-domains and, with `DATAFORSEO_SCOPE=backlinks`, DataForSEO backlinks
-requests. The meters read the same counters the budgets stop at.
+domains, [treg](#treg-competitors-instagram-and-meta-ads) spend in US dollars
+and, with `DATAFORSEO_SCOPE=backlinks`, DataForSEO backlinks requests. The
+meters read the same counters the budgets stop at.
 
 The same map drives the rest of the app:
 
@@ -1292,6 +1293,109 @@ this endpoint are free. Ahrefs' license requires the credit "Domain Rating by
 Ahrefs" wherever the ratings show, so the tables show it under the rows, and
 Ahrefs can withdraw the license. `/api/health` reports whether the key is set
 under `ahrefs`.
+
+## treg: competitors' Instagram and Meta ads
+
+OpenSEO has no source of its own for a competitor's Instagram account or for
+the ads a business runs on Facebook and Instagram. Outside the EU and the UK,
+Meta's official Ad Library API lists only political and social-issue ads. With
+`TREG_API_KEY` set, four MCP tools read both live through
+[treg](https://treg.to), a paid service that resells other providers' data one
+call at a time from a prepaid balance. treg is not a Google API and has no
+free tier, so OpenSEO limits what a call and a month can cost.
+
+The tools work with or without DataForSEO, on self-hosted installs only, and
+only over MCP: the app has no page for them.
+
+| MCP tool                    | What it reads                                                                                 | Typical cost                              |
+| --------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `search_instagram_accounts` | Accounts whose name or bio match a business name, to find a competitor's handle               | About $0.002, also when nothing matches   |
+| `get_instagram_profile`     | Followers, following, number of posts, verified and private flags, full name and bio          | About $0.001                              |
+| `get_instagram_posts`       | The 12 most recent posts: caption, type, likes, comments, date and link                       | About $0.001                              |
+| `get_meta_ad_library_ads`   | The ads a Facebook page runs now in a country: text, call to action, link, date and platforms | About $0.002, and $0 when it finds no ads |
+
+These are the prices treg charged when this guide was written. treg sets them
+and can change them, and every answer says what the call cost.
+
+The posts and ads tools also attach images to the answer, so your AI agent can
+look at what a competitor publishes: the newest posts' images (a reel's cover)
+and the images of the first ads that have one. Instagram and Facebook image
+links stop working within hours or days, so OpenSEO downloads the images
+during the call instead of returning links. It fetches them only from Meta's
+own image hosts (`cdninstagram.com` and `fbcdn.net`), leaves out an image over
+1.5 MB, and attaches at most 3 MB to one answer. Videos are not downloaded.
+
+### Cost limits
+
+- **Per call:** every request tells treg the call may cost at most $0.01. For
+  some tools treg tries several providers in turn, and without a ceiling one
+  call could pay each of them, up to treg's default of $1. A call no provider
+  can serve under the ceiling is refused and costs nothing. The account search
+  pays one provider only, because every provider bills a search that finds
+  nothing.
+- **Per month:** `TREG_MONTHLY_BUDGET_USD` is the most this server spends on
+  treg in a calendar month (UTC): $2 when unset, and an amount with up to two
+  decimals, such as `2` or `2.50`, otherwise. Before sending a call OpenSEO
+  sets aside the $0.01 ceiling. When less than that is left, the tool fails
+  with `MONTHLY_BUDGET_EXHAUSTED` and sends nothing. When treg answers, the
+  counter is corrected to what treg says it charged. A call whose answer never
+  arrives stays counted at $0.01, since treg may have charged it.
+
+Every treg answer ends with the call's cost and the month's spend. Without
+DataForSEO for every feature, `whoami` and the
+[Data sources page](#data-sources-page) show the spend against the budget
+too.
+
+The counter shares the table and the caveats of the
+[Google Places budget](#built-in-monthly-budget): it covers one OpenSEO
+database, and it does not count calls made with the same key from anywhere
+else. treg's prepaid balance is the other limit. When it runs out, treg
+refuses calls without charging them and the tools say to top up the account.
+
+### 1) Create a treg account
+
+Sign up at [treg.to](https://treg.to), add prepaid balance and copy the
+account's API key.
+
+### 2) Set the environment variables
+
+```bash
+TREG_API_KEY=your-treg-key
+# Optional: the most to spend in a month, in US dollars. Default 2.
+TREG_MONTHLY_BUDGET_USD=2
+```
+
+Recreate the container as in the PageSpeed Insights section. OpenSEO sends the
+key only to `treg.to`, in a request header, and never logs it. The startup
+checks say whether the key is set, and warn when the budget is not a valid
+amount: the tools then send nothing until it is fixed.
+
+Without `TREG_API_KEY`, the four tools stay listed and answer that treg is not
+configured on this server (`PROVIDER_NOT_CONFIGURED`). Nothing else changes.
+
+### Accuracy
+
+- **Instagram:** the figures are what the account showed publicly at the time
+  of the call. The posts tool returns the 12 most recent posts, with captions
+  cut to about 500 characters, and no views or reach. A private account has no
+  posts to read, and an account can hide its like counts.
+- **Ads without results:** an answer with no ads is not proof that the page
+  runs none. In tests the source missed a page that had live ads. Each answer
+  links the page's view in Meta's own Ad Library (`adLibraryUrl`) to check.
+- **Which page was read:** a page name can match another page with the same
+  name, in any country. Pass the page's numeric ID or its Facebook URL, and
+  read `pageUsed` in the answer.
+- **How many ads:** the source returns up to `limit` ads (30 at most) and not
+  the page's total. `limitReached` says when the page may run more.
+- **Text written by others:** names, bios, captions and ad text come from the
+  accounts themselves. The tools tell your AI agent to treat them as content
+  and never as instructions.
+
+### What OpenSEO stores
+
+OpenSEO stores only the monthly spend counter. It keeps no profiles, posts,
+ads or images: each call reads them live and returns them to the MCP client.
+SAM, the in-app agent, does not have these tools.
 
 ## Brand Lookup from the answers your tracker collected
 

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   kvGet: vi.fn(),
   kvPut: vi.fn(),
   isHosted: vi.fn(),
+  getDataSources: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -27,12 +28,15 @@ vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: mocks.isHosted,
 }));
 vi.mock("@/server/lib/posthog", () => ({ captureServerEvent: vi.fn() }));
-vi.mock("@/server/lib/data-sources", () => ({ getDataSources: vi.fn() }));
+vi.mock("@/server/lib/data-sources", () => ({
+  getDataSources: mocks.getDataSources,
+}));
 
 const context = makeToolContext({ orgScope: "user" });
 
 beforeEach(() => {
   mocks.isHosted.mockResolvedValue(true);
+  mocks.getDataSources.mockResolvedValue(null);
   mocks.kvGet.mockResolvedValue(null);
   mocks.kvPut.mockResolvedValue(undefined);
   mocks.getOrCreate.mockResolvedValue({ id: context.auth.organizationId });
@@ -145,5 +149,33 @@ describe("whoami", () => {
     });
     expect(mocks.getOrCreate).not.toHaveBeenCalled();
     expect(mocks.check).not.toHaveBeenCalled();
+  });
+
+  it("prints a self-hosted server's budgets, a dollar budget in dollars", async () => {
+    mocks.isHosted.mockResolvedValue(false);
+    const budget = { resets: "the 1st, UTC", note: null };
+    mocks.getDataSources.mockResolvedValue({
+      sections: [],
+      budgets: [
+        {
+          ...budget,
+          label: "Bright Data SERP requests",
+          used: 1200,
+          limit: 4500,
+        },
+        {
+          ...budget,
+          label: "treg spend",
+          used: 0.01234,
+          limit: 2,
+          unit: "usd",
+        },
+      ],
+    });
+
+    const text = textContent(await whoamiTool.handler({}, context));
+
+    expect(text).toContain("- Bright Data SERP requests: 1,200 of 4,500 (");
+    expect(text).toContain("- treg spend: $0.01234 of $2.00 (");
   });
 });

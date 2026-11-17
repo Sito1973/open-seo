@@ -103,6 +103,12 @@ declare namespace Cloudflare {
     // Open PageRank key for the authority half of keyword difficulty
     // estimates. Unset: estimates use the local pack alone.
     OPENPAGERANK_API_KEY?: string;
+    // treg (treg.to) key for the Instagram and Meta Ad Library MCP tools,
+    // self-hosted only, with or without DATAFORSEO_API_KEY. treg bills its
+    // prepaid balance for each call, so every call carries a cost ceiling and
+    // a month stops at TREG_MONTHLY_BUDGET_USD (US dollars, default 2).
+    TREG_API_KEY?: string;
+    TREG_MONTHLY_BUDGET_USD?: string;
     AI_VISIBILITY_WORKFLOW: Workflow<
       (
         | { runId: string }

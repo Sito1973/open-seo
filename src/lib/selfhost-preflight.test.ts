@@ -70,6 +70,18 @@ describe("runSelfhostPreflight", () => {
     expect(itemFor(result, "DATAFORSEO_SCOPE")?.level).toBe("fail");
   });
 
+  // treg is optional: a mistyped budget switches its tools off, not the app.
+  it("warns about a treg budget that is not an amount, without failing the start", () => {
+    const result = runSelfhostPreflight({
+      AUTH_MODE: "local_noauth",
+      TREG_API_KEY: "treg-key",
+      TREG_MONTHLY_BUDGET_USD: "2,5",
+    });
+
+    expect(result.failed).toBe(false);
+    expect(itemFor(result, "TREG_MONTHLY_BUDGET_USD")?.level).toBe("warn");
+  });
+
   it("warns that GSC stays disabled on a short BETTER_AUTH_SECRET", () => {
     const result = runSelfhostPreflight({
       AUTH_MODE: "local_noauth",

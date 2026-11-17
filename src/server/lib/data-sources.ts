@@ -23,6 +23,7 @@ import {
   getSerpApiKey,
   serpApiSearchesUsed,
 } from "@/server/lib/serpApiAiMode";
+import { getTregBudget, getTregKey } from "@/server/lib/treg";
 import {
   resolveDataSections,
   type DataBudget,
@@ -52,6 +53,7 @@ export async function getDataSourceProviders(): Promise<DataSourceProviders | nu
     model,
     ahrefs,
     backlinksKey,
+    tregKey,
   ] = await Promise.all([
     getBrightDataSerp(),
     getGoogleFallbackKey("GOOGLE_PLACES_API_KEY"),
@@ -63,6 +65,7 @@ export async function getDataSourceProviders(): Promise<DataSourceProviders | nu
     getOptionalEnvValue("OPENROUTER_API_KEY"),
     getOptionalEnvValue("AHREFS_API_KEY"),
     getDataforseoKey("backlinks"),
+    getTregKey(),
   ]);
   return {
     brightData: brightData !== null,
@@ -75,6 +78,7 @@ export async function getDataSourceProviders(): Promise<DataSourceProviders | nu
     model: Boolean(model),
     ahrefs: Boolean(ahrefs),
     dataforseoBacklinks: backlinksKey !== null,
+    treg: tregKey !== null,
   };
 }
 
@@ -170,6 +174,18 @@ async function getBudgets(
       limit: backlinksLimit,
       resets: UTC_RESET,
       note: "DataForSEO bills each request.",
+    });
+  }
+  // Null while TREG_MONTHLY_BUDGET_USD is invalid: no call is sent then.
+  const treg = providers.treg ? await getTregBudget() : null;
+  if (treg) {
+    budgets.push({
+      label: "treg spend",
+      used: treg.usedUsd,
+      limit: treg.limitUsd,
+      unit: "usd",
+      resets: UTC_RESET,
+      note: "treg bills each call to its prepaid balance; TREG_MONTHLY_BUDGET_USD sets this budget.",
     });
   }
   return budgets;

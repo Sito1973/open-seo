@@ -34,6 +34,7 @@ it("replaces every credit claim on a server with stand-ins", async () => {
         model: false,
         ahrefs: false,
         dataforseoBacklinks: false,
+        treg: false,
       },
     },
   );
@@ -60,6 +61,10 @@ it("replaces every credit claim on a server with stand-ins", async () => {
     );
     expect(description("explore_prompt")).toMatch(
       /^Prompt Explorer has no source on this server/,
+    );
+    // Not a DataForSEO tool, but it says the same when its key is not set.
+    expect(description("get_instagram_profile")).toMatch(
+      /^Competitors' Instagram and Meta ads has no source on this server, so calls fail with PROVIDER_NOT_CONFIGURED: Set TREG_API_KEY/,
     );
     expect(client.getInstructions()).toContain("bills no credits");
   } finally {

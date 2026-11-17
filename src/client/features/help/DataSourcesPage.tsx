@@ -11,10 +11,11 @@ import { Progress } from "@/client/components/ui/progress";
 import { helpLinkClassName } from "@/client/features/help/SecretHelpPage";
 import { useDataSources } from "@/client/features/help/dataSources";
 import { isHostedClientAuthMode } from "@/lib/auth-mode";
-import type {
-  DataBudget,
-  DataSection,
-  DataSourceState,
+import {
+  formatBudgetAmount,
+  type DataBudget,
+  type DataSection,
+  type DataSourceState,
 } from "@/shared/data-sources";
 
 const GUIDE_URL =
@@ -139,13 +140,13 @@ function BudgetsCard({ budgets }: { budgets: DataBudget[] }) {
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <span className="font-medium">{budget.label}</span>
                 <span className="tabular-nums text-muted-foreground">
-                  {budget.used.toLocaleString("en-US")} of{" "}
-                  {budget.limit.toLocaleString("en-US")}
+                  {formatBudgetAmount(budget, budget.used)} of{" "}
+                  {formatBudgetAmount(budget, budget.limit)}
                 </span>
               </div>
               <Progress
                 value={Math.min(100, (budget.used / budget.limit) * 100)}
-                aria-label={`${budget.label}: ${budget.used} of ${budget.limit} used`}
+                aria-label={`${budget.label}: ${formatBudgetAmount(budget, budget.used)} of ${formatBudgetAmount(budget, budget.limit)} used`}
               />
               <p className="text-xs text-muted-foreground">
                 Resets on {budget.resets}.{budget.note ? ` ${budget.note}` : ""}

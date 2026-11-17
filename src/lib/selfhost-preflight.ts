@@ -5,6 +5,7 @@ import {
   looksLikeDataForSeoKey,
   MIN_BETTER_AUTH_SECRET_LENGTH,
   parseBacklinksMonthlyRequests,
+  tregSetupChecks,
   validateTeamDomain,
 } from "@/shared/selfhost-checks";
 
@@ -24,6 +25,7 @@ type PreflightItem = {
     | "ai"
     | "rendering"
     | "ahrefs"
+    | "treg"
     | "runtime";
   name: string;
   level: PreflightLevel;
@@ -401,6 +403,7 @@ export function runSelfhostChecks(env: EnvRecord): PreflightItem[] {
   checkAuthMode(env, items);
   checkDataForSeo(env, items);
   checkOptionalFeatures(env, items);
+  items.push(...tregSetupChecks(env));
   return items;
 }
 

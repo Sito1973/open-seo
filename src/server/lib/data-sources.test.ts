@@ -19,6 +19,8 @@ vi.mock("@/server/lib/r2-cache", () => ({
 const MONTH_USE: Record<string, number> = {
   brightdata_serp: 120,
   dataforseo_backlinks: 7,
+  // treg's counter is in millionths of a US dollar.
+  treg_usd_micro: 12_340,
 };
 
 beforeEach(() => {
@@ -30,6 +32,7 @@ beforeEach(() => {
     "SERPAPI_API_KEY",
     "GOOGLE_CLIENT_ID",
     "DATAFORSEO_BACKLINKS_MONTHLY_REQUESTS",
+    "TREG_MONTHLY_BUDGET_USD",
   ]) {
     vi.stubEnv(name, "");
   }
@@ -38,6 +41,7 @@ beforeEach(() => {
   vi.stubEnv("DATAFORSEO_SCOPE", "backlinks");
   vi.stubEnv("BRIGHTDATA_API_KEY", "brightdata-key");
   vi.stubEnv("BRIGHTDATA_SERP_ZONE", "serp_zone");
+  vi.stubEnv("TREG_API_KEY", "treg-key");
   usedCalls.mockImplementation(async ({ sku }) => MONTH_USE[sku] ?? 0);
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -51,6 +55,7 @@ it("says what serves each section and reads this month's budgets", async () => {
   expect(states).toMatchObject({
     rank_tracking: "ready",
     backlinks: "ready",
+    social_and_ads: "ready",
     keyword_research: "needs_setup",
     domain: "needs_setup",
     prompt_explorer: "unavailable",
@@ -67,10 +72,32 @@ it("says what serves each section and reads this month's budgets", async () => {
         used: 7,
         limit: 300,
       }),
+      // The one budget in US dollars, $2 a month unless set.
+      expect.objectContaining({
+        label: "treg spend",
+        used: 0.01234,
+        limit: 2,
+        unit: "usd",
+      }),
     ]),
   );
   expect(status?.budgets.map((budget) => budget.label)).not.toContain(
     "SerpApi searches (Google AI Mode)",
+  );
+});
+
+it("lists treg as needing setup, with no budget, until its key is set", async () => {
+  vi.stubEnv("TREG_API_KEY", "");
+
+  const status = await getDataSources();
+
+  const section = status?.sections.find(
+    (candidate) => candidate.id === "social_and_ads",
+  );
+  expect(section?.state).toBe("needs_setup");
+  expect(section?.detail).toContain("TREG_API_KEY");
+  expect(status?.budgets.map((budget) => budget.label)).not.toContain(
+    "treg spend",
   );
 });
 

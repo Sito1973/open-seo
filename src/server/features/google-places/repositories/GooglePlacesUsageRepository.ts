@@ -47,4 +47,33 @@ async function usedCalls(input: {
   return row?.calls ?? 0;
 }
 
-export const GooglePlacesUsageRepository = { reserveCalls, usedCalls };
+/**
+ * Corrects a reservation once its real size is known: adds `delta` to the
+ * month's counter with no limit check, negative to give back what was reserved
+ * and not used. The counter never goes below zero. Returns the new monthly
+ * total, or null when the month has no counter to correct.
+ */
+async function adjustCalls(input: {
+  month: string;
+  sku: GooglePlacesSku;
+  delta: number;
+}): Promise<number | null> {
+  const { month, sku, delta } = input;
+  const [row] = await db
+    .update(googlePlacesUsage)
+    .set({
+      // CASE, not max()/GREATEST(), so SQLite and Postgres run the same SQL.
+      calls: sql`CASE WHEN ${googlePlacesUsage.calls} + ${delta} < 0 THEN 0 ELSE ${googlePlacesUsage.calls} + ${delta} END`,
+    })
+    .where(
+      and(eq(googlePlacesUsage.month, month), eq(googlePlacesUsage.sku, sku)),
+    )
+    .returning({ calls: googlePlacesUsage.calls });
+  return row?.calls ?? null;
+}
+
+export const GooglePlacesUsageRepository = {
+  reserveCalls,
+  usedCalls,
+  adjustCalls,
+};

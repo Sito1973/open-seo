@@ -6,6 +6,7 @@ import { mcpResponse } from "@/server/mcp/formatters";
 import { type ToolContext } from "@/server/mcp/context";
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import { getDataSources } from "@/server/lib/data-sources";
+import { formatBudgetAmount } from "@/shared/data-sources";
 import { optionalMetaOutputSchema } from "@/server/mcp/output-schemas";
 import { z } from "zod";
 
@@ -72,7 +73,7 @@ export const whoamiTool = {
         "Monthly budgets used:",
         ...dataSources.budgets.map(
           (budget) =>
-            `- ${budget.label}: ${budget.used.toLocaleString("en-US")} of ${budget.limit.toLocaleString("en-US")} (resets ${budget.resets})${budget.note ? `. ${budget.note}` : ""}`,
+            `- ${budget.label}: ${formatBudgetAmount(budget, budget.used)} of ${formatBudgetAmount(budget, budget.limit)} (resets ${budget.resets})${budget.note ? `. ${budget.note}` : ""}`,
         ),
       );
     }

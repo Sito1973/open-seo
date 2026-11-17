@@ -1,3 +1,6 @@
+import { formatCount, formatUsd } from "@/shared/format";
+import { DEFAULT_TREG_MONTHLY_BUDGET_USD } from "@/shared/selfhost-checks";
+
 // What serves each section that DataForSEO used to serve, on a self-hosted
 // install that does not use DataForSEO for features other than backlinks
 // (usesGoogleFallbacks). Hosted installs and installs with DataForSEO for
@@ -40,6 +43,8 @@ export type DataSourceProviders = {
   ahrefs: boolean;
   /** DATAFORSEO_API_KEY with DATAFORSEO_SCOPE=backlinks. */
   dataforseoBacklinks: boolean;
+  /** TREG_API_KEY. */
+  treg: boolean;
 };
 
 type SectionStatus = {
@@ -204,6 +209,32 @@ const SECTIONS = [
             },
   },
   {
+    // Not a DataForSEO section: no other provider has this data, so it is
+    // listed here only to show its source, its setup and its budget.
+    id: "social_and_ads",
+    label: "Competitors' Instagram and Meta ads",
+    path: null,
+    tools: [
+      "search_instagram_accounts",
+      "get_instagram_profile",
+      "get_instagram_posts",
+      "get_meta_ad_library_ads",
+    ],
+    status: (p: DataSourceProviders): SectionStatus =>
+      p.treg
+        ? {
+            state: "ready",
+            source: "treg",
+            detail: `Public Instagram profiles, recent posts and account search, and the ads a Facebook page runs, from the Meta Ad Library. treg bills its prepaid balance for each call, a fraction of a cent, under this server's monthly budget in US dollars (TREG_MONTHLY_BUDGET_USD, ${formatUsd(DEFAULT_TREG_MONTHLY_BUDGET_USD)} by default).`,
+          }
+        : {
+            state: "needs_setup",
+            source: "treg",
+            detail:
+              "Set TREG_API_KEY, the key of a treg (treg.to) account with prepaid balance.",
+          },
+  },
+  {
     id: "site_audit",
     label: "Site audit",
     path: "/p/$projectId/audit",
@@ -331,9 +362,19 @@ export type DataBudget = {
   label: string;
   used: number;
   limit: number;
+  /** Set when `used` and `limit` are US dollars; otherwise they are counts. */
+  unit?: "usd";
   resets: string;
   note: string | null;
 };
+
+/** A budget's `used` or `limit` as text: dollars or a count, by its unit. */
+export function formatBudgetAmount(
+  budget: Pick<DataBudget, "unit">,
+  amount: number,
+): string {
+  return budget.unit === "usd" ? formatUsd(amount) : formatCount(amount);
+}
 
 export type DataSourcesStatus = {
   sections: DataSection[];

@@ -75,6 +75,7 @@ const standIns = {
   model: false,
   ahrefs: true,
   dataforseoBacklinks: true,
+  treg: true,
 };
 
 describe("published MCP output schemas", () => {

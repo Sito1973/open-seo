@@ -1,3 +1,5 @@
+import { formatUsd } from "@/shared/format";
+
 // Pure validators for self-host configuration values. Shared by the runtime
 // (auth middleware, /api/health, telemetry) and the Docker preflight script,
 // so every surface applies the exact same rules and wording.
@@ -56,6 +58,57 @@ export function parseBacklinksMonthlyRequests(
   const trimmed = value?.trim();
   if (!trimmed) return DEFAULT_BACKLINKS_MONTHLY_REQUESTS;
   return /^[1-9]\d{0,6}$/.test(trimmed) ? Number(trimmed) : null;
+}
+
+// TREG_API_KEY: treg bills its prepaid balance for each call, so a monthly
+// budget in US dollars (UTC) bounds what a month can cost.
+export const DEFAULT_TREG_MONTHLY_BUDGET_USD = 2;
+
+// TREG_MONTHLY_BUDGET_USD: the default when unset, null when it is not an
+// amount above 0 and up to 1,000 with at most two decimals, such as 2 or 2.50.
+export function parseTregMonthlyBudgetUsd(
+  value: string | undefined,
+): number | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return DEFAULT_TREG_MONTHLY_BUDGET_USD;
+  if (!/^\d{1,4}(\.\d{1,2})?$/.test(trimmed)) return null;
+  const usd = Number(trimmed);
+  return usd > 0 && usd <= 1000 ? usd : null;
+}
+
+// The startup check for treg, which hosted never reads. A bad budget only
+// warns: the Instagram and Meta ad tools then send nothing, and the rest of
+// the app does not depend on them.
+export function tregSetupChecks(env: Record<string, string | undefined>) {
+  if (env.AUTH_MODE?.trim() === "hosted") return [];
+  const key = "treg" as const;
+  if (!env.TREG_API_KEY?.trim()) {
+    return [
+      {
+        key,
+        name: "Instagram and Meta ads",
+        level: "info" as const,
+        message:
+          "TREG_API_KEY not set (optional) — the Instagram and Meta ad MCP tools are off. A treg (treg.to) key turns them on, under a monthly budget in US dollars. See docs/SELF_HOSTING_GOOGLE_APIS.md.",
+      },
+    ];
+  }
+  const budget = parseTregMonthlyBudgetUsd(env.TREG_MONTHLY_BUDGET_USD);
+  return [
+    budget === null
+      ? {
+          key,
+          name: "TREG_MONTHLY_BUDGET_USD",
+          level: "warn" as const,
+          message: `Must be an amount in US dollars above 0 and up to 1,000, such as 2 or 2.50, or unset for the default of ${formatUsd(DEFAULT_TREG_MONTHLY_BUDGET_USD)}. The Instagram and Meta ad tools send nothing until it is fixed.`,
+        }
+      : {
+          key,
+          name: "Instagram and Meta ads",
+          level: "ok" as const,
+          message: `TREG_API_KEY set — treg calls stop at ${formatUsd(budget)} a month (UTC), and no call may cost more than $0.01.`,
+        },
+  ];
 }
 
 // OPENSEO_TELEMETRY_DISABLED / DO_NOT_TRACK semantics: any value except an
