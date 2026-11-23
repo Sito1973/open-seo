@@ -8,7 +8,11 @@ import { resolveUserContextFromHeaders } from "@/middleware/ensure-user/resolve"
 import { AppError } from "@/server/lib/errors";
 import { responseForAppError } from "@/server/lib/http-errors";
 import { getPublicOrigin } from "@/server/mcp/public-origin";
-import { GA4_OAUTH_PROVIDER_ID, GA4_OAUTH_SCOPES } from "@/shared/ga4";
+import {
+  GA4_EDIT_SCOPE,
+  GA4_OAUTH_PROVIDER_ID,
+  GA4_OAUTH_SCOPES,
+} from "@/shared/ga4";
 import { GBP_OAUTH_PROVIDER_ID, GBP_OAUTH_SCOPES } from "@/shared/gbp";
 import {
   GOOGLE_ADS_OAUTH_PROVIDER_ID,
@@ -75,6 +79,13 @@ export const GA4_INTEGRATION: GoogleOAuthIntegration = {
   displayName: "Google Analytics",
   callbackPath: "/api/ga4/oauth/callback",
   scopes: GA4_OAUTH_SCOPES,
+};
+
+// Self-hosted only: Ga4Service.startLink picks it, so a self-hosted grant can
+// also change key events. The callback is shared with GA4_INTEGRATION.
+export const GA4_SELF_HOSTED_INTEGRATION: GoogleOAuthIntegration = {
+  ...GA4_INTEGRATION,
+  scopes: [...GA4_OAUTH_SCOPES, GA4_EDIT_SCOPE],
 };
 
 // Self-hosted only: the callback route and GbpService refuse hosted mode.

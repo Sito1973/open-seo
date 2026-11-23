@@ -128,6 +128,39 @@ describe("ga4Client admin API", () => {
       }).listProperties(),
     ).rejects.toBeInstanceOf(Ga4TokenError);
   });
+
+  it("posts a new key event to the property and deletes one by resource name", async () => {
+    mocks.fetch.mockImplementation(async () => jsonResponse({}));
+    const client = createGa4AdminClient({
+      userId: "u1",
+      ga4AccountId: "google-sub-a",
+    });
+    const keyEvent = {
+      eventName: "generate_lead",
+      countingMethod: "ONCE_PER_EVENT",
+    };
+
+    await client.createKeyEvent("properties/11", keyEvent);
+    await client.deleteKeyEvent("properties/11/keyEvents/7");
+
+    expect(mocks.fetch).toHaveBeenNthCalledWith(
+      1,
+      "https://analyticsadmin.googleapis.com/v1beta/properties/11/keyEvents",
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer ga4_tok",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(keyEvent),
+      },
+    );
+    expect(mocks.fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://analyticsadmin.googleapis.com/v1beta/properties/11/keyEvents/7",
+      { method: "DELETE", headers: { Authorization: "Bearer ga4_tok" } },
+    );
+  });
 });
 
 const reportRequest = {

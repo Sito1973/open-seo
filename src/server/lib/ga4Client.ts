@@ -78,7 +78,11 @@ const enhancedMeasurementSettingsSchema = z.object({
   searchQueryParameter: z.string().default(""),
   uriQueryParameter: z.string().optional().default(""),
 });
+const keyEventNameSchema = z
+  .string()
+  .regex(/^properties\/\d+\/keyEvents\/\d+$/);
 const keyEventSchema = z.object({
+  name: z.string().optional(),
   eventName: z.string(),
   createTime: z.string().optional(),
   deletable: z.boolean().optional(),
@@ -163,19 +167,34 @@ function memoizedGa4AccessToken(opts: {
   return () => (accessTokenPromise ??= getGa4AccessToken(opts));
 }
 
-/** Read-only Admin API client used only for account/property discovery. */
+/**
+ * Admin API client: account and property discovery, measurement settings, and
+ * key events. Everything reads except createKeyEvent and deleteKeyEvent, which
+ * Google refuses unless the grant holds GA4_EDIT_SCOPE.
+ */
 export function createGa4AdminClient(opts: {
   userId: string;
   ga4AccountId: string;
 }) {
   const accessToken = memoizedGa4AccessToken(opts);
 
-  async function request(url: string): Promise<unknown> {
+  async function request(
+    url: string,
+    write?: { method: "POST" | "DELETE"; body?: unknown },
+  ): Promise<unknown> {
     const token = await accessToken();
     let response: Response;
     try {
       response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        method: write?.method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(write?.body !== undefined && {
+            "Content-Type": "application/json",
+          }),
+        },
+        body:
+          write?.body === undefined ? undefined : JSON.stringify(write.body),
       });
     } catch (error) {
       if (isAbortError(error)) throw error;
@@ -190,7 +209,9 @@ export function createGa4AdminClient(opts: {
         adminMessageForStatus(response.status),
       );
     }
-    return response.json();
+    // A write's response is not used: once Google accepted the change, a
+    // body that fails to parse must not report the write as failed.
+    return write ? null : response.json();
   }
 
   function propertyUrl(base: string, propertyId: string, child: string): URL {
@@ -272,6 +293,22 @@ export function createGa4AdminClient(opts: {
         await request(url.toString()),
       );
       return response.keyEvents ?? [];
+    },
+
+    async createKeyEvent(
+      propertyId: string,
+      keyEvent: { eventName: string; countingMethod: string },
+    ): Promise<void> {
+      const url = propertyUrl(GA4_ADMIN_API_BASE, propertyId, "keyEvents");
+      await request(url.toString(), { method: "POST", body: keyEvent });
+    },
+
+    /** `name` is the key event's resource name from listKeyEvents. */
+    async deleteKeyEvent(name: string): Promise<void> {
+      const canonicalName = keyEventNameSchema.parse(name);
+      await request(`${GA4_ADMIN_API_BASE}/${canonicalName}`, {
+        method: "DELETE",
+      });
     },
 
     async listCustomDimensions(propertyId: string) {

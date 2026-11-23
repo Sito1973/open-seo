@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Ga4AdminApiError, Ga4TokenError } from "@/server/lib/ga4Errors";
+import { GA4_EDIT_SCOPE } from "@/shared/ga4";
 import { Ga4Service } from "./Ga4Service";
 
 const mocks = vi.hoisted(() => {
@@ -31,6 +32,9 @@ const mocks = vi.hoisted(() => {
     })),
     upsert: vi.fn(),
     getByProjectId: vi.fn(),
+    isHostedServerAuthMode: vi.fn(),
+    createGoogleAuthorizationUrl:
+      vi.fn<(input: { integration: { scopes: readonly string[] } }) => void>(),
   };
 });
 
@@ -38,6 +42,13 @@ vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@/db", () => ({ db: { select: mocks.dbSelect } }));
 vi.mock("@/server/lib/ga4Client", () => ({
   createGa4AdminClient: mocks.createGa4AdminClient,
+}));
+vi.mock("@/server/lib/runtime-env", () => ({
+  isHostedServerAuthMode: mocks.isHostedServerAuthMode,
+}));
+vi.mock("@/server/features/google/googleOAuth", async (importOriginal) => ({
+  ...(await importOriginal()),
+  createGoogleAuthorizationUrl: mocks.createGoogleAuthorizationUrl,
 }));
 vi.mock("@/server/features/ga4/repositories/Ga4ConnectionRepository", () => ({
   Ga4ConnectionRepository: {
@@ -160,4 +171,27 @@ describe("Ga4Service", () => {
     });
     consoleError.mockRestore();
   });
+
+  // Hosted promises read-only Google scopes; only a self-hosted grant may
+  // change key events.
+  it.each([
+    { hosted: true, asksForEdit: false },
+    { hosted: false, asksForEdit: true },
+  ])(
+    "asks Google for the edit scope only when self-hosted (hosted: $hosted)",
+    async ({ hosted, asksForEdit }) => {
+      mocks.isHostedServerAuthMode.mockResolvedValue(hosted);
+
+      await Ga4Service.startLink({
+        userId: "u1",
+        callbackURL: "/",
+        publicOrigin: "https://open-seo.test",
+      });
+
+      const scopes =
+        mocks.createGoogleAuthorizationUrl.mock.lastCall?.[0].integration
+          .scopes;
+      expect(scopes?.includes(GA4_EDIT_SCOPE)).toBe(asksForEdit);
+    },
+  );
 });

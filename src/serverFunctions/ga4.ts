@@ -9,10 +9,6 @@ import { Ga4Service } from "@/server/features/ga4/services/Ga4Service";
 import { AppError } from "@/server/lib/errors";
 import { Ga4ReportError } from "@/server/lib/ga4Errors";
 import { hasGoogleOAuthConfig } from "@/server/features/google/oauth-config";
-import {
-  createGoogleAuthorizationUrl,
-  GA4_INTEGRATION,
-} from "@/server/features/google/googleOAuth";
 import { hasOrgPermission } from "@/lib/org-permissions";
 import { requireOrgPermission } from "@/server/auth/org-gate";
 import { captureServerEvent } from "@/server/lib/posthog";
@@ -244,8 +240,7 @@ export const startGa4Link = createServerFn({ method: "POST" })
   .middleware(requireAuthenticatedContext)
   .validator(startLinkSchema)
   .handler(async ({ data, context }) => ({
-    url: await createGoogleAuthorizationUrl({
-      integration: GA4_INTEGRATION,
+    url: await Ga4Service.startLink({
       userId: context.userId,
       callbackURL: data.callbackURL,
       publicOrigin: getPublicOrigin(getRequest()),

@@ -6,6 +6,7 @@ import { makeToolContext } from "./tool-test-support";
 
 const mocks = vi.hoisted(() => ({
   runReport: vi.fn(),
+  updateKeyEvent: vi.fn(),
   getProjectForOrganization: vi.fn(),
 }));
 
@@ -17,6 +18,10 @@ vi.mock("@/server/features/ga4/services/Ga4ReportingService", () => ({
 }));
 vi.mock("@/server/features/ga4/services/Ga4OrganicOverviewService", () => ({
   Ga4OrganicOverviewService: { getOrganicOverview: vi.fn() },
+}));
+vi.mock("@/server/features/ga4/services/Ga4KeyEventService", () => ({
+  GA4_KEY_EVENT_COUNTING_METHODS: ["ONCE_PER_EVENT", "ONCE_PER_SESSION"],
+  Ga4KeyEventService: { updateKeyEvent: mocks.updateKeyEvent },
 }));
 vi.mock("@/server/features/ga4/services/Ga4MeasurementHealthService", () => ({
   Ga4MeasurementHealthService: { getMeasurementHealth: vi.fn() },
@@ -185,5 +190,30 @@ describe("Google Analytics MCP tools", () => {
         actionUrl: "https://open-seo.test/p/project_1/settings/integrations",
       },
     });
+  });
+  it("only previews a key event change unless apply is true", async () => {
+    mocks.updateKeyEvent.mockResolvedValue({
+      status: "ok",
+      source: { propertyDisplayName: "Example" },
+      eventName: "generate_lead",
+      mode: "preview",
+      canApply: true,
+      changes: [{ before: null, after: "ONCE_PER_EVENT" }],
+      note: null,
+      revert: null,
+    });
+
+    await tools.updateGoogleAnalyticsKeyEventTool.handler(
+      {
+        projectId: "project_1",
+        eventName: "generate_lead",
+        countingMethod: "ONCE_PER_EVENT",
+      },
+      toolContext,
+    );
+
+    expect(mocks.updateKeyEvent).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ apply: false, remove: false }),
+    );
   });
 });

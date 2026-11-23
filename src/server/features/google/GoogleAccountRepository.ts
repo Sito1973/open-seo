@@ -82,4 +82,18 @@ async function remove(input: AccountInput) {
   ]);
 }
 
-export const GoogleAccountRepository = { getRemovalImpact, remove };
+/** The scopes Google granted this account at its last consent. */
+async function getGrantedScopes(input: AccountInput): Promise<string[]> {
+  const [grant] = await db
+    .select({ scope: account.scope })
+    .from(account)
+    .where(scope(input).grant)
+    .limit(1);
+  return grant?.scope?.split(",") ?? [];
+}
+
+export const GoogleAccountRepository = {
+  getRemovalImpact,
+  remove,
+  getGrantedScopes,
+};

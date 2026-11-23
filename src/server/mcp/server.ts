@@ -82,6 +82,7 @@ import {
   getGoogleAnalyticsSiteSearchTool,
   getGoogleAnalyticsTrafficAcquisitionTool,
   getSearchOpportunitiesTool,
+  updateGoogleAnalyticsKeyEventTool,
 } from "@/server/mcp/tools/google-analytics-tools";
 import { createProjectTool } from "@/server/mcp/tools/create-project";
 import { listProjectsTool } from "@/server/mcp/tools/list-projects";
@@ -329,11 +330,11 @@ export function createOpenSeoMcpServer(
   register(deleteReportTemplateTool);
 
   // Business Profile reads and, after the user approves a preview, edits the
-  // owner's own listings with a scope only self-hosted installs grant, and
-  // Core Web Vitals and place details run only on GOOGLE_PAGESPEED_API_KEY
-  // and GOOGLE_PLACES_API_KEY, which hosted never uses. The Instagram and
-  // Meta ad tools spend the operator's own treg balance (TREG_API_KEY).
-  // Hosted never lists these.
+  // owner's own listings with a scope only self-hosted installs grant; the
+  // Analytics key event edit works the same way. Core Web Vitals and place
+  // details run only on GOOGLE_PAGESPEED_API_KEY and GOOGLE_PLACES_API_KEY,
+  // which hosted never uses. The Instagram and Meta ad tools spend the
+  // operator's own treg balance (TREG_API_KEY). Hosted never lists these.
   if (options.selfHosted) {
     register(listGoogleBusinessProfileLocationsTool);
     register(getGoogleBusinessProfileReviewsTool);
@@ -346,6 +347,7 @@ export function createOpenSeoMcpServer(
     register(replyToGoogleBusinessProfileReviewTool);
     register(createGoogleBusinessProfilePostTool);
     register(updateGoogleBusinessProfileFoodMenuTool);
+    register(updateGoogleAnalyticsKeyEventTool);
     register(getCoreWebVitalsTool);
     register(getPlaceDetailsTool);
     register(searchInstagramAccountsTool);

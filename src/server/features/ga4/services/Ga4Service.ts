@@ -4,6 +4,12 @@ import { account } from "@/db/schema";
 import { AppError } from "@/server/lib/errors";
 import { createGa4AdminClient } from "@/server/lib/ga4Client";
 import { Ga4AdminApiError, Ga4TokenError } from "@/server/lib/ga4Errors";
+import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import {
+  createGoogleAuthorizationUrl,
+  GA4_INTEGRATION,
+  GA4_SELF_HOSTED_INTEGRATION,
+} from "@/server/features/google/googleOAuth";
 import { GA4_OAUTH_PROVIDER_ID } from "@/shared/ga4";
 import {
   Ga4ConnectionRepository,
@@ -29,6 +35,19 @@ async function listGrantsForUser(userId: string) {
 async function userHasGrant(userId: string): Promise<boolean> {
   const grants = await listGrantsForUser(userId);
   return grants.length > 0;
+}
+
+async function startLink(input: {
+  userId: string;
+  callbackURL: string;
+  publicOrigin: string;
+}) {
+  return createGoogleAuthorizationUrl({
+    integration: (await isHostedServerAuthMode())
+      ? GA4_INTEGRATION
+      : GA4_SELF_HOSTED_INTEGRATION,
+    ...input,
+  });
 }
 
 function requiresReconnect(error: unknown): boolean {
@@ -140,6 +159,7 @@ async function disconnect(input: { projectId: string }): Promise<void> {
 export const Ga4Service = {
   getConnection,
   userHasGrant,
+  startLink,
   listPropertiesForUserWithGrantStatus,
   setProperty,
   disconnect,

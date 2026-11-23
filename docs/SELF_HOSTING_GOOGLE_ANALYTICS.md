@@ -1,7 +1,9 @@
 # Self-hosted Google Analytics
 
 Connecting Google Analytics lets OpenSEO bind a GA4 property to a project. The
-connection is optional and read-only.
+connection is optional. OpenSEO reads reports and settings, and changes one
+thing: which events count as key events, and only after you approve the change.
+See [Key events](#key-events).
 
 ## What you'll need
 
@@ -61,11 +63,32 @@ openssl rand -base64 32
 ## 5) Connect a property
 
 Open a project dashboard or **Project settings → Analytics**, click **Connect
-with Google**, approve read-only Analytics access, and choose a GA4 property.
+with Google**, approve access, and choose a GA4 property. Google asks for two
+Analytics permissions: see your data, and edit your Analytics configuration.
+The second one is what lets an agent mark key events.
 
 OpenSEO stores the OAuth tokens encrypted in Better Auth's account table. The
 project mapping stores only the selected property metadata and connector
 account. Disconnecting GA4 does not disconnect Search Console.
+
+## Key events
+
+The MCP tool `update_google_analytics_key_event` marks an event of the
+connected property as a key event, or removes the mark.
+
+- It previews first. Called without `apply`, it reads the current key events
+  and returns what would change. Nothing is saved.
+- The agent applies the change only after you approve that exact preview in
+  the conversation. The response includes the arguments that undo it.
+- A new key event is not retroactive: Google Analytics counts it from the
+  moment it is marked. Removing a mark deletes no data.
+- The connected Google account needs the Editor role on the property.
+
+A connection made before this tool existed is read-only, and the preview says
+so. To upgrade it, click **Change property or account** on the Google
+Analytics card, open the property list, click **Add Google account**, choose
+the same account and approve the new permission. Then cancel: the project
+keeps its property.
 
 ## Troubleshooting
 
